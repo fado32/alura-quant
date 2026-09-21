@@ -3548,6 +3548,14 @@ def actualizar_alertas_activas():
        IA solo se recalculan cuando Yahoo entrega una sesión diaria nueva.
 
     La tesis original y los campos de entrada permanecen INMUTABLES.
+
+    REGLA DE CIERRE: el Score, los indicadores diarios y el comentario IA
+    se consolidan en la última ejecución del día (MODO 22), después del
+    cierre regular de EE. UU. Las ejecuciones 14 y 18 actualizan precio/P&L,
+    pero no publican un nuevo Score ni comentario IA con el mercado abierto.
+    En MODO 22 se fuerza el snapshot final incluso si no existe una vela
+    nueva respecto a la última ejecución (por ejemplo, festivo o ejecución
+    previa del mismo día).
     """
     df = cargar_historial()
     if df.empty:
@@ -3618,19 +3626,45 @@ def actualizar_alertas_activas():
             changed_price = True
 
             # --------------------------------------------------------
-            # 3) Si NO hay nueva vela diaria, no tocamos indicadores,
-            #    Score ni tesis. Solo queda actualizado el precio.
+            # 3) CONTROL DE MOMENTO DE CÁLCULO
             # --------------------------------------------------------
-            if fecha_guardada and fecha_mercado <= fecha_guardada:
+            # 14 y 18: solo precio/P&L. No consolidamos indicadores,
+            # Score ni comentario IA mientras el mercado de EE. UU.
+            # todavía puede estar abierto.
+            #
+            # 22: snapshot final del día. Se recalcula SIEMPRE con el
+            # último dato diario disponible, aunque la fecha de mercado
+            # coincida con la ya guardada.
+            modo = modo_actual()
+            es_cierre_final = modo == "22"
+            hay_nueva_sesion = (
+                not fecha_guardada
+                or fecha_mercado > fecha_guardada
+            )
+
+            if not es_cierre_final and not hay_nueva_sesion:
                 print(
                     f"📍 {ticker}: {fuente_precio} {precio_operativo:.2f} | "
-                    f"P&L {pnl_pct:+.2f}% | sin nueva sesión diaria "
-                    f"({fecha_mercado}). Score/tesis conservados."
+                    f"P&L {pnl_pct:+.2f}% | sesión diaria "
+                    f"({fecha_mercado}) ya procesada. "
+                    f"Score/tesis conservados hasta MODO 22."
+                )
+                continue
+
+            if not es_cierre_final and hay_nueva_sesion:
+                # Aunque Yahoo pueda entregar una vela nueva antes del
+                # proceso final, no la consolidamos en 14/18. El objetivo
+                # es que el snapshot diario visible quede fijado en 22.
+                print(
+                    f"📍 {ticker}: {fuente_precio} {precio_operativo:.2f} | "
+                    f"P&L {pnl_pct:+.2f}% | nueva sesión "
+                    f"({fecha_mercado}) detectada, pero Score/IA se "
+                    f"consolidarán en MODO 22."
                 )
                 continue
 
             # --------------------------------------------------------
-            # 4) Nueva sesión diaria: recalcular snapshot completo.
+            # 4) MODO 22: snapshot diario FINAL + comentario IA.
             # --------------------------------------------------------
             original = construir_original_desde_fila(df.loc[i])
             evolucion = evaluar_evolucion_estrategia(original, actual)
@@ -3645,6 +3679,13 @@ def actualizar_alertas_activas():
                 estado_tesis_anterior,
                 estado_tesis
             )
+
+            # En el proceso final (MODO 22) queremos una lectura IA
+            # cerrada sobre el mercado del día, aunque el cambio de
+            # indicadores no supere los umbrales de materialidad.
+            if not llamada_ia:
+                llamada_ia = True
+                motivo_ia = "snapshot final 22:30"
 
             comentario = ""
             if llamada_ia:
@@ -3700,7 +3741,7 @@ def actualizar_alertas_activas():
         guardar_csv_seguro(df, ARCHIVO_HISTORIAL)
 
         if changed_daily:
-            print("✅ Precio operativo actualizado y nuevas sesiones diarias procesadas.")
+            print("✅ Precio operativo actualizado y snapshot final diario (Score/indicadores/IA) consolidado en MODO 22.")
         elif changed_price:
             print("✅ Precio operativo/P&L actualizados. No había nuevas sesiones diarias.")
     else:
@@ -4170,7 +4211,7 @@ def main():
     print(
         "\n"
         "============================================================\n"
-        "ALURA QUANT V4.4\n"
+        "ALURA QUANT V4.6\n"
         "============================================================"
     )
 
@@ -4195,8 +4236,8 @@ def main():
 
     if IA_PROVIDER == "gemini":
         print(
-            "IA Gemini: comentarios bajo demanda "
-            "solo ante cambios materiales de tesis."
+            "IA Gemini: snapshot final obligatorio en MODO 22; "
+            "14/18 no consolidan Score ni comentario IA."
         )
 
     # ========================================================
