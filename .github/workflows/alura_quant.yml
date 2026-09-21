@@ -7,7 +7,7 @@ on:
     # GitHub Actions admite timezone IANA y ajusta el horario de verano.
     - cron: '0 14 * * 1-5'
     - cron: '0 18 * * 1-5'
-    - cron: '56 20 * * 1-5'
+    - cron: '57 23 * * 1-5'
 
 
 permissions:
