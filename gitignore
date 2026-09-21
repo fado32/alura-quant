@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# Temporales del bot
+*.tmp
+
+# IDE / sistema
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

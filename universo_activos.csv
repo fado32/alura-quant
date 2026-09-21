@@ -1,0 +1,203 @@
+Ticker,Empresa,Sector,Icono
+TLGO.MC,Talgo,Industrial,🚆
+TUB.MC,Tubacex,Industrial,⚙️
+DOM.MC,Global Dominion,Servicios / Tecnología,🔌
+EDR.MC,eDreams ODIGEO,Consumo / Turismo,✈️
+VOC.MC,Vocento,Medios de Comunicación,📰
+PVA.MC,Pescanova,Alimentación,🐟
+PRS.MC,Prisa,Medios de Comunicación,🎙️
+SLR.MC,Solaria,Energías Renovables,☀️
+CIE.MC,CIE Automotive,Automoción,🚗
+GRE.MC,Grenergy Renovables,Energías Renovables,🌱
+MTS.MC,ArcelorMittal,Materiales Básico / Acero,🏭
+CAF.MC,Construcciones y Aux. de Ferrocarriles,Industrial,🚆
+ALM.MC,Almirall,Salud / Farmacéutica,💊
+PHM.MC,PharmaMar,Salud / Biotecnología,🔬
+ANA.MC,Acciona,Infraestructuras,🏗️
+ANE.MC,Acciona Energía,Energías Renovables,⚡
+A3M.MC,Atresmedia,Medios de Comunicación,📺
+CASH.MC,Prosegur Cash,Servicios Financieros,💵
+CLR.MC,Celeo Redes,Energía,🔌
+EBRO.MC,Ebro Foods,Alimentación,🌾
+ENG.MC,Enagás,Utilities / Gas,🔥
+FDR.MC,Fluidra,Bienes de Consumo,🏊
+GEST.MC,Gestamp,Automoción,🚘
+IDR.MC,Indra Sistemas,Tecnología / Defensa,💻
+MAP.MC,Mapfre,Aseguradora,🛡️
+MEL.MC,Meliá Hotels,Consumo / Turismo,🏨
+MRL.MC,Merlin Properties,Inmobiliario / SOCIMI,🏢
+NTGY.MC,Naturgy,Utilities / Gas y Elec.,💡
+RED.MC,Redeia,Utilities / Red Eléctrica,⚡
+REN.MC,Renta 4 Banco,Banca / Servicios Fin.,🏦
+SAB.MC,Banco Sabadell,Banca,🏦
+SAN.MC,Banco Santander,Banca,🏦
+SCYR.MC,Sacyr,Infraestructuras,🏗️
+TRE.MC,Técnicas Reunidas,Ingeniería / Energía,🛠️
+UNI.MC,Unicaja Banco,Banca,🏦
+VID.MC,Vidrala,Industrial / Envases,🍾
+MCG.L,Mobico,Buses,🏗️
+ITX.MC,Inditex,Consumo Cíclico / Textil,👗
+BBVA.MC,BBVA,Banca,🏦
+SAN.MC,Banco Santander,Banca,🏦
+IBE.MC,Iberdrola,Utilities / Energías,⚡
+REP.MC,Repsol,Energía / Petróleo,🛢️
+TEF.MC,Telefónica,Telecomunicaciones,📡
+ACS.MC,ACS,Infraestructuras y Construcción,🏗️
+AENA.MC,Aena,Aeropuertos / Servicios,✈️
+FER.MC,Ferrovial,Infraestructuras,🛣️
+BKT.MC,Bankinter,Banca,🏦
+AAPL,Apple Inc.,Tecnología / Hardware,🍏
+MSFT,Microsoft Corp.,Tecnología / Software,💻
+NVDA,NVIDIA Corp.,Semiconductores / IA,⚡
+AMZN,Amazon.com Inc.,Consumo Discrecional / E-commerce,📦
+GOOGL,Alphabet Inc. (Google),Tecnología / Servicios Internet,🔍
+META,Meta Platforms Inc.,Tecnología / Redes Sociales,🌐
+TSLA,Tesla Inc.,Automoción / Vehículos Eléctricos,🚗
+JPM,JPMorgan Chase & Co.,Servicios Financieros / Banca,🏛️
+ASML.AS,ASML Holding NV,Tecnología / Semiconductores,🔬
+MC.PA,LVMH Moët Hennessy Louis Vuitton,Consumo Discrecional / Lujo,👜
+SAP.DE,SAP SE,Tecnología / Software Empresarial,💼
+SIE.DE,Siemens AG,Industrial / Automoción,⚙️
+SAN.PA,Sanofi SA,Salud / Farmacéutica,💊
+SPY,SPDR S&P 500 ETF Trust,ETF / Renta Variable EE.UU.,📊
+QQQ,Invesco QQQ Trust,ETF / Tecnología EE.UU.,📈
+VGK,Vanguard FTSE Europe ETF,ETF / Renta Variable Europa,🇪🇺
+IWM,iShares Russell 2000 ETF,ETF / Small Caps EE.UU.,📉
+EEM,iShares MSCI Emerging Markets ETF,ETF / Mercados Emergentes,🌏
+GLD,SPDR Gold Shares,ETF / Materias Primas (Oro),🪙
+TLT,iShares 20+ Year Treasury Bond ETF,ETF / Renta Fija (Bonos),📜
+EGL.LS,Energias de Portugal (EDR),Energía / Renovables,⚡
+GEST.MC,Neinor Homes,Inmobiliario / Residencial,🏗️
+JD.L,JD Sports Fashion,Retail / Moda Deportiva,👟
+SMIN.L,Smiths Group,Industrial / Ingeniería,⚙️
+AUTO.L,Auto Trader Group,Tecnología / Clasificados Online,🚗
+ATE.PA,Altamir,Inversión / Private Equity,💼
+COFA.PA,Coface,Seguros de Crédito,🛡️
+ETL.PA,Eutelsat Communications,Telecomunicaciones / Satélites,🛰️
+NEM.DE,Nemetschek,Tecnología / Software Arquitectura,📐
+LEG.DE,LEG Immobilien,Inmobiliario / Residencial,🏢
+GBF.DE,Bilfinger,Ingeniería / Servicios Industriales,🛠️
+FLOW.AS,Flow Traders,Servicios Financieros / Trading,📊
+AMG.AS,Aalberts,Industrial / Ingeniería de Materiales,⚙️
+VPK.AS,Vopak,Logística / Almacenamiento Energético,🛢️
+MT.AS,OCI NV,Química / Fertilizantes,🧪
+BPOST.BR,Bpost,Logística / Correos (Bélgica),📦
+ACKB.BR,Ackermans & van Haaren,Holding / Inversión,💼
+ONTEX.BR,Ontex Group,Bienes de Consumo / Higiene,🧻
+PROX.BR,Proximus,Telecomunicaciones (Bélgica),📡
+ITUB,Itaú Unibanco,Banca (Latinoamérica / ADR),🏦
+BBD,Banco Bradesco,Banca (Latinoamérica / ADR),🏦
+VALE,Vale SA,Minería / Materias Primas (ADR),⛏️
+PBR,Petróleo Brasileiro (Petrobras),Energía / Petróleo (ADR),⛽
+ARCO,Arcos Dorados Holdings,Consumo / Restauración (ADR),🍔
+MELI,MercadoLibre,Comercio Electrónico (Latinoamérica),📦
+ENO.MC,Elecnor,Industrial / Infraestructuras,🏗️
+ENC.MC,Ence,Materiales / Energías Renovables,🌲
+PSG.MC,Prosegur,Servicios de Seguridad,🔐
+OHLA.MC,OHLA,Construcción / Infraestructuras,🏗️
+LDA.MC,Línea Directa Aseguradora,Seguros,🛡️
+ADX.MC,Audax Renovables,Energías Renovables,⚡
+AMP.MC,Amper,Tecnología / Industrial,🔌
+ROVI.MC,Laboratorios Rovi,Farmacéutica,💊
+RJF.MC,Reig Jofre,Farmacéutica,🧪
+COL.MC,Inmobiliaria Colonial,Inmobiliario / SOCIMI,🏢
+LGT.MC,Lingotes Especiales,Componentes de Automoción,⚙️
+NBI.MC,NBI Bearings,Industrial / Componentes,⚙️
+DIA.MC,DIA,Distribución Alimentaria,🛒
+ECR.MC,Ercros,Química,🧪
+AZK.MC,Azkoyen,Industrial / Tecnología,💳
+MCM.MC,Miquel y Costas,Consumo / Productos de Tabaco,📦
+RIO.MC,Bodegas Riojanas,Alimentación / Bebidas,🍷
+MDF.MC,Duro Felguera,Ingeniería Industrial,🛠️
+UBR.MC,Urbas,Inmobiliario / Construcción,🏗️
+ATY.MC,Atrys Health,Servicios Sanitarios,🧬
+FACE.MC,Facephi,Tecnología / Identidad Digital,🔐
+IZER.MC,Izertis,Tecnología / Servicios IT,💻
+GIGA.MC,Gigas Hosting,Cloud / Telecomunicaciones,☁️
+ORY.MC,Oryzon Genomics,Biotecnología,🧬
+NEA.MC,Naturhouse,Consumo / Nutrición,🥗
+CLNX.MC,Cellnex Telecom,Infraestructura de Telecomunicaciones,📡
+TRG.MC,The Naga Group,Fintech / Brokerage,📈
+VIS.MC,Viscofan,Alimentación / Packaging,🥫
+FCC.MC,FCC,Infraestructuras / Servicios,🏗️
+AIXA.DE,Aixtron,Semiconductores,🔬
+ADN1.DE,adesso,Servicios IT / Software,💻
+AT1.DE,ATOSS Software,Software Empresarial,💻
+BYW6.DE,BayWa,Agricultura / Energía,🌾
+COK.DE,CANCOM,Servicios IT,💻
+DUE.DE,Dürr,Maquinaria Industrial,⚙️
+ELG.DE,Elmos Semiconductor,Semiconductores,🔬
+EVT.DE,Evotec,Biotecnología,🧬
+FIE.DE,Fielmann,Salud / Retail Óptico,👓
+FNTN.DE,freenet,Telecomunicaciones,📡
+GFT.DE,GFT Technologies,Software / Servicios IT,💻
+JEN.DE,JENOPTIK,Fotónica / Tecnología,🔬
+KWS.DE,KWS Saat,Agricultura / Semillas,🌱
+LPK.DE,LPKF Laser & Electronics,Tecnología Industrial,🔬
+PVA.DE,PVA TePla,Equipamiento para Semiconductores,🔬
+S92.DE,SMA Solar,Tecnología Solar,☀️
+SBS.DE,STRATEC,Tecnología Médica,🧪
+SIX2.DE,Sixt,Movilidad / Alquiler de Vehículos,🚗
+TMV.DE,TeamViewer,Software,💻
+WAC.DE,Wacker Neuson,Maquinaria Industrial,⚙️
+PAT.DE,Patrizia,Inmobiliario / Gestión de Activos,🏢
+ARCAD.AS,Arcadis,Ingeniería / Infraestructuras,🏗️
+BFIT.AS,Basic-Fit,Fitness / Servicios al Consumidor,🏋️
+CTPNV.AS,CTP,Inmobiliario,🏢
+FUR.AS,Fugro,Ingeniería / Servicios Energéticos,🌊
+KENDR.AS,Kendrion,Componentes Industriales,⚙️
+TWEKA.AS,TKH Group,Tecnología / Industrial,🔌
+SBMO.AS,SBM Offshore,Servicios Energéticos Offshore,🌊
+ALFEN.AS,Alfen,Tecnología Energética,🔋
+NXFIL.AS,NX Filtration,Tecnología del Agua,💧
+FAST.AS,Fastned,Recarga de Vehículos Eléctricos,⚡
+PNL.AS,PostNL,Logística / Correos,📦
+CMCOM.AS,CM.com,Cloud / Comunicaciones,☁️
+EVS.BR,EVS Broadcast Equipment,Tecnología / Broadcasting,📺
+RECT.BR,Recticel,Materiales Industriales,🧱
+XIOR.BR,Xior Student Housing,Inmobiliario / Residencias,🏢
+DEME.BR,DEME Group,Ingeniería Marítima,⚓
+CFE.BR,CFE,Construcción / Infraestructuras,🏗️
+VGP.BR,VGP,Inmobiliario Logístico,🏭
+MELE.BR,Melexis,Semiconductores / Automoción,🔬
+BAR.BR,Barco,Tecnología / Visualización,🖥️
+ABCA.PA,ABC arbitrage,Servicios Financieros / Trading,📊
+ABEO.PA,ABEO,Equipamiento Deportivo,🏃
+AKWEL.PA,AKWEL,Componentes de Automoción,🚗
+ALTAREA.PA,Altarea,Inmobiliario,🏢
+ARAMI.PA,Aramis Group,Automoción / E-commerce,🚗
+ASSY.PA,Assystem,Ingeniería / Tecnología,🛠️
+ATEME.PA,Ateme,Tecnología de Vídeo,📺
+AUB.PA,Aubay,Consultoría IT,💻
+AVT.PA,Avenir Telecom,Telecomunicaciones / Retail,📱
+BLC.PA,Bastide Le Confort Médical,Servicios Sanitarios,🩺
+BEN.PA,Beneteau,Ocio / Embarcaciones,🛥️
+BON.PA,Bonduelle,Alimentación,🥫
+CARM.PA,Carmila,Inmobiliario / Retail,🏬
+COV.PA,Covivio,Inmobiliario,🏢
+DBV.PA,DBV Technologies,Biotecnología,🧬
+DERIC.PA,Derichebourg,Servicios Industriales / Medio Ambiente,♻️
+EKI.PA,Ekinops,Equipamiento de Telecomunicaciones,📡
+ELIOR.PA,Elior Group,Servicios de Alimentación,🍽️
+ANSS,ANSYS,Software / Ingeniería,💻
+APPF,AppFolio,Software,☁️
+BOOT,BOOT Barn Holdings,Retail / Moda,👢
+CELH,Celsius Holdings,Consumo / Bebidas,🥤
+CRDO,Credo Technology,Semiconductores,🔬
+DOCS,Doximity,HealthTech,🩺
+ENSG,Ensign Group,Servicios Sanitarios,🏥
+FIVE,Five Below,Retail / Consumo,🛍️
+GKOS,Glaukos,Dispositivos Médicos,👁️
+IESC,IES Holdings,Industrial / Servicios,🏗️
+LITE,Lumentum,Tecnología Óptica,📡
+ONTO,Onto Innovation,Equipamiento para Semiconductores,🔬
+PCVX,Vaxcyte,Biotecnología,🧬
+PLMR,Palomar Holdings,Seguros,🛡️
+RKLB,Rocket Lab USA,Tecnología Espacial,🚀
+RYAN,Ryan Specialty Holdings,Seguros,🛡️
+SFM,Sprouts Farmers Market,Distribución Alimentaria,🥦
+TMDX,TransMedics,Dispositivos Médicos,🩺
+UFPI,Universal Forest Products,Materiales / Construcción,🪵
+WING,Wingstop,Restauración,🍗
+WMS,Advanced Drainage Systems,Infraestructuras / Materiales,🛠️
+CARG,CarGurus,Marketplace Automoción,🚗
