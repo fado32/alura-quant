@@ -1,5 +1,5 @@
 # ============================================================
-# ALURA QUANT V4.3.1
+# ALURA QUANT V4.5
 # ============================================================
 #
 # ARQUITECTURA
@@ -738,6 +738,48 @@ def guardar_csv_seguro(df, ruta):
 # DESCARGA ROBUSTA YAHOO
 # ============================================================
 
+def obtener_precio_tiempo_real(ticker):
+    """
+    Obtiene el último precio disponible independientemente de que exista
+    una nueva vela diaria.
+
+    Prioridad:
+    1. fast_info.last_price
+    2. histórico intradía de 5 minutos
+    3. histórico intradía de 1 minuto
+
+    Si Yahoo no devuelve precio intradía, devuelve None. Esto NO se
+    interpreta como ticker delisted ni como nueva sesión diaria.
+    """
+    # Vía rápida de yfinance.
+    try:
+        info = yf.Ticker(ticker).fast_info
+        precio = info.get("last_price")
+        if precio is not None and pd.notna(precio) and float(precio) > 0:
+            return float(precio)
+    except Exception:
+        pass
+
+    # Fallback intradía. 5m suele ser más tolerante que 1m.
+    for intervalo in ("5m", "1m"):
+        try:
+            datos = yf.Ticker(ticker).history(
+                period="1d",
+                interval=intervalo,
+                auto_adjust=True,
+                actions=False,
+            )
+            if datos is None or datos.empty or "Close" not in datos.columns:
+                continue
+            serie = pd.to_numeric(datos["Close"], errors="coerce").dropna()
+            if not serie.empty and float(serie.iloc[-1]) > 0:
+                return float(serie.iloc[-1])
+        except Exception:
+            continue
+
+    return None
+
+
 def descargar_historico_ticker(
     ticker,
     period=PERIODO_ACTUAL
@@ -1294,7 +1336,7 @@ def preparar_indicadores(
             pd.NA
         )
 
-    ).fillna(0)
+    ).astype("float64").fillna(0.0)
 
     return d
 
@@ -3495,15 +3537,17 @@ def debe_llamar_ia_seguimiento(
 
 def actualizar_alertas_activas():
     """
-    Actualiza únicamente el estado ACTUAL de las alertas.
+    Actualiza el seguimiento de alertas ACTIVA separando dos capas:
 
-    REGLAS:
-    - Precio_Alerta, Score_Entrada, indicadores de entrada, Stop_Loss,
-      Take_Profit y tesis original son INMUTABLES.
-    - Precio/indicadores/tesis IA actuales solo cambian cuando Yahoo
-      entrega una sesión de mercado distinta a Fecha_Mercado_Actual.
-    - Si sábado, domingo, festivo o Yahoo devuelve la misma última vela,
-      no se llama a la IA y se conserva el comentario anterior.
+    1. PRECIO OPERATIVO: se actualiza en cada ejecución si Yahoo ofrece
+       un precio actual/intradía válido. Esto permite actualizar P&L,
+       distancia a SL y distancia a TP aunque no exista una nueva vela
+       diaria.
+
+    2. SNAPSHOT DIARIO: Score, RSI, ROC20, RVOL, EMAs, tesis y comentario
+       IA solo se recalculan cuando Yahoo entrega una sesión diaria nueva.
+
+    La tesis original y los campos de entrada permanecen INMUTABLES.
     """
     df = cargar_historial()
     if df.empty:
@@ -3516,15 +3560,20 @@ def actualizar_alertas_activas():
 
     print(f"\n🔄 Revisando {len(indices)} alerta(s) ACTIVA...")
     changed = False
+    changed_price = False
+    changed_daily = False
 
     for i in indices:
         ticker = str(df.at[i, "Ticker"]).strip()
         try:
+            # --------------------------------------------------------
+            # 1) Histórico diario: indicadores / sesión de mercado
+            # --------------------------------------------------------
             datos, estado_descarga = descargar_historico_ticker(
                 ticker, period=PERIODO_ACTUAL
             )
             if datos is None:
-                print(f"⚠️ {ticker}: sin actualización de mercado. Motivo: {estado_descarga}")
+                print(f"⚠️ {ticker}: sin actualización de histórico diario. Motivo: {estado_descarga}")
                 continue
 
             actual = obtener_estado_actual(ticker, datos)
@@ -3539,14 +3588,50 @@ def actualizar_alertas_activas():
                 print(f"⚠️ {ticker}: Yahoo no devolvió una fecha de mercado válida.")
                 continue
 
-            # No hay vela nueva: conservar TODO el snapshot actual y la IA.
+            # --------------------------------------------------------
+            # 2) Precio operativo: independiente de la vela diaria
+            # --------------------------------------------------------
+            precio_operativo = obtener_precio_tiempo_real(ticker)
+            if precio_operativo is None:
+                # Si no hay intradía, usamos el último cierre diario real.
+                # Esto mantiene el bot funcional sin inventar un precio.
+                precio_operativo = float(actual["precio"])
+                fuente_precio = "cierre diario"
+            else:
+                fuente_precio = "precio actual"
+
+            entrada = float(df.at[i, "Precio_Alerta"])
+            sl = float(df.at[i, "Stop_Loss"])
+            tp = float(df.at[i, "Take_Profit"])
+
+            pnl_pct = ((precio_operativo / entrada) - 1) * 100
+            distancia_sl = ((precio_operativo - sl) / precio_operativo) * 100
+            distancia_tp = ((tp - precio_operativo) / precio_operativo) * 100
+
+            # Precio/P&L/SL/TP se actualizan SIEMPRE que tenemos un precio.
+            df.at[i, "Precio_Actual"] = precio_operativo
+            df.at[i, "Distancia_SL_Pct"] = round(distancia_sl, 2)
+            df.at[i, "Distancia_TP_Pct"] = round(distancia_tp, 2)
+            df.at[i, "P&L_Actual_Pct"] = round(pnl_pct, 2)
+            df.at[i, "Ultima_Actualizacion"] = ahora().strftime("%Y-%m-%d %H:%M")
+            changed = True
+            changed_price = True
+
+            # --------------------------------------------------------
+            # 3) Si NO hay nueva vela diaria, no tocamos indicadores,
+            #    Score ni tesis. Solo queda actualizado el precio.
+            # --------------------------------------------------------
             if fecha_guardada and fecha_mercado <= fecha_guardada:
                 print(
-                    f"⏸️ {ticker}: sin nueva sesión de mercado "
-                    f"({fecha_mercado}). Se conserva el comentario IA actual."
+                    f"📍 {ticker}: {fuente_precio} {precio_operativo:.2f} | "
+                    f"P&L {pnl_pct:+.2f}% | sin nueva sesión diaria "
+                    f"({fecha_mercado}). Score/tesis conservados."
                 )
                 continue
 
+            # --------------------------------------------------------
+            # 4) Nueva sesión diaria: recalcular snapshot completo.
+            # --------------------------------------------------------
             original = construir_original_desde_fila(df.loc[i])
             evolucion = evaluar_evolucion_estrategia(original, actual)
             estado_tesis = estado_estrategia(original, actual)
@@ -3561,15 +3646,6 @@ def actualizar_alertas_activas():
                 estado_tesis
             )
 
-            entrada = float(df.at[i, "Precio_Alerta"])
-            precio_actual = float(actual["precio"])
-            sl = float(df.at[i, "Stop_Loss"])
-            tp = float(df.at[i, "Take_Profit"])
-
-            pnl_pct = ((precio_actual / entrada) - 1) * 100
-            distancia_sl = ((precio_actual - sl) / precio_actual) * 100
-            distancia_tp = ((tp - precio_actual) / precio_actual) * 100
-
             comentario = ""
             if llamada_ia:
                 comentario = comentario_seguimiento(
@@ -3577,8 +3653,7 @@ def actualizar_alertas_activas():
                 )
                 comentario = str(comentario or "").replace("\n", " ").strip()
 
-            # Actualizamos SOLO campos dinámicos.
-            df.at[i, "Precio_Actual"] = precio_actual
+            # Los indicadores se basan en la nueva vela diaria real.
             df.at[i, "Score_Actual"] = actual["score"]
             df.at[i, "RVOL_Actual"] = actual["rvol"]
             df.at[i, "RSI_Actual"] = actual["rsi"]
@@ -3589,18 +3664,13 @@ def actualizar_alertas_activas():
             df.at[i, "Razones_Actuales"] = actual["razones"]
             df.at[i, "Soporte_Actual"] = actual["soporte"]
             df.at[i, "Resistencia_Actual"] = actual["resistencia"]
-            df.at[i, "Distancia_SL_Pct"] = round(distancia_sl, 2)
-            df.at[i, "Distancia_TP_Pct"] = round(distancia_tp, 2)
-            df.at[i, "P&L_Actual_Pct"] = round(pnl_pct, 2)
             df.at[i, "Estado_Estrategia"] = estado_tesis
             df.at[i, "Fecha_Mercado_Actual"] = fecha_mercado
-            df.at[i, "Ultima_Actualizacion"] = ahora().strftime("%Y-%m-%d %H:%M")
 
-            # Nunca sustituimos un comentario válido por vacío.
             if comentario:
                 df.at[i, "Analisis_IA_Actual"] = comentario
 
-            changed = True
+            changed_daily = True
 
             icono = {
                 "TESIS_REFORZADA": "🟢",
@@ -3611,8 +3681,8 @@ def actualizar_alertas_activas():
 
             print(
                 f"{icono} {ticker} | Mercado {fecha_mercado} | "
-                f"Entrada {entrada:.2f} | Actual {precio_actual:.2f} | "
-                f"P&L {pnl_pct:+.2f}% | Score {original['score']:.0f}→{actual['score']} | "
+                f"Actual {precio_operativo:.2f} | P&L {pnl_pct:+.2f}% | "
+                f"Score {original['score']:.0f}→{actual['score']} | "
                 f"Tesis: {estado_tesis} | "
                 f"IA: {'OK' if comentario else 'NO NECESARIA'} "
                 f"({motivo_ia})"
@@ -3627,10 +3697,14 @@ def actualizar_alertas_activas():
         for col in CAMPOS_NUMERICOS:
             df[col] = pd.to_numeric(df[col], errors="coerce")
         df = df.reindex(columns=CAMPOS_HISTORIAL)
-        df.to_csv(ARCHIVO_HISTORIAL, index=False)
-        print("✅ Seguimiento de alertas actualizado con nuevas sesiones de mercado.")
+        guardar_csv_seguro(df, ARCHIVO_HISTORIAL)
+
+        if changed_daily:
+            print("✅ Precio operativo actualizado y nuevas sesiones diarias procesadas.")
+        elif changed_price:
+            print("✅ Precio operativo/P&L actualizados. No había nuevas sesiones diarias.")
     else:
-        print("ℹ️ No hubo nuevas sesiones de mercado. No se modificó el seguimiento.")
+        print("ℹ️ No hubo datos de precio actualizables.")
 
 
 # ============================================================
