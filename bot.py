@@ -813,7 +813,6 @@ def descargar_historico_ticker(
                 group_by="column",
                 timeout=30,
             )
-            time.sleep(10)
             
             valido, resultado = validar_datos_mercado(datos)
 
@@ -1961,7 +1960,7 @@ R:R:
 
             reasoning_effort="low"
         )
-
+        time.sleep(5)
         return (
             respuesta
             .choices[0]
@@ -3087,7 +3086,7 @@ simplemente los datos.
 
             reasoning_effort="low"
         )
-
+        time.sleep(5)
         return (
             respuesta
             .choices[0]
