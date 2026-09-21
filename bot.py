@@ -813,7 +813,8 @@ def descargar_historico_ticker(
                 group_by="column",
                 timeout=30,
             )
-
+            time.sleep(10)
+            
             valido, resultado = validar_datos_mercado(datos)
 
             if valido:
