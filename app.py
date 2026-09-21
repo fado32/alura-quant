@@ -2,7 +2,7 @@ import os
 import re
 import html
 from datetime import datetime, timedelta
-
+import gspread
 import pandas as pd
 import streamlit as st
 import yfinance as yf
