@@ -435,20 +435,37 @@ def obtener_estado_actual(t, d):
     if d.empty:
         return None
     x = d.iloc[-1]
-    requeridos = ["Close", "E50", "E200", "RSI", "ATR", "VM20", "TO20", "ROC20", "H20"]
-    if any(pd.isna(x[k]) for k in requeridos):
-        return None
 
-    price = float(x.Close)
-    e50 = float(x.E50)
-    e200 = float(x.E200)
-    rsi_actual = float(x.RSI)
-    atr_actual = float(x.ATR)
-    rvol = float(x.Volume / x.VM20) if float(x.VM20) > 0 else 0
-    liquidez = float(x.TO20)
-    roc20 = float(x.ROC20)
-    ruptura = price > float(x.H20)
-    clv = float(x.CLV)
+    # Validamos y convertimos TODOS los campos numéricos que se utilizan
+    # posteriormente. Esto evita errores de tipo pd.NA -> float().
+    requeridos = [
+        "Close", "E50", "E200", "RSI", "ATR", "VM20",
+        "TO20", "ROC20", "H20", "Volume", "CLV"
+    ]
+
+    valores = {}
+    for campo in requeridos:
+        if campo not in x.index:
+            return None
+        valor = pd.to_numeric(x[campo], errors="coerce")
+        if pd.isna(valor):
+            return None
+        valores[campo] = float(valor)
+
+    price = valores["Close"]
+    e50 = valores["E50"]
+    e200 = valores["E200"]
+    rsi_actual = valores["RSI"]
+    atr_actual = valores["ATR"]
+    vm20 = valores["VM20"]
+    liquidez = valores["TO20"]
+    roc20 = valores["ROC20"]
+    h20 = valores["H20"]
+    volume = valores["Volume"]
+    clv = valores["CLV"]
+
+    rvol = volume / vm20 if vm20 > 0 else 0.0
+    ruptura = price > h20
 
     score = 0
     razones = []
@@ -573,7 +590,7 @@ def estado_estrategia(original, actual):
 
 def comentario_seguimiento(original, actual, fila, evolucion):
     try:
-        pnl_pct = ((float(actual["precio"]) / float(fila["precio_alerta"])) - 1) * 100
+        pnl_pct = ((float(actual["precio"]) / float(fila["Precio_Alerta"])) - 1) * 100
         system_prompt = "Eres el analista cuantitativo senior de Alura Quant monitorizando una estrategia abierta. Explica en max 3 frases cómo evoluciona la tesis original. Sin listas ni títulos."
         user_prompt = f"Activo: {original['empresa']} ({original['ticker']})\nP&L: {pnl_pct:+.2f}%\nLectura: {evolucion}"
         respuesta = cliente_ia().chat.completions.create(
@@ -585,7 +602,15 @@ def comentario_seguimiento(original, actual, fila, evolucion):
         return respuesta.choices[0].message.content.strip()
     except Exception as e:
         print(f"⚠️ Error IA seguimiento: {e}")
-        return f"Evolución con P&L del {pnl_pct:+.2f}% y score actual de {actual['score']}."
+        try:
+            precio_actual = float(actual.get("precio"))
+            precio_entrada = float(fila.get("Precio_Alerta"))
+            if precio_entrada > 0:
+                pnl_pct = ((precio_actual / precio_entrada) - 1) * 100
+                return f"Evolución con P&L del {pnl_pct:+.2f}% y score actual de {actual.get('score', 'N/D')}."
+        except Exception:
+            pass
+        return f"Evolución de la tesis disponible. Score actual: {actual.get('score', 'N/D')}."
 
 
 # ============================================================
