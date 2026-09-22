@@ -2784,7 +2784,7 @@ render_html(
             Alura Quant | Inteligencia Financiera
         </h1>
         <div class="hero-subtitle">
-            Procesamos todo el mercado con rigor matematico, para identificar oportunidades de valor.
+            Procesamos todo el mercado con rigor matematico, para identificar oportunidades de valor
         </div>
     </div>
 </div>
