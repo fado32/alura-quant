@@ -104,7 +104,6 @@ def cargar_universo():
             response = supabase.table("universo_activos").select("ticker, empresa, sector, icono, activo").execute()
             if response.data:
                 for r in response.data:
-                    # Opcional: puedes omitir si activo es False, o cargarlos todos
                     ticker = str(r.get("ticker", "")).strip()
                     if ticker and r.get("activo", True):
                         universo[ticker] = (
@@ -117,7 +116,6 @@ def cargar_universo():
         except Exception as e:
             print(f"⚠️ Error cargando universo desde Supabase, usando respaldo base: {e}")
 
-    # Fallback archivo local si Supabase no responde
     archivo_universo = os.path.join(BASE_DIR, "universo_activos.csv")
     if os.path.exists(archivo_universo):
         try:
@@ -155,7 +153,7 @@ CAMPOS_HISTORIAL = [
     "Estado", "Fecha_Salida", "Resultado_R", "MAE_R", "MFE_R"
 ]
 
-# Mapeo exacto de nombres de columnas en Python a snake_case en Supabase
+# Mapeo exacto actualizado con pnl_actual_pct
 MAPEO_COLUMNAS_SUPABASE = {
     "Fecha": "fecha", "Ticker": "ticker", "Empresa": "empresa", "Sector": "sector", "Icono": "icono", "Modo": "modo",
     "Precio_Alerta": "precio_alerta", "Score_Entrada": "score_entrada", "RVOL_Entrada": "rvol_entrada",
@@ -167,7 +165,7 @@ MAPEO_COLUMNAS_SUPABASE = {
     "RVOL_Actual": "rvol_actual", "RSI_Actual": "rsi_actual", "ROC20_Actual": "roc20_actual", "ATR_Actual": "atr_actual",
     "EMA50_Actual": "ema50_actual", "EMA200_Actual": "ema200_actual", "Razones_Actuales": "razones_actuales",
     "Soporte_Actual": "soporte_actual", "Resistencia_Actual": "resistencia_actual", "Distancia_SL_Pct": "distancia_sl_pct",
-    "Distancia_TP_Pct": "distancia_tp_pct", "P&L_Actual_Pct": "p_l_actual_pct", "Estado_Estrategia": "estado_estrategia",
+    "Distancia_TP_Pct": "distancia_tp_pct", "P&L_Actual_Pct": "pnl_actual_pct", "Estado_Estrategia": "estado_estrategia",
     "Ultima_Actualizacion": "ultima_actualizacion", "Fecha_Mercado_Actual": "fecha_mercado_actual",
     "Analisis_IA_Actual": "analisis_ia_actual", "Estado": "estado", "Fecha_Salida": "fecha_salida",
     "Resultado_R": "resultado_r", "MAE_R": "mae_r", "MFE_R": "mfe_r"
@@ -349,6 +347,9 @@ def descargar_lote(tickers, period=PERIODO_ACTUAL):
                 else:
                     for ticker in tickers:
                         try:
+                            if ticker not in datos_lote.columns.levels[0]:
+                                resultado[ticker] = (None, "SIN_DATOS")
+                                continue
                             datos = norm(datos_lote[ticker])
                             valido, datos_validos = validar_datos_mercado(datos)
                             if valido:
@@ -359,9 +360,9 @@ def descargar_lote(tickers, period=PERIODO_ACTUAL):
                             resultado[ticker] = (None, "ERROR_EXTRACCION: " + str(e))
                     
                     faltantes = [t for t in tickers if resultado.get(t, (None, ""))[0] is None]
-                    if not faltantes:
+                    if not [t for t in faltantes if not str(resultado[t][1]).startswith("SIN_DATOS")]:
                         return resultado
-                    for ticker in faltantes:
+                    for ticker in [t for t in faltantes if not str(resultado[t][1]).startswith("SIN_DATOS")]:
                         datos, estado = descargar_historico_ticker(ticker, period=period)
                         resultado[ticker] = (datos, estado)
                     return resultado
@@ -375,6 +376,8 @@ def descargar_lote(tickers, period=PERIODO_ACTUAL):
 
     for ticker in tickers:
         if ticker in resultado and resultado[ticker][0] is not None:
+            continue
+        if str(resultado.get(ticker, (None, ""))[1]).startswith("SIN_DATOS"):
             continue
         datos, estado = descargar_historico_ticker(ticker, period=period)
         resultado[ticker] = (datos, estado if datos is not None else ("ERROR_YAHOO: " + str(ultimo_error or estado)))
@@ -401,6 +404,10 @@ def atr(d, n=14):
 
 def preparar_indicadores(d):
     d = d.copy()
+    for col in ["Close", "High", "Low", "Volume"]:
+        d[col] = pd.to_numeric(d[col], errors="coerce")
+    d = d.dropna(subset=["Close", "High", "Low", "Volume"])
+    
     d["E20"] = d.Close.ewm(span=20, adjust=False).mean()
     d["E50"] = d.Close.ewm(span=50, adjust=False).mean()
     d["E200"] = d.Close.ewm(span=200, adjust=False).mean()
@@ -425,6 +432,8 @@ def obtener_estado_actual(t, d):
     if len(d) < 220:
         return None
     d = preparar_indicadores(d)
+    if d.empty:
+        return None
     x = d.iloc[-1]
     requeridos = ["Close", "E50", "E200", "RSI", "ATR", "VM20", "TO20", "ROC20", "H20"]
     if any(pd.isna(x[k]) for k in requeridos):
@@ -593,7 +602,6 @@ def cargar_historial():
         response = supabase.table("historial_alertas").select("*").execute()
         if response.data:
             df = pd.DataFrame(response.data)
-            # Renombrar columnas de Supabase (snake_case) a nombres internos del bot
             inv_map = {v: k for k, v in MAPEO_COLUMNAS_SUPABASE.items()}
             df = df.rename(columns=inv_map)
             
@@ -611,7 +619,6 @@ def guardar_en_supabase(fila_dict):
     if not supabase:
         return
     try:
-        # Convertir claves al formato de Supabase
         registro_db = {}
         for k, v in fila_dict.items():
             db_key = MAPEO_COLUMNAS_SUPABASE.get(k, k.lower())
@@ -763,7 +770,6 @@ def actualizar_alertas_activas():
                 if comentario:
                     cambios["Analisis_IA_Actual"] = comentario
 
-            # Actualizar en Supabase
             actualizar_fila_en_supabase(ticker, fecha_creacion, cambios)
             print(f"✅ {ticker} actualizado en Supabase | P&L: {pnl_pct:+.2f}%")
 
