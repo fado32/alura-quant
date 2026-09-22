@@ -1,15 +1,13 @@
+import os
+import re
 import html
 from datetime import datetime, timedelta
-
+import gspread
 import pandas as pd
 import streamlit as st
 import yfinance as yf
-from supabase import create_client
-
-# Google Sheets se mantiene únicamente para el registro de suscriptores
-# hasta que exista una tabla de suscriptores en Supabase.
-import gspread
 from google.oauth2.service_account import Credentials
+from supabase import create_client
 
 
 # ============================================================
@@ -24,67 +22,9 @@ st.set_page_config(
 
 
 # ============================================================
-# CONFIGURACIÓN SUPABASE
+# CONFIGURACIÓN DE GOOGLE SHEETS — SUSCRIPCIONES
 # ============================================================
-SUPABASE_URL = st.secrets.get("SUPABASE_URL", "").strip()
-SUPABASE_KEY = st.secrets.get("SUPABASE_KEY", "").strip()
 
-# Fallback para ejecución local mediante variables de entorno.
-if not SUPABASE_URL:
-    import os
-    SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
-if not SUPABASE_KEY:
-    import os
-    SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
-
-if not SUPABASE_URL or not SUPABASE_KEY:
-    st.error("No se han configurado SUPABASE_URL y SUPABASE_KEY en los secretos de Streamlit.")
-    st.stop()
-
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-
-# Mismo mapeo utilizado por bot.py: Supabase -> columnas que espera la UI.
-MAPEO_COLUMNAS_SUPABASE = {
-    "fecha": "Fecha", "ticker": "Ticker", "empresa": "Empresa", "sector": "Sector", "icono": "Icono", "modo": "Modo",
-    "precio_alerta": "Precio_Alerta", "score_entrada": "Score_Entrada", "rvol_entrada": "RVOL_Entrada",
-    "rsi_entrada": "RSI_Entrada", "roc20_entrada": "ROC20_Entrada", "atr_entrada": "ATR_Entrada",
-    "ema50_entrada": "EMA50_Entrada", "ema200_entrada": "EMA200_Entrada", "razones_entrada": "Razones_Entrada",
-    "soporte_entrada": "Soporte_Entrada", "resistencia_entrada": "Resistencia_Entrada", "analisis_ia_entrada": "Analisis_IA_Entrada",
-    "stop_loss": "Stop_Loss", "take_profit": "Take_Profit", "ratio_rr": "Ratio_RR", "riesgo_euros": "Riesgo_Euros",
-    "acciones": "Acciones", "nominal": "Nominal", "precio_actual": "Precio_Actual", "score_actual": "Score_Actual",
-    "rvol_actual": "RVOL_Actual", "rsi_actual": "RSI_Actual", "roc20_actual": "ROC20_Actual", "atr_actual": "ATR_Actual",
-    "ema50_actual": "EMA50_Actual", "ema200_actual": "EMA200_Actual", "razones_actuales": "Razones_Actuales",
-    "soporte_actual": "Soporte_Actual", "resistencia_actual": "Resistencia_Actual", "distancia_sl_pct": "Distancia_SL_Pct",
-    "distancia_tp_pct": "Distancia_TP_Pct", "pnl_actual_pct": "P&L_Actual_Pct", "estado_estrategia": "Estado_Estrategia",
-    "ultima_actualizacion": "Ultima_Actualizacion", "fecha_mercado_actual": "Fecha_Mercado_Actual",
-    "analisis_ia_actual": "Analisis_IA_Actual", "estado": "Estado", "fecha_salida": "Fecha_Salida",
-    "resultado_r": "Resultado_R", "mae_r": "MAE_R", "mfe_r": "MFE_R",
-}
-
-
-def normalizar_historial_supabase(df):
-    """Convierte las columnas snake_case de Supabase al esquema que usa la UI."""
-    if df is None or df.empty:
-        return pd.DataFrame()
-
-    df = df.copy().rename(columns=MAPEO_COLUMNAS_SUPABASE)
-
-    # Garantiza que la UI siempre encuentre las columnas que espera.
-    columnas_esperadas = list(MAPEO_COLUMNAS_SUPABASE.values())
-    for col in columnas_esperadas:
-        if col not in df.columns:
-            df[col] = None
-
-    return df
-
-
-# ============================================================
-# CONFIGURACIÓN DE GOOGLE SHEETS
-# ============================================================
-# Se mantiene para el registro de suscriptores porque bot.py no define
-# ninguna tabla de suscriptores en Supabase. El histórico y el universo
-# ya NO dependen de Google Sheets ni de CSV.
 def conectar_google_sheets(nombre_pestana):
     scope = [
         "https://spreadsheets.google.com/feeds",
@@ -96,14 +36,11 @@ def conectar_google_sheets(nombre_pestana):
             creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
         else:
             creds = Credentials.from_service_account_file("credentials.json", scopes=scope)
-
         client = gspread.authorize(creds)
-        sheet = client.open("Alura_DB").worksheet(nombre_pestana)
-        return sheet
+        return client.open("Alura_DB").worksheet(nombre_pestana)
     except Exception as e:
         print(f"Error conectando a Google Sheets: {e}")
         return None
-
 
 def guardar_suscriptor_cloud(email, tipo="free"):
     try:
@@ -111,13 +48,10 @@ def guardar_suscriptor_cloud(email, tipo="free"):
         sheet = conectar_google_sheets(pestana)
         if sheet is None:
             return "error"
-
         registros = sheet.get_all_records()
         df = pd.DataFrame(registros)
-
-        if not df.empty and 'email' in df.columns and email in df['email'].values:
+        if not df.empty and "email" in df.columns and email in df["email"].values:
             return "exists"
-
         fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         sheet.append_row([email, fecha_actual])
         return "success"
@@ -125,11 +59,52 @@ def guardar_suscriptor_cloud(email, tipo="free"):
         print(f"Error guardando suscriptor: {e}")
         return "error"
 
+# ============================================================
+# CONFIGURACIÓN SUPABASE
+# ============================================================
 
-# ============================================================
-# CONFIGURACIÓN
-# ============================================================
 CAPITAL_POR_ALERTA = 300.0
+
+MAPEO_COLUMNAS_SUPABASE = {
+    "Fecha": "fecha", "Ticker": "ticker", "Empresa": "empresa", "Sector": "sector", "Icono": "icono", "Modo": "modo",
+    "Precio_Alerta": "precio_alerta", "Score_Entrada": "score_entrada", "RVOL_Entrada": "rvol_entrada",
+    "RSI_Entrada": "rsi_entrada", "ROC20_Entrada": "roc20_entrada", "ATR_Entrada": "atr_entrada",
+    "EMA50_Entrada": "ema50_entrada", "EMA200_Entrada": "ema200_entrada", "Razones_Entrada": "razones_entrada",
+    "Soporte_Entrada": "soporte_entrada", "Resistencia_Entrada": "resistencia_entrada", "Analisis_IA_Entrada": "analisis_ia_entrada",
+    "Stop_Loss": "stop_loss", "Take_Profit": "take_profit", "Ratio_RR": "ratio_rr", "Riesgo_Euros": "riesgo_euros",
+    "Acciones": "acciones", "Nominal": "nominal", "Precio_Actual": "precio_actual", "Score_Actual": "score_actual",
+    "RVOL_Actual": "rvol_actual", "RSI_Actual": "rsi_actual", "ROC20_Actual": "roc20_actual", "ATR_Actual": "atr_actual",
+    "EMA50_Actual": "ema50_actual", "EMA200_Actual": "ema200_actual", "Razones_Actuales": "razones_actuales",
+    "Soporte_Actual": "soporte_actual", "Resistencia_Actual": "resistencia_actual", "Distancia_SL_Pct": "distancia_sl_pct",
+    "Distancia_TP_Pct": "distancia_tp_pct", "P&L_Actual_Pct": "pnl_actual_pct", "Estado_Estrategia": "estado_estrategia",
+    "Ultima_Actualizacion": "ultima_actualizacion", "Fecha_Mercado_Actual": "fecha_mercado_actual",
+    "Analisis_IA_Actual": "analisis_ia_actual", "Estado": "estado", "Fecha_Salida": "fecha_salida",
+    "Resultado_R": "resultado_r", "MAE_R": "mae_r", "MFE_R": "mfe_r"
+}
+CAMPOS_HISTORIAL = list(MAPEO_COLUMNAS_SUPABASE.keys())
+
+def conectar_supabase():
+    url = key = ""
+    try:
+        if "supabase" in st.secrets:
+            bloque = st.secrets["supabase"]
+            url = str(bloque.get("url", "")).strip()
+            key = str(bloque.get("key", "")).strip()
+    except Exception:
+        pass
+    if not url or not key:
+        url = os.getenv("SUPABASE_URL", "").strip()
+        key = os.getenv("SUPABASE_KEY", "").strip()
+    if not url or not key:
+        st.error("Supabase no está configurado. Comprueba Streamlit Secrets: [supabase] con url y key.")
+        st.stop()
+    try:
+        return create_client(url, key)
+    except Exception as e:
+        st.error(f"No se pudo inicializar Supabase: {e}")
+        st.stop()
+
+supabase = conectar_supabase()
 
 
 # ============================================================
@@ -248,20 +223,20 @@ def formatear_tesis_ia(texto):
     return html.escape(texto).replace("\n", "<br>")
 
 
-def obtener_total_activos():
-    """Calcula dinámicamente el total de activos activos desde Supabase."""
+@st.cache_data(ttl=60)
+def cargar_universo_supabase():
     try:
-        response = (
-            supabase
-            .table("universo_activos")
-            .select("ticker, activo")
-            .execute()
-        )
-        return sum(1 for row in (response.data or []) if row.get("activo", True))
+        response = supabase.table("universo_activos").select("ticker, empresa, sector, icono, activo").eq("activo", True).execute()
+        df = pd.DataFrame(response.data or [])
+        if df.empty:
+            return pd.DataFrame(columns=["Ticker", "Empresa", "Sector", "Icono", "Activo"])
+        return df.rename(columns={"ticker":"Ticker", "empresa":"Empresa", "sector":"Sector", "icono":"Icono", "activo":"Activo"})
     except Exception as e:
-        print(f"Error cargando universo desde Supabase: {e}")
-        return 0
+        st.error(f"Error cargando universo desde Supabase: {e}")
+        return pd.DataFrame(columns=["Ticker", "Empresa", "Sector", "Icono", "Activo"])
 
+def obtener_total_activos():
+    return int(len(cargar_universo_supabase()))
 
 TOTAL_ACTIVOS_UNIVERSO = obtener_total_activos()
 
@@ -272,22 +247,28 @@ TOTAL_ACTIVOS_UNIVERSO = obtener_total_activos()
 
 @st.cache_data(ttl=30)
 def cargar_datos():
-    """Carga el historial directamente desde Supabase."""
     try:
-        response = (
-            supabase
-            .table("historial_alertas")
-            .select("*")
-            .order("fecha", desc=False)
-            .execute()
-        )
-
-        return normalizar_historial_supabase(
-            pd.DataFrame(response.data or [])
-        )
+        registros = []
+        inicio = 0
+        tamano = 1000
+        while True:
+            response = supabase.table("historial_alertas").select("*").range(inicio, inicio + tamano - 1).execute()
+            lote = response.data or []
+            registros.extend(lote)
+            if len(lote) < tamano:
+                break
+            inicio += tamano
+        if not registros:
+            return pd.DataFrame(columns=CAMPOS_HISTORIAL)
+        df = pd.DataFrame(registros)
+        df = df.rename(columns={v:k for k,v in MAPEO_COLUMNAS_SUPABASE.items()})
+        for col in CAMPOS_HISTORIAL:
+            if col not in df.columns:
+                df[col] = None
+        return df
     except Exception as e:
-        st.error(f"No se ha podido cargar el historial desde Supabase: {e}")
-        return pd.DataFrame()
+        st.error(f"Error cargando historial desde Supabase: {e}")
+        return pd.DataFrame(columns=CAMPOS_HISTORIAL)
 
 
 @st.cache_data(ttl=300)
@@ -324,7 +305,7 @@ def obtener_precio_actual(ticker):
 
 def obtener_precios_activos(df):
     """
-    Usa primero Precio_Actual persistido por bot.py en Supabase.
+    Usa primero Precio_Actual persistido por bot.py.
     Solo consulta Yahoo como fallback cuando Supabase no tiene precio.
     Así la web no inventa una actualización durante fines de semana/festivos.
     """
@@ -337,9 +318,9 @@ def obtener_precios_activos(df):
         if not ticker:
             continue
 
-        precio_csv = safe_float(row.get("Precio_Actual"))
-        if precio_csv is not None:
-            precios[ticker] = precio_csv
+        precio_persistido = safe_float(row.get("Precio_Actual"))
+        if precio_persistido is not None:
+            precios[ticker] = precio_persistido
             continue
 
         precio = obtener_precio_actual(ticker)
@@ -2763,13 +2744,15 @@ color_resultado = (
 # ============================================================
 
 def obtener_fecha_ultima_actualizacion(df):
-    """Obtiene la fecha más reciente disponible en Supabase."""
     try:
-        if not df.empty and "Fecha" in df.columns:
-            max_fecha = df["Fecha"].max()
-            if pd.notna(max_fecha):
-                return pd.to_datetime(max_fecha).strftime("%d/%m/%Y %H:%M")
-        
+        candidatos = []
+        for col in ("Ultima_Actualizacion", "Fecha", "Fecha_Mercado_Actual"):
+            if col in df.columns:
+                serie = pd.to_datetime(df[col], errors="coerce").dropna()
+                if not serie.empty:
+                    candidatos.append(serie.max())
+        if candidatos:
+            return max(candidatos).strftime("%d/%m/%Y %H:%M")
     except Exception:
         pass
     return datetime.now().strftime("%d/%m/%Y %H:%M")
@@ -4277,7 +4260,7 @@ with tab_planes:
                 elif resultado == "exists":
                     st.warning("Este correo ya se encuentra registrado.")
                 else:
-                    st.error("Hubo un error al procesar el registro con Google Sheets.")
+                    st.error("Hubo un error al procesar el registro.")
             else:
                     st.error("Introduce un correo electrónico válido.")
 
