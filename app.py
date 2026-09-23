@@ -2,11 +2,10 @@ import os
 import re
 import html
 from datetime import datetime, timedelta
-import gspread
 import pandas as pd
 import streamlit as st
 import yfinance as yf
-from google.oauth2.service_account import Credentials
+import plotly.graph_objects as go
 from supabase import create_client
 
 
@@ -22,42 +21,96 @@ st.set_page_config(
 
 
 # ============================================================
-# CONFIGURACIÓN DE GOOGLE SHEETS — SUSCRIPCIONES
+# CONFIGURACIÓN SUPABASE
 # ============================================================
 
-def conectar_google_sheets(nombre_pestana):
-    scope = [
-        "https://spreadsheets.google.com/feeds",
-        "https://www.googleapis.com/auth/drive"
-    ]
-    try:
-        if "gcp_service_account" in st.secrets:
-            creds_dict = dict(st.secrets["gcp_service_account"])
-            creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
-        else:
-            creds = Credentials.from_service_account_file("credentials.json", scopes=scope)
-        client = gspread.authorize(creds)
-        return client.open("Alura_DB").worksheet(nombre_pestana)
-    except Exception as e:
-        print(f"Error conectando a Google Sheets: {e}")
-        return None
+CAPITAL_POR_ALERTA = 300.0
 
-def guardar_suscriptor_cloud(email, tipo="free"):
+MAPEO_COLUMNAS_SUPABASE = {
+    "Fecha": "fecha", "Ticker": "ticker", "Empresa": "empresa", "Sector": "sector", "Icono": "icono", "Modo": "modo",
+    "Precio_Alerta": "precio_alerta", "Score_Entrada": "score_entrada", "RVOL_Entrada": "rvol_entrada",
+    "RSI_Entrada": "rsi_entrada", "ROC20_Entrada": "roc20_entrada", "ATR_Entrada": "atr_entrada",
+    "EMA50_Entrada": "ema50_entrada", "EMA200_Entrada": "ema200_entrada", "Razones_Entrada": "razones_entrada",
+    "Soporte_Entrada": "soporte_entrada", "Resistencia_Entrada": "resistencia_entrada", "Analisis_IA_Entrada": "analisis_ia_entrada",
+    "Stop_Loss": "stop_loss", "Take_Profit": "take_profit", "Ratio_RR": "ratio_rr", "Riesgo_Euros": "riesgo_euros",
+    "Acciones": "acciones", "Nominal": "nominal", "Precio_Actual": "precio_actual", "Score_Actual": "score_actual",
+    "RVOL_Actual": "rvol_actual", "RSI_Actual": "rsi_actual", "ROC20_Actual": "roc20_actual", "ATR_Actual": "atr_actual",
+    "EMA50_Actual": "ema50_actual", "EMA200_Actual": "ema200_actual", "Razones_Actuales": "razones_actuales",
+    "Soporte_Actual": "soporte_actual", "Resistencia_Actual": "resistencia_actual", "Distancia_SL_Pct": "distancia_sl_pct",
+    "Distancia_TP_Pct": "distancia_tp_pct", "P&L_Actual_Pct": "pnl_actual_pct", "Estado_Estrategia": "estado_estrategia",
+    "Ultima_Actualizacion": "ultima_actualizacion", "Fecha_Mercado_Actual": "fecha_mercado_actual",
+    "Analisis_IA_Actual": "analisis_ia_actual", "Estado": "estado", "Fecha_Salida": "fecha_salida",
+    "Resultado_R": "resultado_r", "MAE_R": "mae_r", "MFE_R": "mfe_r"
+}
+CAMPOS_HISTORIAL = list(MAPEO_COLUMNAS_SUPABASE.keys())
+
+
+def conectar_supabase():
+    url = key = ""
     try:
-        pestana = "free" if tipo == "free" else "vip"
-        sheet = conectar_google_sheets(pestana)
-        if sheet is None:
-            return "error"
-        registros = sheet.get_all_records()
-        df = pd.DataFrame(registros)
-        if not df.empty and "email" in df.columns and email in df["email"].values:
-            return "exists"
-        fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        sheet.append_row([email, fecha_actual])
-        return "success"
+        if "supabase" in st.secrets:
+            bloque = st.secrets["supabase"]
+            url = str(bloque.get("url", "")).strip()
+            key = str(bloque.get("key", "")).strip()
+    except Exception:
+        pass
+
+    if not url or not key:
+        url = os.getenv("SUPABASE_URL", "").strip()
+        key = os.getenv("SUPABASE_KEY", "").strip()
+
+    if not url or not key:
+        st.error("Supabase no está configurado. Comprueba Streamlit Secrets: [supabase] con url y key.")
+        st.stop()
+
+    try:
+        return create_client(url, key)
     except Exception as e:
-        print(f"Error guardando suscriptor: {e}")
-        return "error"
+        st.error(f"No se pudo inicializar Supabase: {e}")
+        st.stop()
+
+
+supabase = conectar_supabase()
+
+
+def guardar_suscriptor_supabase(email, tipo="free"):
+    """Registra un email en la tabla Supabase correspondiente."""
+    email = str(email or "").strip().lower()
+    if not email or "@" not in email or "." not in email.split("@")[-1]:
+        return "invalid"
+
+    tabla = "suscriptores_vip" if tipo == "vip" else "suscriptores_free"
+
+    try:
+        # on_conflict evita errores si el usuario ya está registrado.
+        response = (
+            supabase
+            .table(tabla)
+            .upsert(
+                {"email": email},
+                on_conflict="email",
+                ignore_duplicates=True
+            )
+            .execute()
+        )
+        return "success" if response.data is not None else "exists"
+    except Exception as e:
+        # Algunos clientes/versiones de postgrest pueden no soportar
+        # ignore_duplicates de la misma forma; hacemos fallback a insert.
+        try:
+            supabase.table(tabla).insert({"email": email}).execute()
+            return "success"
+        except Exception as inner:
+            if "duplicate" in str(inner).lower() or "unique" in str(inner).lower():
+                return "exists"
+            print(f"Error registrando suscriptor en {tabla}: {inner}")
+            return "error"
+
+
+def validar_email(email):
+    email = str(email or "").strip()
+    return bool(re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email))
+
 
 # ============================================================
 # CONFIGURACIÓN SUPABASE
@@ -297,6 +350,188 @@ def obtener_precio_actual(ticker):
         pass
 
     return None
+
+
+# ============================================================
+# BACKTESTING DIARIO — CURVA DE BENEFICIO
+# ============================================================
+
+@st.cache_data(ttl=120)
+def cargar_backtesting_diario():
+    """Carga snapshots diarios de backtesting_diario_alertas desde Supabase."""
+    columnas = [
+        "fecha_snapshot", "alerta_id", "ticker", "estado",
+        "precio_alerta", "precio_actual", "pnl_actual_pct",
+        "mae_r", "mfe_r", "score_actual", "rsi_actual",
+        "atr_actual", "distancia_sl_pct", "distancia_tp_pct",
+        "ultima_actualizacion"
+    ]
+
+    try:
+        registros = []
+        inicio = 0
+        tamano = 1000
+
+        while True:
+            response = (
+                supabase
+                .table("backtesting_diario_alertas")
+                .select(",".join(columnas))
+                .order("fecha_snapshot", desc=False)
+                .range(inicio, inicio + tamano - 1)
+                .execute()
+            )
+            lote = response.data or []
+            registros.extend(lote)
+
+            if len(lote) < tamano:
+                break
+            inicio += tamano
+
+        if not registros:
+            return pd.DataFrame(columns=columnas)
+
+        df = pd.DataFrame(registros)
+
+        df["fecha_snapshot"] = pd.to_datetime(
+            df["fecha_snapshot"], errors="coerce"
+        ).dt.normalize()
+
+        for col in [
+            "pnl_actual_pct", "mae_r", "mfe_r", "score_actual",
+            "rsi_actual", "atr_actual", "distancia_sl_pct",
+            "distancia_tp_pct", "precio_alerta", "precio_actual"
+        ]:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+
+        return df.dropna(subset=["fecha_snapshot"])
+
+    except Exception as e:
+        print(f"Error cargando backtesting diario: {e}")
+        return pd.DataFrame(columns=columnas)
+
+
+def calcular_curva_backtesting(df_backtest):
+    """
+    Construye una curva diaria a partir del último snapshot disponible
+    de cada alerta en cada fecha.
+
+    pnl_actual_pct representa el P&L actual de cada alerta frente a su
+    entrada. Por tanto, el agregado diario es un P&L mark-to-market
+    de la cartera, no una suma de operaciones cerradas.
+    """
+    if df_backtest is None or df_backtest.empty:
+        return pd.DataFrame()
+
+    df = df_backtest.copy()
+
+    required = {"fecha_snapshot", "alerta_id", "pnl_actual_pct"}
+    if not required.issubset(df.columns):
+        return pd.DataFrame()
+
+    df = df.dropna(subset=["fecha_snapshot", "alerta_id"])
+    df["pnl_eur"] = df["pnl_actual_pct"].fillna(0) * CAPITAL_POR_ALERTA / 100
+
+    # Una fila por alerta y día. La constraint unique de Supabase ya
+    # garantiza esto, pero mantenemos la deduplicación por robustez.
+    df = (
+        df.sort_values(["fecha_snapshot", "alerta_id"])
+          .drop_duplicates(["fecha_snapshot", "alerta_id"], keep="last")
+    )
+
+    diario = (
+        df.groupby("fecha_snapshot", as_index=False)
+          .agg(
+              pnl_eur=("pnl_eur", "sum"),
+              pnl_pct_total=("pnl_actual_pct", "sum"),
+              alertas=("alerta_id", "nunique"),
+          )
+          .sort_values("fecha_snapshot")
+    )
+
+    if diario.empty:
+        return diario
+
+    diario["variacion_dia_eur"] = diario["pnl_eur"].diff().fillna(diario["pnl_eur"])
+    diario["fecha"] = diario["fecha_snapshot"].dt.strftime("%Y-%m-%d")
+
+    return diario
+
+
+def obtener_snapshot_backtesting_actual(df_backtest):
+    """Obtiene el último snapshot de cada alerta y suma su P&L actual."""
+    if df_backtest is None or df_backtest.empty:
+        return 0.0, 0, 0
+
+    df = df_backtest.dropna(subset=["fecha_snapshot", "alerta_id"]).copy()
+    if df.empty:
+        return 0.0, 0, 0
+
+    latest_date = df["fecha_snapshot"].max()
+    latest = df[df["fecha_snapshot"] == latest_date].copy()
+
+    latest["pnl_eur"] = latest["pnl_actual_pct"].fillna(0) * CAPITAL_POR_ALERTA / 100
+
+    total = float(latest["pnl_eur"].sum())
+    positivas = int((latest["pnl_eur"] > 0).sum())
+    negativas = int((latest["pnl_eur"] < 0).sum())
+
+    return total, positivas, negativas
+
+
+def calcular_metricas_resultados(df_historial, df_curva):
+    """Métricas de presentación para el cuadro de mando de Resultados."""
+    resultado = {
+        "profit_factor": None,
+        "avg_win": None,
+        "avg_loss": None,
+        "max_drawdown": 0.0,
+        "mejor_dia": None,
+        "peor_dia": None,
+        "dias": 0,
+    }
+
+    if df_curva is not None and not df_curva.empty:
+        resultado["dias"] = int(len(df_curva))
+        cambios = pd.to_numeric(df_curva["variacion_dia_eur"], errors="coerce").dropna()
+        if not cambios.empty:
+            resultado["mejor_dia"] = float(cambios.max())
+            resultado["peor_dia"] = float(cambios.min())
+
+        equity = pd.to_numeric(df_curva["pnl_eur"], errors="coerce").fillna(0)
+        peak = equity.cummax()
+        drawdown = equity - peak
+        resultado["max_drawdown"] = float(drawdown.min())
+
+    if df_historial is not None and not df_historial.empty:
+        ganancias = []
+        perdidas = []
+
+        for _, row in df_historial.iterrows():
+            estado = str(row.get("Estado", ""))
+            entrada = safe_float(row.get("Precio_Alerta"))
+            sl = safe_float(row.get("Stop_Loss"))
+            tp = safe_float(row.get("Take_Profit"))
+
+            if entrada is None or entrada <= 0:
+                continue
+
+            if "OBJETIVO_CUMPLIDO" in estado and tp is not None:
+                ganancias.append(CAPITAL_POR_ALERTA * (tp - entrada) / entrada)
+            elif "STOP_SALTADO" in estado and sl is not None:
+                perdidas.append(CAPITAL_POR_ALERTA * (sl - entrada) / entrada)
+
+        resultado["avg_win"] = float(pd.Series(ganancias).mean()) if ganancias else None
+        resultado["avg_loss"] = float(pd.Series(perdidas).mean()) if perdidas else None
+
+        gross_profit = sum(v for v in ganancias if v > 0)
+        gross_loss = abs(sum(v for v in perdidas if v < 0))
+        resultado["profit_factor"] = (
+            gross_profit / gross_loss if gross_loss > 0 else None
+        )
+
+    return resultado
 
 
 # ============================================================
@@ -671,82 +906,47 @@ def calcular_resultados(
 # POSITION METRICS
 # ============================================================
 
-def calcular_position_percentages(
-    stop_loss,
-    entrada,
-    actual,
-    take_profit
-):
-
+def calcular_position_percentages(stop_loss, entrada, actual, take_profit):
     """
-    Calcula la posición relativa de SL /
-    Entrada / Actual / TP dentro de una
-    escala visual.
-    """
+    Escala VISUAL FIJA basada exclusivamente en SL / Entrada / TP.
 
+    El precio actual nunca redefine el rango. Esto evita el bug visual
+    por el que la zona verde se desplazaba o cambiaba de tamaño cuando
+    el precio se acercaba al stop loss.
+    """
     values = [
-        v
-        for v in [
-            stop_loss,
-            entrada,
-            actual,
-            take_profit
-        ]
-        if v is not None
+        safe_float(stop_loss),
+        safe_float(entrada),
+        safe_float(take_profit),
     ]
 
-    if len(values) < 2:
+    if any(v is None for v in values):
         return None
 
-    minimum = min(values)
-    maximum = max(values)
+    sl, entry, tp = values
 
-    rango = (
-        maximum -
-        minimum
-    )
-
-    if rango <= 0:
+    if not (sl < entry < tp):
         return None
 
+    # Pequeño margen visual, pero fijo para cada operación.
+    rango = tp - sl
     margen = rango * 0.08
+    minimum = sl - margen
+    maximum = tp + margen
+    escala = maximum - minimum
 
-    minimum -= margen
-    maximum += margen
-
-    rango = (
-        maximum -
-        minimum
-    )
-
-    def position(value):
-
+    def position(value, clamp=True):
+        value = safe_float(value)
         if value is None:
             return None
-
-        pct = (
-            (
-                value -
-                minimum
-            )
-            /
-            rango
-            * 100
-        )
-
-        return max(
-            3,
-            min(
-                97,
-                pct
-            )
-        )
+        pct = (value - minimum) / escala * 100
+        return max(0, min(100, pct)) if clamp else pct
 
     return {
-        "sl": position(stop_loss),
-        "entry": position(entrada),
+        "sl": position(sl),
+        "entry": position(entry),
         "current": position(actual),
-        "tp": position(take_profit),
+        "tp": position(tp),
     }
 
 
@@ -1044,36 +1244,6 @@ div[data-testid="stStatusWidget"] {
     transition:
         .2s ease;
 
-}
-
-.summary-card-pnl {
-    min-width: 330px;
-}
-
-.pnl-split {
-    display: flex;
-    align-items: center;
-    gap: 18px;
-    margin-top: 4px;
-}
-
-.pnl-block {
-    flex: 1;
-    min-width: 0;
-}
-
-.pnl-caption {
-    font-size: 9px;
-    font-weight: 800;
-    letter-spacing: .08em;
-    color: var(--text-tertiary);
-    margin-bottom: 2px;
-}
-
-.pnl-divider {
-    width: 1px;
-    height: 34px;
-    background: var(--border);
 }
 
 .summary-card:hover {
@@ -2626,6 +2796,394 @@ div[data-testid="stDataFrame"] {
 )
 
 
+
+# ============================================================
+# PREMIUM UI OVERRIDES
+# ============================================================
+
+st.markdown(
+    """
+<style>
+/* Dashboard header */
+.results-hero{
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:24px;
+    padding:24px 26px;
+    margin:4px 0 18px;
+    background:linear-gradient(135deg,#0f172a 0%,#172554 58%,#1d4ed8 100%);
+    border-radius:22px;
+    color:white;
+    box-shadow:0 18px 45px rgba(15,23,42,.12);
+}
+.eyebrow{
+    font-size:9px;
+    letter-spacing:.13em;
+    font-weight:800;
+    opacity:.68;
+    margin-bottom:7px;
+}
+.results-title{
+    font-family:'Plus Jakarta Sans';
+    font-size:25px;
+    font-weight:800;
+    letter-spacing:-.04em;
+}
+.results-subtitle{
+    margin-top:6px;
+    font-size:11px;
+    line-height:1.5;
+    color:rgba(255,255,255,.72);
+}
+.results-source{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    white-space:nowrap;
+    padding:8px 11px;
+    border:1px solid rgba(255,255,255,.14);
+    background:rgba(255,255,255,.08);
+    border-radius:999px;
+    font-size:9px;
+    font-weight:700;
+}
+.source-dot{
+    width:6px;height:6px;border-radius:50%;
+    background:#86efac;
+    box-shadow:0 0 0 4px rgba(134,239,172,.12);
+}
+
+/* Premium top cards */
+.premium-summary{gap:14px!important;}
+.summary-card{
+    position:relative;
+    overflow:hidden;
+    min-height:132px;
+    padding:18px 19px!important;
+    border-radius:18px!important;
+    border:1px solid #e5eaf2!important;
+}
+.summary-card::after{
+    content:"";
+    position:absolute;
+    right:-26px;
+    top:-30px;
+    width:90px;height:90px;
+    border-radius:50%;
+    background:#f8fafc;
+}
+.summary-card-primary{
+    border-color:#dbe7ff!important;
+    background:linear-gradient(145deg,#ffffff,#f5f8ff)!important;
+}
+.summary-card-primary::after{background:#e9f1ff;}
+.summary-topline{
+    position:relative;
+    z-index:1;
+    display:flex;
+    align-items:center;
+    gap:7px;
+    min-height:18px;
+}
+.summary-icon{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:23px;height:23px;
+    border-radius:8px;
+    background:#eff6ff;
+    color:#2563eb;
+    font-size:12px;
+    font-weight:800;
+}
+.summary-label{
+    font-size:9px!important;
+    letter-spacing:.09em!important;
+    margin:0!important;
+}
+.summary-status{
+    margin-left:auto;
+    padding:3px 7px;
+    border-radius:999px;
+    background:#ecfdf3;
+    color:#15803d;
+    font-size:7px;
+    font-weight:800;
+    letter-spacing:.08em;
+}
+.summary-value{
+    position:relative;
+    z-index:1;
+    margin-top:16px!important;
+    font-size:24px!important;
+}
+.summary-detail{
+    position:relative;
+    z-index:1;
+    margin-top:7px!important;
+    font-size:10px!important;
+}
+
+/* Result KPI cards */
+.results-kpi-grid{
+    display:grid;
+    grid-template-columns:1.35fr repeat(5,1fr);
+    gap:10px;
+    margin:0 0 18px;
+}
+.results-kpi{
+    min-width:0;
+    background:#fff;
+    border:1px solid #e7ebf2;
+    border-radius:16px;
+    padding:15px 16px;
+    box-shadow:0 5px 20px rgba(15,23,42,.025);
+}
+.results-kpi-main{
+    background:linear-gradient(145deg,#ffffff,#f6f9ff);
+    border-color:#dbe7ff;
+}
+.kpi-label{
+    color:#94a3b8;
+    font-size:8px;
+    letter-spacing:.09em;
+    font-weight:800;
+}
+.kpi-value{
+    margin-top:9px;
+    font-family:'Plus Jakarta Sans';
+    font-size:19px;
+    font-weight:800;
+    letter-spacing:-.035em;
+    white-space:nowrap;
+}
+.kpi-meta{
+    margin-top:5px;
+    color:#64748b;
+    font-size:9px;
+    line-height:1.35;
+}
+
+/* Result panels */
+.dashboard-panel{
+    background:#fff;
+    border:1px solid #e7ebf2;
+    border-radius:20px;
+    padding:20px;
+    box-shadow:0 8px 30px rgba(15,23,42,.035);
+    margin-bottom:14px;
+}
+.chart-panel{padding-bottom:14px;}
+.panel-heading{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom:12px;
+}
+.panel-title{
+    font-family:'Plus Jakarta Sans';
+    font-size:15px;
+    font-weight:800;
+    letter-spacing:-.02em;
+}
+.panel-subtitle{
+    color:#94a3b8;
+    font-size:9px;
+    margin-top:4px;
+}
+.panel-badge{
+    padding:5px 8px;
+    border-radius:999px;
+    background:#eff6ff;
+    color:#2563eb;
+    font-size:7px;
+    font-weight:800;
+    letter-spacing:.07em;
+}
+.mini-table-title{
+    margin:4px 0 8px;
+    color:#64748b;
+    font-size:9px;
+    font-weight:800;
+    text-transform:uppercase;
+    letter-spacing:.07em;
+}
+.insight-panel{padding:19px;}
+.insight-item{
+    display:flex;
+    align-items:center;
+    gap:11px;
+    padding:13px 0;
+    border-bottom:1px solid #eef1f5;
+}
+.insight-item:last-of-type{border-bottom:0;}
+.insight-icon{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:31px;height:31px;
+    flex:0 0 31px;
+    border-radius:10px;
+    font-size:13px;
+    font-weight:800;
+}
+.insight-green{background:#ecfdf3;color:#16a34a;}
+.insight-red{background:#fef2f2;color:#dc2626;}
+.insight-blue{background:#eff6ff;color:#2563eb;}
+.insight-amber{background:#fffbeb;color:#d97706;}
+.insight-label{font-size:9px;color:#64748b;font-weight:600;}
+.insight-value{
+    margin-top:2px;
+    font-family:'Plus Jakarta Sans';
+    font-size:13px;
+    font-weight:800;
+    color:#111827;
+}
+.insight-footer{
+    margin-top:13px;
+    padding:10px 11px;
+    background:#f8fafc;
+    border-radius:11px;
+    color:#64748b;
+    font-size:8px;
+    line-height:1.55;
+}
+.methodology-panel{padding:16px 18px;}
+.methodology-title{
+    font-family:'Plus Jakarta Sans';
+    font-size:11px;
+    font-weight:800;
+    margin-bottom:7px;
+}
+.methodology-row{
+    display:flex;
+    justify-content:space-between;
+    gap:10px;
+    padding:7px 0;
+    color:#64748b;
+    font-size:9px;
+    border-bottom:1px solid #eef1f5;
+}
+.methodology-row:last-child{border-bottom:0;}
+.methodology-row strong{color:#111827;}
+
+/* Cleaner Streamlit table */
+div[data-testid="stDataFrame"]{
+    border:1px solid #e7ebf2!important;
+    border-radius:12px!important;
+}
+
+/* Tabs */
+.stTabs [data-baseweb="tab-list"]{
+    gap:4px!important;
+    padding:5px!important;
+    border:1px solid #e7ebf2!important;
+    background:#f1f5f9!important;
+    border-radius:13px!important;
+}
+.stTabs button[data-baseweb="tab"]{
+    height:36px!important;
+    padding:0 15px!important;
+    border-radius:9px!important;
+    border:0!important;
+}
+.stTabs button[aria-selected="true"]{
+    background:#fff!important;
+    color:#2563eb!important;
+    border:1px solid #e1e8f4!important;
+    box-shadow:0 2px 8px rgba(15,23,42,.06);
+}
+
+/* Portfolio cards */
+.asset-card{
+    border-radius:20px!important;
+    padding:21px!important;
+}
+.position-track{
+    height:8px!important;
+    background:#e9eef5!important;
+    overflow:visible;
+}
+.position-risk{
+    background:linear-gradient(90deg,#fee2e2,#fecaca)!important;
+}
+.position-reward{
+    background:linear-gradient(90deg,#dcfce7,#bbf7d0)!important;
+}
+
+/* Subscription */
+.subscription-hero{
+    padding:24px;
+    margin-bottom:16px;
+    border:1px solid #dbe7ff;
+    border-radius:20px;
+    background:linear-gradient(135deg,#f8fbff,#eef4ff);
+}
+.plan-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:14px;
+}
+.plan-card{
+    padding:22px;
+    border:1px solid #e7ebf2;
+    border-radius:20px;
+    background:#fff;
+    box-shadow:0 8px 30px rgba(15,23,42,.035);
+}
+.plan-card-vip{
+    border-color:#c7d7fe;
+    background:linear-gradient(145deg,#ffffff,#f7f9ff);
+}
+.plan-kicker{
+    color:#64748b;
+    font-size:8px;
+    font-weight:800;
+    letter-spacing:.1em;
+}
+.plan-name{
+    margin-top:5px;
+    font-family:'Plus Jakarta Sans';
+    font-size:20px;
+    font-weight:800;
+}
+.plan-price{
+    margin-top:5px;
+    font-family:'Plus Jakarta Sans';
+    font-size:26px;
+    font-weight:800;
+}
+.plan-copy{
+    margin:9px 0 14px;
+    color:#64748b;
+    font-size:10px;
+    line-height:1.6;
+}
+.plan-list{
+    margin:0 0 17px;
+    padding-left:17px;
+    color:#334155;
+    font-size:10px;
+    line-height:1.9;
+}
+@media(max-width:1100px){
+    .results-kpi-grid{grid-template-columns:repeat(3,1fr);}
+    .results-kpi-main{grid-column:span 2;}
+}
+@media(max-width:700px){
+    .results-hero{display:block;padding:19px;}
+    .results-source{display:inline-flex;margin-top:13px;}
+    .results-kpi-grid{grid-template-columns:1fr 1fr;}
+    .results-kpi-main{grid-column:span 2;}
+    .plan-grid{grid-template-columns:1fr;}
+}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
 # ============================================================
 # CARGAR HISTÓRICO
 # ============================================================
@@ -2690,6 +3248,20 @@ else:
 precios_actuales = obtener_precios_activos(
     df_activas_global
 )
+
+
+# ============================================================
+# BACKTESTING DIARIO
+# ============================================================
+
+df_backtest = cargar_backtesting_diario()
+df_curva_backtest = calcular_curva_backtesting(df_backtest)
+
+(
+    beneficio_backtest_actual,
+    backtest_ganadoras,
+    backtest_perdedoras
+) = obtener_snapshot_backtesting_actual(df_backtest)
 
 
 # ============================================================
@@ -2768,75 +3340,22 @@ color_resultado = (
     beneficio_no_realizado
 )
 
+metricas_resultados = calcular_metricas_resultados(
+    df_hist,
+    df_curva_backtest
+)
 
-
-# ============================================================
-# BACKTESTING DIARIO — SNAPSHOTS DE P&L
-# ============================================================
-
-@st.cache_data(ttl=60)
-def cargar_backtesting_diario_alertas():
-    """Carga snapshots diarios de P&L desde Supabase."""
-    try:
-        registros = []
-        inicio = 0
-        tamano = 1000
-        while True:
-            response = (
-                supabase
-                .table("backtesting_diario_alertas")
-                .select("fecha_snapshot, alerta_id, ticker, estado, precio_alerta, precio_actual, pnl_actual_pct, ultima_actualizacion")
-                .range(inicio, inicio + tamano - 1)
-                .execute()
-            )
-            lote = response.data or []
-            registros.extend(lote)
-            if len(lote) < tamano:
-                break
-            inicio += tamano
-        if not registros:
-            return pd.DataFrame()
-        df = pd.DataFrame(registros)
-        df["fecha_snapshot"] = pd.to_datetime(df["fecha_snapshot"], errors="coerce").dt.date
-        df["pnl_actual_pct"] = pd.to_numeric(df["pnl_actual_pct"], errors="coerce")
-        df["alerta_id"] = pd.to_numeric(df["alerta_id"], errors="coerce")
-        return df.dropna(subset=["fecha_snapshot"])
-    except Exception as e:
-        # La pantalla principal no debe romperse si la tabla todavía no existe.
-        return pd.DataFrame()
-
-
-def calcular_pnl_snapshot(df_snapshot, fecha=None):
-    """Calcula P&L monetario de un snapshot usando 300€ por alerta."""
-    if df_snapshot is None or df_snapshot.empty:
-        return 0.0
-    df = df_snapshot.copy()
-    if fecha is not None:
-        df = df[df["fecha_snapshot"] == fecha]
-    if df.empty:
-        return 0.0
-    # Una fila por alerta y día está garantizada por uk_snapshot_alerta.
-    return float(df["pnl_actual_pct"].fillna(0).sum() * CAPITAL_POR_ALERTA / 100.0)
-
-
-def calcular_pnl_snapshot_acumulado(df_snapshot):
-    """Devuelve el P&L del último snapshot disponible por alerta."""
-    if df_snapshot is None or df_snapshot.empty:
-        return 0.0
-    df = df_snapshot.copy().sort_values(["fecha_snapshot", "alerta_id"])
-    ultimo = df.drop_duplicates(subset=["alerta_id"], keep="last")
-    return float(ultimo["pnl_actual_pct"].fillna(0).sum() * CAPITAL_POR_ALERTA / 100.0)
-
-
-df_backtesting = cargar_backtesting_diario_alertas()
-fecha_hoy = datetime.now().date()
-pnl_snapshot_dia = calcular_pnl_snapshot(df_backtesting, fecha_hoy)
-pnl_snapshot_acumulado = calcular_pnl_snapshot_acumulado(df_backtesting)
-
-# El dato mostrado como P&L del día refleja la situación actual de las alertas.
-# El acumulado incorpora el histórico cerrado y el último snapshot disponible.
-pnl_dia = beneficio_no_realizado
-pnl_acumulado = pnl_dia + pnl_snapshot_acumulado
+# Si existe backtesting diario, la cifra principal de Resultados
+# utiliza el último snapshot disponible de Supabase.
+beneficio_dashboard = (
+    beneficio_backtest_actual
+    if not df_backtest.empty
+    else beneficio_acumulado
+)
+rentabilidad_dashboard = (
+    beneficio_dashboard / CAPITAL_INICIAL * 100
+    if CAPITAL_INICIAL else 0
+)
 
 
 # ============================================================
@@ -2899,52 +3418,66 @@ render_html(
 
 render_html(
     f"""
-<div class="portfolio-summary">
+<div class="portfolio-summary premium-summary">
 
-    <div class="summary-card summary-card-pnl">
-        <div class="summary-label">P&L</div>
-        <div class="pnl-split">
-            <div class="pnl-block">
-                <div class="pnl-caption">HOY</div>
-                <div class="summary-value" style="color:{'#16a34a' if pnl_dia >= 0 else '#dc2626'};">
-                    {formatear_numero(pnl_dia, 2, " €", True)}
-                </div>
-            </div>
-            <div class="pnl-divider"></div>
-            <div class="pnl-block">
-                <div class="pnl-caption">ACUMULADO</div>
-                <div class="summary-value" style="color:{'#16a34a' if pnl_acumulado >= 0 else '#dc2626'};">
-                    {formatear_numero(pnl_acumulado, 2, " €", True)}
-                </div>
-            </div>
+    <div class="summary-card summary-card-primary">
+        <div class="summary-topline">
+            <span class="summary-icon">↗</span>
+            <span class="summary-label">P&amp;L DE CARTERA</span>
+            <span class="summary-status">LIVE</span>
         </div>
-        <div class="summary-detail">Cartera actual + último snapshot por alerta</div>
-    </div>
-
-    <div class="summary-card">
-        <div class="summary-label">Rentabilidad</div>
-        <div class="summary-value" style="color:{'#16a34a' if pnl_acumulado >= 0 else '#dc2626'};">
-            {formatear_numero((pnl_acumulado / CAPITAL_INICIAL * 100) if CAPITAL_INICIAL else 0, 2, "%", True)}
+        <div class="summary-value" style="color:{color_resultado};">
+            {formatear_numero(beneficio_dashboard, 2, " €", True)}
         </div>
-        <div class="summary-detail">Sobre {formatear_numero(CAPITAL_INICIAL, 0, " €")}</div>
+        <div class="summary-detail">
+            Snapshot diario · {formatear_numero(rentabilidad_dashboard, 2, "%", True)}
+        </div>
     </div>
 
     <div class="summary-card">
-        <div class="summary-label">Posiciones activas</div>
-        <div class="summary-value">{activas}</div>
-        <div class="summary-detail">{TOTAL_ACTIVOS_UNIVERSO} activos monitorizados</div>
+        <div class="summary-topline">
+            <span class="summary-icon">◒</span>
+            <span class="summary-label">EFICIENCIA</span>
+        </div>
+        <div class="summary-value">
+            {formatear_numero(win_rate, 1, "%")}
+        </div>
+        <div class="summary-detail">
+            {exitos} objetivos · {fallos} stops · {total_alertas} señales
+        </div>
     </div>
 
     <div class="summary-card">
-        <div class="summary-label">Win Rate</div>
-        <div class="summary-value">{formatear_numero(win_rate, 1, "%")}</div>
-        <div class="summary-detail">{exitos} TP · {fallos} SL</div>
+        <div class="summary-topline">
+            <span class="summary-icon">◎</span>
+            <span class="summary-label">EXPOSICIÓN</span>
+        </div>
+        <div class="summary-value">
+            {activas}
+        </div>
+        <div class="summary-detail">
+            Posiciones activas · {TOTAL_ACTIVOS_UNIVERSO} activos monitorizados
+        </div>
+    </div>
+
+    <div class="summary-card">
+        <div class="summary-topline">
+            <span class="summary-icon">◆</span>
+            <span class="summary-label">RIESGO / RETORNO</span>
+        </div>
+        <div class="summary-value">
+            {formatear_numero(metricas_resultados["profit_factor"], 2, "x") if metricas_resultados["profit_factor"] is not None else "—"}
+        </div>
+        <div class="summary-detail">
+            Profit Factor · DD máx. {formatear_numero(abs(metricas_resultados["max_drawdown"]), 0, " €") if metricas_resultados["max_drawdown"] else "0 €"}
+        </div>
     </div>
 
 </div>
 """,
     unsafe_allow_html=True,
 )
+
 
 # ============================================================
 # SI NO HAY DATOS
@@ -3343,6 +3876,21 @@ with tab_cartera:
 
 
             # ------------------------------------------------
+            # RISK / REWARD
+            # ------------------------------------------------
+
+            ratio_rr_text = (
+                formatear_numero(
+                    ratio_rr,
+                    1,
+                    "x"
+                )
+                if ratio_rr is not None
+                else "—"
+            )
+
+
+            # ------------------------------------------------
             # PRECIOS DEL TRACKER
             # ------------------------------------------------
 
@@ -3428,33 +3976,10 @@ with tab_cartera:
                 )
 
 
-                risk_left = (
-                    min(
-                        entry_pct,
-                        current_pct
-                    )
-                    -
-                    sl_pct
-                )
-
-                reward_left = (
-                    tp_pct
-                    -
-                    max(
-                        entry_pct,
-                        current_pct
-                    )
-                )
-
-                risk_width = max(
-                    0,
-                    risk_left
-                )
-
-                reward_width = max(
-                    0,
-                    reward_left
-                )
+                # Las zonas de riesgo y recompensa son FIJAS.
+                # Solo se mueve el marcador del precio actual.
+                risk_width = max(0, entry_pct - sl_pct)
+                reward_width = max(0, tp_pct - entry_pct)
 
 
                 position_tracker = f"""
@@ -3529,7 +4054,7 @@ with tab_cartera:
         <div
             class="position-reward"
             style="
-                left:{current_pct:.2f}%;
+                left:{entry_pct:.2f}%;
                 width:{reward_width:.2f}%;
             "
         ></div>
@@ -3673,7 +4198,22 @@ with tab_cartera:
 
     <div class="performance-row">
 
-        <!-- RENDIMIENTO -->
+        <!-- IZQUIERDA: RISK / REWARD -->
+
+        <div class="performance-rr">
+
+            <div class="performance-rr-label">
+                Risk / Reward
+            </div>
+
+            <div class="performance-rr-value">
+                {ratio_rr_text}
+            </div>
+
+        </div>
+
+
+        <!-- DERECHA: RENDIMIENTO -->
 
         <div class="performance-left">
 
@@ -3718,16 +4258,83 @@ with tab_cartera:
 with tab_resultados:
 
     render_html(
-        """
-<div class="section-header">
-
+        f"""
+<div class="results-hero">
     <div>
-
-        <div class="section-title">
-            Rendimiento
+        <div class="eyebrow">PERFORMANCE CENTER · ALURA QUANT</div>
+        <div class="results-title">Resultados de la estrategia</div>
+        <div class="results-subtitle">
+            Seguimiento cuantitativo del rendimiento, exposición y evolución diaria del P&amp;L.
         </div>
+    </div>
+    <div class="results-source">
+        <span class="source-dot"></span>
+        Supabase · backtesting diario
+    </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
 
+    # --------------------------------------------------------
+    # KPI STRIP
+    # --------------------------------------------------------
 
+    ultimo_snapshot = (
+        df_backtest["fecha_snapshot"].max().strftime("%d/%m/%Y")
+        if not df_backtest.empty
+        else "—"
+    )
+
+    pnl_color = "#16a34a" if beneficio_dashboard >= 0 else "#dc2626"
+    dd_abs = abs(metricas_resultados["max_drawdown"])
+
+    render_html(
+        f"""
+<div class="results-kpi-grid">
+
+    <div class="results-kpi results-kpi-main">
+        <div class="kpi-label">P&amp;L ACTUAL</div>
+        <div class="kpi-value" style="color:{pnl_color};">
+            {formatear_numero(beneficio_dashboard, 2, " €", True)}
+        </div>
+        <div class="kpi-meta">
+            {formatear_numero(rentabilidad_dashboard, 2, "%", True)} sobre capital simulado
+        </div>
+    </div>
+
+    <div class="results-kpi">
+        <div class="kpi-label">WIN RATE</div>
+        <div class="kpi-value">{formatear_numero(win_rate, 1, "%")}</div>
+        <div class="kpi-meta">{exitos} TP · {fallos} SL</div>
+    </div>
+
+    <div class="results-kpi">
+        <div class="kpi-label">PROFIT FACTOR</div>
+        <div class="kpi-value">
+            {formatear_numero(metricas_resultados["profit_factor"], 2, "x") if metricas_resultados["profit_factor"] is not None else "—"}
+        </div>
+        <div class="kpi-meta">Ganancia bruta / pérdida bruta</div>
+    </div>
+
+    <div class="results-kpi">
+        <div class="kpi-label">DRAWDOWN MÁX.</div>
+        <div class="kpi-value" style="color:#dc2626;">
+            {formatear_numero(dd_abs, 2, " €") if dd_abs else "0 €"}
+        </div>
+        <div class="kpi-meta">Desde máximo de la curva diaria</div>
+    </div>
+
+    <div class="results-kpi">
+        <div class="kpi-label">EXPOSICIÓN</div>
+        <div class="kpi-value">{activas}</div>
+        <div class="kpi-meta">{backtest_ganadoras} abiertas en positivo</div>
+    </div>
+
+    <div class="results-kpi">
+        <div class="kpi-label">SNAPSHOT</div>
+        <div class="kpi-value">{ultimo_snapshot}</div>
+        <div class="kpi-meta">{metricas_resultados["dias"]} días monitorizados</div>
     </div>
 
 </div>
@@ -3735,101 +4342,206 @@ with tab_resultados:
         unsafe_allow_html=True,
     )
 
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
-    col_g1, col_g2 = st.columns(
-        [1.55, 0.75],
-        gap="large"
-    )
-
+    col_chart, col_side = st.columns([1.65, 0.75], gap="large")
 
     # --------------------------------------------------------
-    # CHART
+    # CURVA DIARIA
     # --------------------------------------------------------
 
-    with col_g1:
+    with col_chart:
+
+        render_html(
+            """
+<div class="dashboard-panel chart-panel">
+    <div class="panel-heading">
+        <div>
+            <div class="panel-title">Evolución diaria del P&amp;L</div>
+            <div class="panel-subtitle">Valoración mark-to-market agregada desde backtesting_diario_alertas</div>
+        </div>
+        <div class="panel-badge">CURVA SUAVIZADA</div>
+    </div>
+""",
+            unsafe_allow_html=True,
+        )
+
+        if not df_curva_backtest.empty:
+
+            chart_df = df_curva_backtest.copy()
+            chart_df["fecha_snapshot"] = pd.to_datetime(chart_df["fecha_snapshot"])
+
+            fig = go.Figure()
+
+            fig.add_trace(
+                go.Scatter(
+                    x=chart_df["fecha_snapshot"],
+                    y=chart_df["pnl_eur"],
+                    mode="lines",
+                    name="P&L",
+                    line=dict(
+                        width=3,
+                        shape="spline",
+                        smoothing=1.15,
+                    ),
+                    fill="tozeroy",
+                    fillcolor="rgba(37,99,235,0.07)",
+                    hovertemplate=(
+                        "<b>%{x|%d %b %Y}</b><br>"
+                        "P&L: <b>%{y:.2f} €</b><extra></extra>"
+                    ),
+                )
+            )
+
+            fig.add_hline(
+                y=0,
+                line_width=1,
+                line_dash="dot",
+                line_color="#cbd5e1",
+            )
+
+            fig.update_layout(
+                height=390,
+                margin=dict(l=10, r=10, t=8, b=10),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(
+                    family="DM Sans, sans-serif",
+                    color="#64748b",
+                    size=11,
+                ),
+                hovermode="x unified",
+                showlegend=False,
+                xaxis=dict(
+                    showgrid=False,
+                    linecolor="#e7ebf2",
+                    tickfont=dict(size=10),
+                ),
+                yaxis=dict(
+                    title=None,
+                    showgrid=True,
+                    gridcolor="#eef1f5",
+                    zeroline=False,
+                    tickfont=dict(size=10),
+                ),
+            )
+
+            st.plotly_chart(
+                fig,
+                use_container_width=True,
+                config={
+                    "displayModeBar": False,
+                    "responsive": True,
+                },
+            )
+
+            # Tabla-resumen de últimos días, útil para lectura rápida.
+            ultimos = chart_df.tail(5).copy()
+            ultimos["Fecha"] = ultimos["fecha_snapshot"].dt.strftime("%d/%m/%Y")
+            ultimos["P&L"] = ultimos["pnl_eur"].map(
+                lambda x: formatear_numero(x, 2, " €", True)
+            )
+            ultimos["Variación"] = ultimos["variacion_dia_eur"].map(
+                lambda x: formatear_numero(x, 2, " €", True)
+            )
+
+            render_html(
+                """
+<div class="mini-table-title">Últimos snapshots</div>
+""",
+                unsafe_allow_html=True,
+            )
+
+            st.dataframe(
+                ultimos[["Fecha", "P&L", "Variación", "alertas"]].rename(
+                    columns={"alertas": "Alertas"}
+                ),
+                use_container_width=True,
+                hide_index=True,
+                height=205,
+            )
+
+        else:
+            render_html(
+                """
+<div class="empty-state">
+    <div class="empty-icon">⌁</div>
+    <div class="empty-title">Aún no hay snapshots diarios</div>
+    <div class="empty-text">
+        La curva se activará automáticamente cuando backtesting_diario_alertas tenga registros.
+    </div>
+</div>
+""",
+                unsafe_allow_html=True,
+            )
+
+        render_html("</div>", unsafe_allow_html=True)
+
+    # --------------------------------------------------------
+    # PANEL LATERAL DE LECTURA
+    # --------------------------------------------------------
+
+    with col_side:
+
+        mejor_dia = metricas_resultados["mejor_dia"]
+        peor_dia = metricas_resultados["peor_dia"]
+        avg_win = metricas_resultados["avg_win"]
+        avg_loss = metricas_resultados["avg_loss"]
 
         render_html(
             f"""
-<div class="result-card">
+<div class="dashboard-panel insight-panel">
 
-    <div class="result-header">
-
+    <div class="panel-heading">
         <div>
-
-            <div class="result-title">
-                Evolución de beneficios
-            </div>
-
-            <div class="result-subtitle">
-                Resultado simulado de la cartera
-            </div>
-
+            <div class="panel-title">Lectura del sistema</div>
+            <div class="panel-subtitle">Indicadores operativos</div>
         </div>
-
-
-        <div>
-
-            <div
-                class="result-number"
-                style="
-                    color:{color_resultado};
-                "
-            >
-                {formatear_numero(
-                    beneficio_acumulado,
-                    2,
-                    " €",
-                    True
-                )}
-            </div>
-
-            <div class="result-percent">
-
-                {formatear_numero(
-                    rentabilidad_pct,
-                    2,
-                    "%",
-                    True
-                )}
-                de retorno
-
-            </div>
-
-        </div>
-
     </div>
 
+    <div class="insight-item">
+        <div class="insight-icon insight-green">↗</div>
+        <div>
+            <div class="insight-label">Mejor variación diaria</div>
+            <div class="insight-value">
+                {formatear_numero(mejor_dia, 2, " €", True) if mejor_dia is not None else "—"}
+            </div>
+        </div>
+    </div>
 
-    <div style="
-        display:flex;
-        gap:16px;
-        font-size:10px;
-        color:#94a3b8;
-        font-weight:600;
-        margin-bottom:3px;
-        flex-wrap:wrap;
-    ">
+    <div class="insight-item">
+        <div class="insight-icon insight-red">↘</div>
+        <div>
+            <div class="insight-label">Peor variación diaria</div>
+            <div class="insight-value">
+                {formatear_numero(peor_dia, 2, " €", True) if peor_dia is not None else "—"}
+            </div>
+        </div>
+    </div>
 
-        <span>
-            ● Realizado:
-            {formatear_numero(
-                beneficio_realizado,
-                2,
-                " €",
-                True
-            )}
-        </span>
+    <div class="insight-item">
+        <div class="insight-icon insight-blue">+</div>
+        <div>
+            <div class="insight-label">Ganancia media por TP</div>
+            <div class="insight-value">
+                {formatear_numero(avg_win, 2, " €", True) if avg_win is not None else "—"}
+            </div>
+        </div>
+    </div>
 
-        <span>
-            ● Abierto:
-            {formatear_numero(
-                beneficio_no_realizado,
-                2,
-                " €",
-                True
-            )}
-        </span>
+    <div class="insight-item">
+        <div class="insight-icon insight-amber">−</div>
+        <div>
+            <div class="insight-label">Pérdida media por SL</div>
+            <div class="insight-value">
+                {formatear_numero(avg_loss, 2, " €", True) if avg_loss is not None else "—"}
+            </div>
+        </div>
+    </div>
 
+    <div class="insight-footer">
+        <strong>Fuente:</strong> snapshots diarios de Supabase.
+        El P&amp;L de la curva es mark-to-market y no sustituye al resultado contable de operaciones cerradas.
     </div>
 
 </div>
@@ -3837,248 +4549,22 @@ with tab_resultados:
             unsafe_allow_html=True,
         )
 
-
-        if fechas_curva:
-
-            df_beneficio = pd.DataFrame(
-                {
-                    "Beneficio Neto (€)":
-                        beneficios_curva
-                },
-                index=fechas_curva
-            )
-
-            st.line_chart(
-                df_beneficio,
-                height=320
-            )
-
-        else:
-
-            render_html(
-                """
-<div class="empty-state">
-
-    <div class="empty-title">
-        Sin suficientes datos
-    </div>
-
-    <div class="empty-text">
-        Se requieren registros históricos para construir la curva.
-    </div>
-
-</div>
-""",
-                unsafe_allow_html=True,
-            )
-
-
-    # --------------------------------------------------------
-    # METRICS
-    # --------------------------------------------------------
-
-    with col_g2:
-
         render_html(
             f"""
-<div class="result-card">
-
-    <div class="result-title">
-        Métricas clave
+<div class="dashboard-panel methodology-panel">
+    <div class="methodology-title">Cómo leer el dashboard</div>
+    <div class="methodology-row">
+        <span>Capital por alerta</span>
+        <strong>{formatear_numero(CAPITAL_POR_ALERTA, 0, " €")}</strong>
     </div>
-
-    <div class="result-subtitle">
-        Estado operativo del sistema
+    <div class="methodology-row">
+        <span>Alertas históricas</span>
+        <strong>{total_alertas}</strong>
     </div>
-
-
-    <div class="metric-list">
-
-
-        <div class="metric-row">
-
-            <span class="metric-name">
-                Señales activas
-            </span>
-
-            <span
-                class="metric-value"
-                style="
-                    color:#2563eb;
-                "
-            >
-                {activas}
-            </span>
-
-        </div>
-
-
-        <div class="metric-row">
-
-            <span class="metric-name">
-                Posiciones en beneficio
-            </span>
-
-            <span
-                class="metric-value"
-                style="
-                    color:#16a34a;
-                "
-            >
-                {posiciones_con_beneficio}
-            </span>
-
-        </div>
-
-
-        <div class="metric-row">
-
-            <span class="metric-name">
-                Take Profit alcanzado
-            </span>
-
-            <span
-                class="metric-value"
-                style="
-                    color:#16a34a;
-                "
-            >
-                {exitos}
-            </span>
-
-        </div>
-
-
-        <div class="metric-row">
-
-            <span class="metric-name">
-                Stop Loss saltado
-            </span>
-
-            <span
-                class="metric-value"
-                style="
-                    color:#dc2626;
-                "
-            >
-                {fallos}
-            </span>
-
-        </div>
-
-
-        <div class="metric-row">
-
-            <span class="metric-name">
-                Win Rate
-            </span>
-
-            <span class="metric-value">
-                {formatear_numero(
-                    win_rate,
-                    1,
-                    "%"
-                )}
-            </span>
-
-        </div>
-
-
-        <div class="metric-row">
-
-            <span class="metric-name">
-                Beneficio realizado
-            </span>
-
-            <span
-                class="metric-value"
-                style="
-                    color:{
-                        '#16a34a'
-                        if beneficio_realizado >= 0
-                        else '#dc2626'
-                    };
-                "
-            >
-                {formatear_numero(
-                    beneficio_realizado,
-                    2,
-                    " €",
-                    True
-                )}
-            </span>
-
-        </div>
-
-
-        <div class="metric-row">
-
-            <span class="metric-name">
-                P&L posiciones abiertas
-            </span>
-
-            <span
-                class="metric-value"
-                style="
-                    color:{
-                        '#16a34a'
-                        if beneficio_no_realizado >= 0
-                        else '#dc2626'
-                    };
-                "
-            >
-                {formatear_numero(
-                    beneficio_no_realizado,
-                    2,
-                    " €",
-                    True
-                )}
-            </span>
-
-        </div>
-
-
-        <div class="metric-row">
-
-            <span class="metric-name">
-                Beneficio total simulado
-            </span>
-
-            <span
-                class="metric-value"
-                style="
-                    color:{color_resultado};
-                "
-            >
-                {formatear_numero(
-                    beneficio_acumulado,
-                    2,
-                    " €",
-                    True
-                )}
-            </span>
-
-        </div>
-
-
-        <div class="metric-row">
-
-            <span class="metric-name">
-                Capital simulado
-            </span>
-
-            <span class="metric-value">
-                {formatear_numero(
-                    CAPITAL_INICIAL,
-                    0,
-                    " €"
-                )}
-            </span>
-
-        </div>
-
+    <div class="methodology-row">
+        <span>Posiciones activas</span>
+        <strong>{activas}</strong>
     </div>
-
 </div>
 """,
             unsafe_allow_html=True,
@@ -4246,60 +4732,133 @@ with tab_planes:
 
     render_html(
         """
-<div class="section-header">
-    <div>
-        <div class="section-title">Planes y Comunidad</div>
+<div class="subscription-hero">
+    <div class="eyebrow" style="color:#2563eb;">ALURA QUANT · MEMBERSHIP</div>
+    <div class="results-title" style="color:#111827;">Convierte señales cuantitativas en una experiencia premium.</div>
+    <div class="results-subtitle" style="color:#64748b;">
+        Registra tu acceso directamente en Supabase y mantén la gestión de suscriptores centralizada.
     </div>
 </div>
 """,
         unsafe_allow_html=True,
     )
 
-    col1, col2 = st.columns(2)
+    plan_col1, plan_col2 = st.columns(2, gap="large")
 
-    with col1:
-        st.subheader("Plan Gratuito (Free)")
-        st.markdown("""
-        * Alertas con score moderado.
-        * Resumen de mercado básico.
-        * Acceso a informes públicos.
-        """)
-        
-        email_free = st.text_input("Tu correo electrónico:", key="input_free")
-        if st.button("Unirme Gratis"):
-            if "@" in email_free and "." in email_free:
-                resultado = guardar_suscriptor_cloud(email_free, tipo="free")
-                if resultado == "success":
-                    st.success("¡Te has registrado con éxito en el plan gratuito!")
-                elif resultado == "exists":
-                    st.warning("Este correo ya se encuentra registrado.")
-                else:
-                    st.error("Hubo un error al procesar el registro.")
+    with plan_col1:
+        render_html(
+            """
+<div class="plan-card">
+    <div class="plan-kicker">ACCESO ABIERTO</div>
+    <div class="plan-name">Free</div>
+    <div class="plan-price">0 € <span style="font-size:11px;color:#94a3b8;font-weight:600;">/ mes</span></div>
+    <div class="plan-copy">
+        Una primera capa de inteligencia cuantitativa para conocer el sistema y recibir señales seleccionadas.
+    </div>
+    <ul class="plan-list">
+        <li>Alertas con score moderado</li>
+        <li>Resumen de mercado básico</li>
+        <li>Acceso a informes públicos</li>
+        <li>Registro gestionado desde Supabase</li>
+    </ul>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+
+        email_free = st.text_input(
+            "Email Free",
+            placeholder="tu@email.com",
+            key="input_free",
+            label_visibility="collapsed",
+        )
+
+        if st.button(
+            "Crear acceso gratuito",
+            key="btn_free",
+            use_container_width=True,
+        ):
+            if not validar_email(email_free):
+                st.error("Introduce un email válido.")
             else:
-                    st.error("Introduce un correo electrónico válido.")
+                resultado = guardar_suscriptor_supabase(email_free, "free")
+                if resultado == "success":
+                    st.success("Acceso registrado correctamente.")
+                elif resultado == "exists":
+                    st.info("Este email ya está registrado en Free.")
+                else:
+                    st.error("No se pudo registrar el email. Revisa la conexión con Supabase.")
 
-    with col2:
-        st.subheader("PROXIMAMENTE - Plan VIP")
-        st.markdown("""
-        * **Alertas exclusivas con Score > 80**.
-        * Envío prioritario en tiempo real.
-        * Informe semanal cuantitativo completo.
-        * Acceso al histórico de tesis detalladas.
-        """)
-        
-        url_stripe = "https://buy.stripe.com/tu_enlace_de_pago_real"
-        
-        st.markdown(f"""
-        <div style="text-align: center; margin-top: 30px;">
-            <a href="{url_stripe}" target="_blank">
-                <button style="background-color: #00e676; color: black; padding: 12px 24px; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer;">
-                    Suscribirse a VIP (19€/mes)
-                </button>
-            </a>
-        </div>
-        """, unsafe_allow_html=True)
-        st.caption(" ")
+    with plan_col2:
+        render_html(
+            """
+<div class="plan-card plan-card-vip">
+    <div class="plan-kicker" style="color:#2563eb;">ACCESO PREMIUM</div>
+    <div class="plan-name">VIP</div>
+    <div class="plan-price">19 € <span style="font-size:11px;color:#94a3b8;font-weight:600;">/ mes</span></div>
+    <div class="plan-copy">
+        Acceso premium para usuarios que quieren recibir las señales con mayor profundidad y contexto.
+    </div>
+    <ul class="plan-list">
+        <li>Alertas exclusivas con Score &gt; 80</li>
+        <li>Envío prioritario en tiempo real</li>
+        <li>Informe semanal cuantitativo completo</li>
+        <li>Histórico de tesis detalladas</li>
+    </ul>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
 
+        email_vip = st.text_input(
+            "Email VIP",
+            placeholder="tu@email.com",
+            key="input_vip",
+            label_visibility="collapsed",
+        )
+
+        if st.button(
+            "Registrar interés VIP",
+            key="btn_vip",
+            use_container_width=True,
+        ):
+            if not validar_email(email_vip):
+                st.error("Introduce un email válido.")
+            else:
+                resultado = guardar_suscriptor_supabase(email_vip, "vip")
+                if resultado == "success":
+                    st.success("Email registrado en la lista VIP.")
+                elif resultado == "exists":
+                    st.info("Este email ya está registrado en VIP.")
+                else:
+                    st.error("No se pudo registrar el email. Revisa la conexión con Supabase.")
+
+        # El enlace se obtiene de Secrets para no dejar una URL de pago
+        # hardcodeada en el código.
+        stripe_url = ""
+        try:
+            stripe_url = str(
+                st.secrets.get("stripe", {}).get("vip_checkout_url", "")
+            ).strip()
+        except Exception:
+            stripe_url = ""
+
+        if stripe_url:
+            render_html(
+                f"""
+<div style="margin-top:10px;">
+    <a href="{html.escape(stripe_url)}" target="_blank"
+       style="display:block;text-align:center;text-decoration:none;
+              padding:11px 14px;border-radius:11px;background:#111827;
+              color:white;font-size:10px;font-weight:800;">
+        Continuar al pago VIP →
+    </a>
+</div>
+""",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.caption("Configura [stripe].vip_checkout_url en Streamlit Secrets para activar el checkout.")
 
 # ============================================================
 # FOOTER
