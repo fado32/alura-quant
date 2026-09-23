@@ -5,9 +5,9 @@ on:
   schedule:
     # 3 ejecuciones diarias en hora local de Madrid.
     # GitHub Actions admite timezone IANA y ajusta el horario de verano.
-    - cron: '0 12 * * 1-5'
-    - cron: '0 16 * * 1-5'
-    - cron: '0 21 * * 1-5'
+    - cron: '17 12 * * 1-5'
+    - cron: '34 16 * * 1-5'
+    - cron: '42 21 * * 1-5'
 
 
 permissions:
