@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 import pandas as pd
 import streamlit as st
 import yfinance as yf
-import plotly.graph_objects as go
 from supabase import create_client
 
 
@@ -412,33 +411,63 @@ def cargar_backtesting_diario():
         return pd.DataFrame(columns=columnas)
 
 
-def calcular_curva_backtesting(df_backtest):
+def preparar_backtesting_valido(df_backtest):
     """
-    Construye una curva diaria a partir del último snapshot disponible
-    de cada alerta en cada fecha.
+    Aplica la regla temporal de backtesting:
+    - Una alerta aporta todos sus snapshots mientras está ACTIVA.
+    - El primer snapshot con estado no activo es el último que aporta P&L.
+    - Cualquier registro posterior de esa alerta queda fuera.
 
-    pnl_actual_pct representa el P&L actual de cada alerta frente a su
-    entrada. Por tanto, el agregado diario es un P&L mark-to-market
-    de la cartera, no una suma de operaciones cerradas.
+    Esto evita que una posición que cerró, por ejemplo, por Stop Loss,
+    siga aportando P&L en días posteriores.
     """
     if df_backtest is None or df_backtest.empty:
         return pd.DataFrame()
 
     df = df_backtest.copy()
-
     required = {"fecha_snapshot", "alerta_id", "pnl_actual_pct"}
     if not required.issubset(df.columns):
         return pd.DataFrame()
 
-    df = df.dropna(subset=["fecha_snapshot", "alerta_id"])
-    df["pnl_eur"] = df["pnl_actual_pct"].fillna(0) * CAPITAL_POR_ALERTA / 100
+    df = df.dropna(subset=["fecha_snapshot", "alerta_id"]).copy()
+    if df.empty:
+        return df
 
-    # Una fila por alerta y día. La constraint unique de Supabase ya
-    # garantiza esto, pero mantenemos la deduplicación por robustez.
     df = (
-        df.sort_values(["fecha_snapshot", "alerta_id"])
-          .drop_duplicates(["fecha_snapshot", "alerta_id"], keep="last")
+        df.sort_values(["alerta_id", "fecha_snapshot"])
+          .drop_duplicates(["alerta_id", "fecha_snapshot"], keep="last")
     )
+
+    estados = df.get("estado", pd.Series("", index=df.index)).fillna("").astype(str).str.upper()
+    es_activa = estados.str.contains("ACTIV", regex=False) | estados.str.contains("ACTIVE", regex=False)
+    df["_es_activa"] = es_activa
+
+    # Primer día en el que cada alerta deja de estar activa.
+    cierres = (
+        df.loc[~df["_es_activa"], ["alerta_id", "fecha_snapshot"]]
+          .groupby("alerta_id")["fecha_snapshot"]
+          .min()
+    )
+
+    if not cierres.empty:
+        df["_fecha_cierre"] = df["alerta_id"].map(cierres)
+        df = df[
+            df["_fecha_cierre"].isna()
+            | (df["fecha_snapshot"] <= df["_fecha_cierre"])
+        ].copy()
+    else:
+        df["_fecha_cierre"] = pd.NaT
+
+    df["pnl_actual_pct"] = pd.to_numeric(df["pnl_actual_pct"], errors="coerce").fillna(0)
+    df["pnl_eur"] = df["pnl_actual_pct"] * CAPITAL_POR_ALERTA / 100
+    return df
+
+
+def calcular_curva_backtesting(df_backtest):
+    """Construye el P&L diario usando TODOS los snapshots válidos."""
+    df = preparar_backtesting_valido(df_backtest)
+    if df.empty:
+        return pd.DataFrame()
 
     diario = (
         df.groupby("fecha_snapshot", as_index=False)
@@ -450,34 +479,60 @@ def calcular_curva_backtesting(df_backtest):
           .sort_values("fecha_snapshot")
     )
 
-    if diario.empty:
-        return diario
-
     diario["variacion_dia_eur"] = diario["pnl_eur"].diff().fillna(diario["pnl_eur"])
     diario["fecha"] = diario["fecha_snapshot"].dt.strftime("%Y-%m-%d")
-
+    # Suavizado visual: no altera el dato real, solo la serie mostrada.
+    diario["pnl_eur_suavizado"] = diario["pnl_eur"].rolling(3, min_periods=1).mean()
     return diario
 
 
+def calcular_pnl_dashboard(df_backtest, beneficio_dia_actual, fecha_actual=None):
+    """
+    Devuelve P&L del día y P&L acumulado.
+
+    El acumulado suma todos los snapshots históricos válidos anteriores al día
+    actual, añade los cierres registrados hoy y sustituye los snapshots ACTIVA
+    de hoy por el P&L vivo calculado desde las posiciones actuales.
+    """
+    if fecha_actual is None:
+        fecha_actual = pd.Timestamp(datetime.now().date())
+    else:
+        fecha_actual = pd.Timestamp(fecha_actual).normalize()
+
+    df = preparar_backtesting_valido(df_backtest)
+    if df.empty:
+        return float(beneficio_dia_actual), float(beneficio_dia_actual)
+
+    historico = df[df["fecha_snapshot"] < fecha_actual]
+    hoy = df[df["fecha_snapshot"] == fecha_actual]
+
+    # Los cierres de hoy sí forman parte del acumulado.
+    if not hoy.empty:
+        estados_hoy = hoy.get("estado", pd.Series("", index=hoy.index)).fillna("").astype(str).str.upper()
+        activos_hoy = estados_hoy.str.contains("ACTIV", regex=False) | estados_hoy.str.contains("ACTIVE", regex=False)
+        cierres_hoy = hoy.loc[~activos_hoy, "pnl_eur"].sum()
+    else:
+        cierres_hoy = 0.0
+
+    historico_total = float(historico["pnl_eur"].sum())
+    # El P&L del día incluye posiciones abiertas en tiempo real + cierres
+    # registrados hoy en los snapshots.
+    pnl_dia = float(beneficio_dia_actual) + float(cierres_hoy)
+    pnl_acumulado = historico_total + pnl_dia
+    return pnl_dia, pnl_acumulado
+
+
 def obtener_snapshot_backtesting_actual(df_backtest):
-    """Obtiene el último snapshot de cada alerta y suma su P&L actual."""
+    """Mantiene compatibilidad con el resto de la app; devuelve el último día."""
     if df_backtest is None or df_backtest.empty:
         return 0.0, 0, 0
-
-    df = df_backtest.dropna(subset=["fecha_snapshot", "alerta_id"]).copy()
+    df = preparar_backtesting_valido(df_backtest)
     if df.empty:
         return 0.0, 0, 0
-
     latest_date = df["fecha_snapshot"].max()
-    latest = df[df["fecha_snapshot"] == latest_date].copy()
-
-    latest["pnl_eur"] = latest["pnl_actual_pct"].fillna(0) * CAPITAL_POR_ALERTA / 100
-
+    latest = df[df["fecha_snapshot"] == latest_date]
     total = float(latest["pnl_eur"].sum())
-    positivas = int((latest["pnl_eur"] > 0).sum())
-    negativas = int((latest["pnl_eur"] < 0).sum())
-
-    return total, positivas, negativas
+    return total, int((latest["pnl_eur"] > 0).sum()), int((latest["pnl_eur"] < 0).sum())
 
 
 def calcular_metricas_resultados(df_historial, df_curva):
@@ -3345,17 +3400,18 @@ metricas_resultados = calcular_metricas_resultados(
     df_curva_backtest
 )
 
-# Si existe backtesting diario, la cifra principal de Resultados
-# utiliza el último snapshot disponible de Supabase.
-beneficio_dashboard = (
-    beneficio_backtest_actual
-    if not df_backtest.empty
-    else beneficio_acumulado
+# P&L de dashboard: dato vivo del día + histórico acumulado de snapshots.
+beneficio_dia_dashboard, beneficio_dashboard = calcular_pnl_dashboard(
+    df_backtest,
+    beneficio_no_realizado,
+    pd.Timestamp(datetime.now().date()),
 )
 rentabilidad_dashboard = (
     beneficio_dashboard / CAPITAL_INICIAL * 100
     if CAPITAL_INICIAL else 0
 )
+color_dia_dashboard = "#16a34a" if beneficio_dia_dashboard >= 0 else "#dc2626"
+color_acumulado_dashboard = "#16a34a" if beneficio_dashboard >= 0 else "#dc2626"
 
 
 # ============================================================
@@ -3423,15 +3479,24 @@ render_html(
     <div class="summary-card summary-card-primary">
         <div class="summary-topline">
             <span class="summary-icon">↗</span>
-            <span class="summary-label">P&amp;L DE CARTERA</span>
+            <span class="summary-label">P&amp;L DEL DÍA</span>
             <span class="summary-status">LIVE</span>
         </div>
-        <div class="summary-value" style="color:{color_resultado};">
+        <div class="summary-value" style="color:{color_dia_dashboard};">
+            {formatear_numero(beneficio_dia_dashboard, 2, " €", True)}
+        </div>
+        <div class="summary-detail">P&amp;L actual de posiciones abiertas</div>
+    </div>
+
+    <div class="summary-card">
+        <div class="summary-topline">
+            <span class="summary-icon">Σ</span>
+            <span class="summary-label">P&amp;L ACUMULADO</span>
+        </div>
+        <div class="summary-value" style="color:{color_acumulado_dashboard};">
             {formatear_numero(beneficio_dashboard, 2, " €", True)}
         </div>
-        <div class="summary-detail">
-            Snapshot diario · {formatear_numero(rentabilidad_dashboard, 2, "%", True)}
-        </div>
+        <div class="summary-detail">Histórico de snapshots + día en curso</div>
     </div>
 
     <div class="summary-card">
@@ -3457,19 +3522,6 @@ render_html(
         </div>
         <div class="summary-detail">
             Posiciones activas · {TOTAL_ACTIVOS_UNIVERSO} activos monitorizados
-        </div>
-    </div>
-
-    <div class="summary-card">
-        <div class="summary-topline">
-            <span class="summary-icon">◆</span>
-            <span class="summary-label">RIESGO / RETORNO</span>
-        </div>
-        <div class="summary-value">
-            {formatear_numero(metricas_resultados["profit_factor"], 2, "x") if metricas_resultados["profit_factor"] is not None else "—"}
-        </div>
-        <div class="summary-detail">
-            Profit Factor · DD máx. {formatear_numero(abs(metricas_resultados["max_drawdown"]), 0, " €") if metricas_resultados["max_drawdown"] else "0 €"}
         </div>
     </div>
 
@@ -4192,39 +4244,15 @@ with tab_cartera:
     </div>
 
 
-    <!-- ================================================
-         RISK / REWARD + RENDIMIENTO
-         ================================================ -->
-
     <div class="performance-row">
 
-        <!-- IZQUIERDA: RISK / REWARD -->
-
-        <div class="performance-rr">
-
-            <div class="performance-rr-label">
-                Risk / Reward
-            </div>
-
-            <div class="performance-rr-value">
-                {ratio_rr_text}
-            </div>
-
-        </div>
-
-
-        <!-- DERECHA: RENDIMIENTO -->
-
-        <div class="performance-left">
-
+        <div class="performance-left" style="width:100%;">
             <div class="performance-label">
                 Rendimiento desde entrada
             </div>
-
             <div class="performance-value {performance_class}">
                 {performance_text}
             </div>
-
         </div>
 
     </div>
@@ -4256,25 +4284,6 @@ with tab_cartera:
 # ============================================================
 
 with tab_resultados:
-
-    render_html(
-        f"""
-<div class="results-hero">
-    <div>
-        <div class="eyebrow">PERFORMANCE CENTER · ALURA QUANT</div>
-        <div class="results-title">Resultados de la estrategia</div>
-        <div class="results-subtitle">
-            Seguimiento cuantitativo del rendimiento, exposición y evolución diaria del P&amp;L.
-        </div>
-    </div>
-    <div class="results-source">
-        <span class="source-dot"></span>
-        Supabase · backtesting diario
-    </div>
-</div>
-""",
-        unsafe_allow_html=True,
-    )
 
     # --------------------------------------------------------
     # KPI STRIP
@@ -4371,69 +4380,10 @@ with tab_resultados:
             chart_df = df_curva_backtest.copy()
             chart_df["fecha_snapshot"] = pd.to_datetime(chart_df["fecha_snapshot"])
 
-            fig = go.Figure()
-
-            fig.add_trace(
-                go.Scatter(
-                    x=chart_df["fecha_snapshot"],
-                    y=chart_df["pnl_eur"],
-                    mode="lines",
-                    name="P&L",
-                    line=dict(
-                        width=3,
-                        shape="spline",
-                        smoothing=1.15,
-                    ),
-                    fill="tozeroy",
-                    fillcolor="rgba(37,99,235,0.07)",
-                    hovertemplate=(
-                        "<b>%{x|%d %b %Y}</b><br>"
-                        "P&L: <b>%{y:.2f} €</b><extra></extra>"
-                    ),
-                )
+            chart_display = chart_df.set_index("fecha_snapshot")[["pnl_eur_suavizado"]].rename(
+                columns={"pnl_eur_suavizado": "P&L suavizado (€)"}
             )
-
-            fig.add_hline(
-                y=0,
-                line_width=1,
-                line_dash="dot",
-                line_color="#cbd5e1",
-            )
-
-            fig.update_layout(
-                height=390,
-                margin=dict(l=10, r=10, t=8, b=10),
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(
-                    family="DM Sans, sans-serif",
-                    color="#64748b",
-                    size=11,
-                ),
-                hovermode="x unified",
-                showlegend=False,
-                xaxis=dict(
-                    showgrid=False,
-                    linecolor="#e7ebf2",
-                    tickfont=dict(size=10),
-                ),
-                yaxis=dict(
-                    title=None,
-                    showgrid=True,
-                    gridcolor="#eef1f5",
-                    zeroline=False,
-                    tickfont=dict(size=10),
-                ),
-            )
-
-            st.plotly_chart(
-                fig,
-                use_container_width=True,
-                config={
-                    "displayModeBar": False,
-                    "responsive": True,
-                },
-            )
+            st.line_chart(chart_display, height=390, use_container_width=True)
 
             # Tabla-resumen de últimos días, útil para lectura rápida.
             ultimos = chart_df.tail(5).copy()
@@ -4539,189 +4489,11 @@ with tab_resultados:
         </div>
     </div>
 
-    <div class="insight-footer">
-        <strong>Fuente:</strong> snapshots diarios de Supabase.
-        El P&amp;L de la curva es mark-to-market y no sustituye al resultado contable de operaciones cerradas.
-    </div>
-
 </div>
 """,
             unsafe_allow_html=True,
         )
 
-        render_html(
-            f"""
-<div class="dashboard-panel methodology-panel">
-    <div class="methodology-title">Cómo leer el dashboard</div>
-    <div class="methodology-row">
-        <span>Capital por alerta</span>
-        <strong>{formatear_numero(CAPITAL_POR_ALERTA, 0, " €")}</strong>
-    </div>
-    <div class="methodology-row">
-        <span>Alertas históricas</span>
-        <strong>{total_alertas}</strong>
-    </div>
-    <div class="methodology-row">
-        <span>Posiciones activas</span>
-        <strong>{activas}</strong>
-    </div>
-</div>
-""",
-            unsafe_allow_html=True,
-        )
-
-
-# ============================================================
-# 3. HISTÓRICO
-# ============================================================
-
-with tab_historial:
-
-    render_html(
-        """
-<div class="history-header">
-
-    <div class="history-title">
-        Registro histórico
-    </div>
-
-    <div class="history-subtitle">
-        Auditoría completa de las señales generadas por Alura Quant.
-    </div>
-
-</div>
-""",
-        unsafe_allow_html=True,
-    )
-
-
-    df_cerradas = df_hist.copy()
-
-
-    if not df_cerradas.empty:
-
-        col_f1, col_f2 = st.columns(
-            [1, 1],
-            gap="small"
-        )
-
-
-        with col_f1:
-
-            if "Estado" in df_cerradas.columns:
-
-                estados_posibles = sorted(
-                    df_cerradas["Estado"]
-                    .astype(str)
-                    .unique()
-                    .tolist()
-                )
-
-            else:
-
-                estados_posibles = []
-
-
-            filtro_est = st.multiselect(
-                "Estado operativo",
-                estados_posibles,
-                default=estados_posibles,
-                label_visibility="collapsed"
-            )
-
-
-        with col_f2:
-
-            busq_hist = st.text_input(
-                "Buscar histórico",
-                placeholder="⌕  Buscar empresa, ticker o estado...",
-                label_visibility="collapsed"
-            )
-
-
-        df_view = (
-            df_cerradas.copy()
-        )
-
-
-        if (
-            filtro_est
-            and "Estado"
-            in df_view.columns
-        ):
-
-            df_view = df_view[
-                df_view["Estado"]
-                .astype(str)
-                .isin(
-                    filtro_est
-                )
-            ]
-
-
-        if busq_hist:
-
-            mask_h = (
-                df_view
-                .astype(str)
-                .apply(
-                    lambda col:
-                    col.str.contains(
-                        busq_hist,
-                        case=False,
-                        na=False,
-                        regex=False
-                    )
-                )
-                .any(axis=1)
-            )
-
-            df_view = (
-                df_view[mask_h]
-            )
-
-
-        render_html(
-            f"""
-<div style="
-    margin:8px 0 10px;
-    color:#94a3b8;
-    font-size:10px;
-    font-weight:700;
-">
-    {len(df_view)} REGISTROS
-</div>
-""",
-            unsafe_allow_html=True,
-        )
-
-
-        st.dataframe(
-            df_view,
-            use_container_width=True,
-            height=480,
-            hide_index=True
-        )
-
-
-    else:
-
-        render_html(
-            """
-<div class="empty-state">
-
-    <div class="empty-title">
-        No hay registros históricos
-    </div>
-
-    <div class="empty-text">
-        Las señales cerradas aparecerán aquí.
-    </div>
-
-</div>
-""",
-            unsafe_allow_html=True,
-        )
 
 
 # ============================================================
@@ -4729,19 +4501,6 @@ with tab_historial:
 # ============================================================
 
 with tab_planes:
-
-    render_html(
-        """
-<div class="subscription-hero">
-    <div class="eyebrow" style="color:#2563eb;">ALURA QUANT · MEMBERSHIP</div>
-    <div class="results-title" style="color:#111827;">Convierte señales cuantitativas en una experiencia premium.</div>
-    <div class="results-subtitle" style="color:#64748b;">
-        Registra tu acceso directamente en Supabase y mantén la gestión de suscriptores centralizada.
-    </div>
-</div>
-""",
-        unsafe_allow_html=True,
-    )
 
     plan_col1, plan_col2 = st.columns(2, gap="large")
 
