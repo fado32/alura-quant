@@ -1,3 +1,4 @@
+plotly
 supabase
 streamlit
 pandas>=2.2,<3
