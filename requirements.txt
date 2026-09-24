@@ -1,7 +1,9 @@
-plotly
-supabase
-streamlit
+plotly>=5.0.0
+supabase>=2.0.0
+streamlit>=1.30.0
 pandas>=2.2,<3
 yfinance>=0.2.66,<1
 openai>=1.100,<3
 gspread>=6.0,<7
+python-dotenv>=1.0.0
+requests>=2.31.0
