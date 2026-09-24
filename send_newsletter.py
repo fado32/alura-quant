@@ -9,7 +9,13 @@ import resend
 # 1. Configuración de Credenciales y Parámetros de IA
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-resend.api_key = os.environ.get("RESEND_API_KEY")
+
+# Lectura explícita y limpieza de la clave de Resend
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip()
+if not RESEND_API_KEY:
+    raise RuntimeError("Falta RESEND_API_KEY en las variables de entorno o GitHub Secrets.")
+
+resend.api_key = RESEND_API_KEY
 
 IA_PROVIDER = os.getenv("IA_PROVIDER", "gemini").strip().lower()
 MODELO_GEMINI = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite").strip()
@@ -150,12 +156,13 @@ def enviar_correo(html_content, destinatarios):
         print("No hay destinatarios a los que enviar el correo.")
         return
 
-    print(f"Enviando newsletter a través de Resend a {len(destinatarios)} suscriptor(es)...")
+    destinatarios_limpios = [str(email).strip() for email in destinatarios if email]
+    
+    print(f"Enviando newsletter a través de Resend a {len(destinatarios_limpios)} suscriptor(es)...")
     
     params = {
-        # Con Resend se recomienda usar el dominio por defecto de pruebas o uno verificado
         "from": "Alura Quant <onboarding@resend.dev>", 
-        "to": destinatarios,
+        "to": destinatarios_limpios,
         "subject": f"Alura Quant | Informe Semanal — {datetime.now().strftime('%d/%m/%Y')}",
         "html": html_content,
     }
@@ -164,7 +171,7 @@ def enviar_correo(html_content, destinatarios):
         email = resend.Emails.send(params)
         print("¡Correo enviado con éxito a través de Resend! Respuesta:", email)
     except Exception as e:
-        print("Error al enviar el correo con Resend:", e)
+        print(f"Error detallado al enviar el correo con Resend: {type(e).__name__} - {e}")
 
 if __name__ == "__main__":
     lista_suscriptores = obtener_suscriptores()
