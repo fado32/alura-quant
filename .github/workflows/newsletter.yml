@@ -4,7 +4,7 @@ on:
   schedule:
     # Se ejecuta todos los sábados a las 10:22 UTC
     - cron: '22 10 * * 6'
-  workflow_dispatch: # Permite lanzarlo manualmente desde la pestaña "Actions" cuando quieras probarlo
+  workflow_dispatch: # Permite lanzarlo manualmente desde la pestaña "Actions"
 
 jobs:
   run-newsletter:
@@ -20,7 +20,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install supabase pandas google-genai resend requests
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Run script
         env:
@@ -28,4 +29,6 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          IA_PROVIDER: "gemini"
+          GEMINI_MODEL: "gemini-3.5-flash-lite"
         run: python send_newsletter.py
