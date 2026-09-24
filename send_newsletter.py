@@ -97,7 +97,7 @@ def generar_html_newsletter(metricas):
     print("Generando el comentario y el HTML de la newsletter con IA...")
     
     response = client.models.generate_content(
-        model='gemini-3.5-flash',
+        model='gemini-2.5-flash',
         contents=prompt,
         config=types.GenerateContentConfig(
             temperature=0.3,
