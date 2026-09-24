@@ -132,7 +132,7 @@ def enviar_correo(html_content, destinatarios):
         "Messages": [
             {
                 "From": {
-                    "Email": "updates@aluraquant.com", # Asegúrate de que este correo esté verificado en Mailjet
+                    "Email": "adelgadosanz@gmail.com", # Asegúrate de que este correo esté verificado en Mailjet
                     "Name": "Alura Quant"
                 },
                 "To": to_list,
