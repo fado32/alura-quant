@@ -1,5 +1,5 @@
 # ============================================================
-# ALURA QUANT V5.0 - SUPABASE EDITION
+# ALURA QUANT V5.0 - SUPABASE EDITION (CON TP ESTRUCTURAL)
 # ============================================================
 #
 # ARQUITECTURA
@@ -12,6 +12,7 @@
 # 6. Estado_Estrategia: TESIS_REFORZADA, TESIS_ESTABLE, 
 #                      TESIS_DEBILITADA, TESIS_INVALIDADA.
 # 7. Integración nativa con Supabase (Base de datos en la nube).
+# 8. Take Profit híbrido: R:R ajustado a resistencias de mercado.
 # ============================================================
 
 import os
@@ -48,6 +49,7 @@ CAPITAL = 100000.0
 RIESGO_POR_OPERACION = 0.005
 ATR_MULTIPLICADOR = 1.75
 RR_TARGET = 2.5
+RR_MINIMO_PERMITIDO = 1.5  # Ratio R:R mínimo exigido tras ajustar a resistencia
 UMBRAL_SCORE_18 = 55
 UMBRAL_SCORE_14 = 50
 LIQUIDEZ_MIN_EUR = 500000
@@ -153,7 +155,6 @@ CAMPOS_HISTORIAL = [
     "Estado", "Fecha_Salida", "Resultado_R", "MAE_R", "MFE_R"
 ]
 
-# Mapeo exacto actualizado con pnl_actual_pct
 MAPEO_COLUMNAS_SUPABASE = {
     "Fecha": "fecha", "Ticker": "ticker", "Empresa": "empresa", "Sector": "sector", "Icono": "icono", "Modo": "modo",
     "Precio_Alerta": "precio_alerta", "Score_Entrada": "score_entrada", "RVOL_Entrada": "rvol_entrada",
@@ -436,8 +437,6 @@ def obtener_estado_actual(t, d):
         return None
     x = d.iloc[-1]
 
-    # Validamos y convertimos TODOS los campos numéricos que se utilizan
-    # posteriormente. Esto evita errores de tipo pd.NA -> float().
     requeridos = [
         "Close", "E50", "E200", "RSI", "ATR", "VM20",
         "TO20", "ROC20", "H20", "Volume", "CLV"
@@ -519,18 +518,38 @@ def procesar_dataframe_activo(t, d):
     soporte = estado["soporte"]
     resistencia = estado["resistencia"]
     atr_actual = estado["atr"]
+    
+    # Cálculo inicial de Stop Loss
     stop = min(precio - ATR_MULTIPLICADOR * atr_actual, soporte * .99)
     riesgo_unitario = precio - stop
 
     if riesgo_unitario <= 0 or riesgo_unitario > precio * .20:
         return None
 
+    # --- TAKE PROFIT HÍBRIDO (R:R + Resistencia Estructural) ---
+    take_profit_teorico = precio + RR_TARGET * riesgo_unitario
+    
+    # Si la resistencia técnica se encuentra por debajo del objetivo teórico, 
+    # ajustamos el Take Profit a la resistencia para ser más realistas.
+    if resistencia > precio and resistencia < take_profit_teorico:
+        take_profit = resistencia
+    else:
+        take_profit = take_profit_teorico
+
+    # Comprobamos el Ratio R:R real resultante tras el ajuste estructural
+    beneficio_unitario = take_profit - precio
+    ratio_rr_real = beneficio_unitario / riesgo_unitario if riesgo_unitario > 0 else 0
+
+    # Si el recorrido hasta la resistencia es insuficiente, descartamos la señal
+    if ratio_rr_real < RR_MINIMO_PERMITIDO:
+        return None
+    # -----------------------------------------------------------
+
     acciones = int((CAPITAL * RIESGO_POR_OPERACION) / riesgo_unitario)
     if acciones < 1:
         return None
 
     info = MAESTRO_ACTIVOS.get(t, (t, "General", "📈"))
-    take_profit = precio + RR_TARGET * riesgo_unitario
 
     return {
         "ticker": t, "empresa": info[0], "sector": info[1], "icono": info[2], "modo": modo,
@@ -618,7 +637,6 @@ def comentario_seguimiento(original, actual, fila, evolucion):
 # ============================================================
 
 def cargar_historial():
-    """Carga todo el historial de alertas desde la tabla de Supabase."""
     if not supabase:
         print("⚠️ Supabase no configurado. Historial vacío.")
         return pd.DataFrame(columns=CAMPOS_HISTORIAL)
@@ -640,7 +658,6 @@ def cargar_historial():
     return pd.DataFrame(columns=CAMPOS_HISTORIAL)
 
 def guardar_en_supabase(fila_dict):
-    """Inserta una nueva alerta en la tabla de Supabase."""
     if not supabase:
         return
     try:
@@ -658,7 +675,6 @@ def guardar_en_supabase(fila_dict):
         print(f"⚠️ Error guardando alerta en Supabase: {e}")
 
 def actualizar_fila_en_supabase(ticker, fecha_creacion, cambios_dict):
-    """Actualiza una alerta existente en Supabase basada en su Ticker y Fecha."""
     if not supabase:
         return
     try:
@@ -871,6 +887,11 @@ def auditar():
 # ============================================================
 
 def guardar(c, comentario):
+    # Calculamos el ratio R:R real guardado para la estadística
+    riesgo = c["precio"] - c["stop"]
+    beneficio = c["tp"] - c["precio"]
+    ratio_rr_guardado = round(beneficio / riesgo, 2) if riesgo > 0 else RR_TARGET
+
     nueva_fila = {
         "Fecha": ahora().strftime("%Y-%m-%d %H:%M"),
         "Ticker": c["ticker"],
@@ -892,7 +913,7 @@ def guardar(c, comentario):
         "Analisis_IA_Entrada": comentario.replace("\n", " "),
         "Stop_Loss": c["stop"],
         "Take_Profit": c["tp"],
-        "Ratio_RR": RR_TARGET,
+        "Ratio_RR": ratio_rr_guardado,
         "Riesgo_Euros": c["riesgo"],
         "Acciones": c["acciones"],
         "Nominal": c["nominal"],
@@ -921,19 +942,6 @@ def guardar(c, comentario):
         "MFE_R": None
     }
     guardar_en_supabase(nueva_fila)
-
-
-# ============================================================
-# GIT (OPCIONAL O PARA LOGS)
-# ============================================================
-
-def git():
-    try:
-        repo_dir = BASE_DIR
-        subprocess.run(["git", "-C", repo_dir, "status", "--porcelain"], capture_output=True, text=True, check=False)
-        print("ℹ️ Git: Sincronización en la nube con Supabase activa.")
-    except Exception as e:
-        print(f"ℹ️ Git: {e}")
 
 
 # ============================================================
@@ -984,9 +992,8 @@ def main():
     for c in nuevas_alertas:
         comentario = comentario_entrada(c)
         guardar(c, comentario)
-        print(f"\n{c['icono']} {c['empresa']} ({c['ticker']}) | Score: {c['score']} | Entrada: {c['precio']:.2f}€")
+        print(f"\n{c['icono']} {c['empresa']} ({c['ticker']}) | Score: {c['score']} | Entrada: {c['precio']:.2f}€ | TP: {c['tp']}€")
 
-    git()
     print("\n============================================================")
     print("✅ ALURA QUANT V5.0 FINALIZADO")
     print("============================================================")
