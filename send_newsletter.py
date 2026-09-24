@@ -3,19 +3,28 @@ import time
 import pandas as pd
 from datetime import datetime, timedelta
 from supabase import create_client, Client
-from google import genai
-from google.genai import types
+from openai import OpenAI
 import resend
 
-# 1. Configuración de Credenciales
+# 1. Configuración de Credenciales y Parámetros de IA (igual que en bot.py)
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 resend.api_key = os.environ.get("RESEND_API_KEY")
+
+IA_PROVIDER = os.getenv("IA_PROVIDER", "gemini").strip().lower()
+MODELO_GEMINI = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite").strip()
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
 # Inicializar clientes
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-client = genai.Client(api_key=GEMINI_API_KEY)
+
+def cliente_ia():
+    if IA_PROVIDER == "gemini":
+        api_key = os.getenv("GEMINI_API_KEY", "").strip()
+        if not api_key:
+            raise RuntimeError("Falta GEMINI_API_KEY. Configúrala como variable de entorno o GitHub Secret.")
+        return OpenAI(api_key=api_key, base_url=GEMINI_BASE_URL)
+    raise RuntimeError(f"IA_PROVIDER no válido: {IA_PROVIDER}. Usa 'gemini'.")
 
 def obtener_suscriptores():
     """Extrae la lista de correos electrónicos desde la tabla suscriptores_free de Supabase"""
@@ -46,7 +55,6 @@ def extraer_datos_supabase():
     if df.empty:
         return None, "No hay registros en la tabla para este periodo."
     
-    # Procesar métricas clave
     operaciones_cerradas = df[df['estado'].isin(['WIN', 'LOSS'])]
     total_cerradas = len(operaciones_cerradas)
     
@@ -68,7 +76,7 @@ def extraer_datos_supabase():
     return metricas, df.to_string()
 
 def generar_html_newsletter(metricas):
-    """Redacta la newsletter aplicando una pausa para estabilizar la API y genera el comentario cuantitativo de IA"""
+    """Redacta la newsletter usando el cliente OpenAI compatible con Gemini"""
     
     prompt = f"""
     Eres el gestor cuantitativo senior de Alura Quant. Tienes que redactar la newsletter semanal para los suscriptores en formato HTML limpio, moderno y profesional.
@@ -91,20 +99,20 @@ def generar_html_newsletter(metricas):
     IMPORTANTE: Devuelve **únicamente** el código HTML puro dentro de un bloque de texto, sin explicaciones adicionales, listo para ser inyectado en el cuerpo de un email.
     """
 
-    print("Esperando 5 segundos para estabilizar conexión con la API...")
-    time.sleep(5)  # Pausa de cortesía para evitar restricciones de IP en GitHub Actions
-
-    print("Generando el comentario y el HTML de la newsletter con IA...")
+    print(f"Generando el comentario y el HTML con el modelo {MODELO_GEMINI}...")
     
-    response = client.models.generate_content(
-        model='gemini-2.5-flash',
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            temperature=0.3,
-        ),
+    client = cliente_ia()
+    
+    response = client.chat.completions.create(
+        model=MODELO_GEMINI,
+        messages=[
+            {"role": "system", "content": "Eres un asistente financiero experto y generas código HTML puro."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0.3,
     )
     
-    html_content = response.text.replace("```html", "").replace("```", "").strip()
+    html_content = response.choices[0].message.content.replace("```html", "").replace("```", "").strip()
     return html_content
 
 def enviar_correo(html_content, destinatarios):
@@ -135,9 +143,12 @@ if __name__ == "__main__":
         metricas, datos_str = extraer_datos_supabase()
         
         if metricas:
-            html_newsletter = generar_html_newsletter(metricas)
-            print("\n--- HTML GENERADO CORRECTAMENTE ---\n")
-            enviar_correo(html_newsletter, lista_suscriptores)
+            try:
+                html_newsletter = generar_html_newsletter(metricas)
+                print("\n--- HTML GENERADO CORRECTAMENTE ---\n")
+                enviar_correo(html_newsletter, lista_suscriptores)
+            except Exception as e:
+                print(f"Error generando o enviando la newsletter: {e}")
         else:
             print(datos_str)
     else:
