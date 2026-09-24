@@ -73,7 +73,7 @@ def extraer_datos_supabase():
         pnl_medio = round(operaciones_cerradas['pnl_actual_pct'].mean(), 2)
         
     # 2. Análisis de posiciones abiertas (Top 3 mejores y Top 3 peores de la semana)
-    open_df = df[df['estado'] == 'OPEN']
+    open_df = df[df['estado'] == 'ACTIVA']
     top_3_str = "No hay suficientes datos de posiciones abiertas."
     worst_3_str = "No hay suficientes datos de posiciones abiertas."
     
