@@ -187,7 +187,7 @@ def modo_actual():
     minuto = ahora().minute
     if 8 < hora < 16:
         return "14"
-    if hora < 21 or (hora == 21 and minuto < 30):
+    if hora < 20 or (hora == 20 and minuto < 30):
         return "18"
     return "22"
 
