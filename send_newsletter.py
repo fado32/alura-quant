@@ -1,4 +1,5 @@
 import os
+import time
 import pandas as pd
 from datetime import datetime, timedelta
 from supabase import create_client, Client
@@ -25,9 +26,8 @@ def obtener_suscriptores():
         print("No se encontraron suscriptores en la tabla suscriptores_free.")
         return []
     
-    # Extraemos los emails en una lista de Python simple
     emails = [sub['email'] for sub in response.data]
-    print(f"Se han encontrado {len(emails)} suscriptores.")
+    print(f"Se han encontrado {len(emails)} suscriptor(es).")
     return emails
 
 def extraer_datos_supabase():
@@ -68,16 +68,14 @@ def extraer_datos_supabase():
     return metricas, df.to_string()
 
 def generar_html_newsletter(metricas):
-    """Utiliza Gemini con búsqueda web para redactar la newsletter directamente en HTML estilizado"""
+    """Redacta la newsletter aplicando una pausa para estabilizar la API y genera el comentario cuantitativo de IA"""
     
     prompt = f"""
     Eres el gestor cuantitativo senior de Alura Quant. Tienes que redactar la newsletter semanal para los suscriptores en formato HTML limpio, moderno y profesional.
     
     ESTAMOS EN EL PRESENTE (Fecha actual: {datetime.now().strftime('%Y-%m-%d')}).
     
-    Por favor, haz lo siguiente:
-    1. Utiliza la herramienta de búsqueda web para investigar brevemente los eventos macroeconómicos o de mercados financieros más relevantes a nivel global durante esta última semana ({metricas['periodo']}).
-    2. Combina ese contexto macro con los datos reales de nuestra cartera cuantitativa:
+    Por favor, redacta el informe combinando un comentario analítico experto con los datos reales de nuestra cartera cuantitativa de esta semana:
        - Periodo: {metricas['periodo']}
        - Operaciones cerradas: {metricas['total_operaciones_semana']}
        - Win Rate semanal: {metricas['win_rate_semanal']}%
@@ -86,20 +84,22 @@ def generar_html_newsletter(metricas):
        
     Estructura requerida para el HTML (usa etiquetas <h2>, <p>, <ul>, <li>, <strong>, etc., con un estilo sobrio, tipografía sans-serif, fondo blanco, contenedores limpios y colores corporativos elegantes como azul marino y gris):
     - **Cabecera**: Título del reporte ("Alura Quant — Informe Semanal de Inversores") y fechas.
-    - **Contexto Global**: Breve resumen macro de la semana en los mercados.
-    - **Radiografía de Cartera**: Análisis de las métricas cuantitativas y del comportamiento del algoritmo.
+    - **Contexto Global**: Breve comentario experto sobre la evolución de los mercados.
+    - **Radiografía de Cartera**: Análisis detallado de las métricas cuantitativas y del comportamiento del algoritmo.
     - **Outlook**: Perspectiva y objetivos para la próxima semana.
     
     IMPORTANTE: Devuelve **únicamente** el código HTML puro dentro de un bloque de texto, sin explicaciones adicionales, listo para ser inyectado en el cuerpo de un email.
     """
 
-    print("Generando el HTML de la newsletter con IA y búsqueda web...")
+    print("Esperando 5 segundos para estabilizar conexión con la API...")
+    time.sleep(5)  # Pausa de cortesía para evitar restricciones de IP en GitHub Actions
+
+    print("Generando el comentario y el HTML de la newsletter con IA...")
     
     response = client.models.generate_content(
-        model='gemini-3.5-flash',
+        model='gemini-3.6-flash',
         contents=prompt,
         config=types.GenerateContentConfig(
-            tools=[types.Tool(google_search=types.GoogleSearch())],
             temperature=0.3,
         ),
     )
@@ -117,7 +117,7 @@ def enviar_correo(html_content, destinatarios):
     
     params = {
         "from": "Alura Quant <updates@aluraquant.com>",
-        "to": destinatarios,  # Lista dinámica extraída de Supabase
+        "to": destinatarios,
         "subject": f"Alura Quant | Informe Semanal — {datetime.now().strftime('%d/%m/%Y')}",
         "html": html_content,
     }
@@ -129,19 +129,14 @@ def enviar_correo(html_content, destinatarios):
         print("Error al enviar el correo:", e)
 
 if __name__ == "__main__":
-    # 1. Obtener la lista de suscriptores de Supabase
     lista_suscriptores = obtener_suscriptores()
     
     if lista_suscriptores:
-        # 2. Extraer métricas de la cartera
         metricas, datos_str = extraer_datos_supabase()
         
         if metricas:
-            # 3. Generar la newsletter con IA
             html_newsletter = generar_html_newsletter(metricas)
             print("\n--- HTML GENERADO CORRECTAMENTE ---\n")
-            
-            # 4. Enviar a todos los suscriptores
             enviar_correo(html_newsletter, lista_suscriptores)
         else:
             print(datos_str)
