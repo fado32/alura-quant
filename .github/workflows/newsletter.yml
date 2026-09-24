@@ -1,0 +1,31 @@
+name: Enviar Newsletter Semanal Alura Quant
+
+on:
+  schedule:
+    # Se ejecuta todos los sábados a las 10:22 UTC
+    - cron: '22 10 * * 6'
+  workflow_dispatch: # Permite lanzarlo manualmente desde la pestaña "Actions" cuando quieras probarlo
+
+jobs:
+  run-newsletter:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install supabase pandas google-genai resend requests
+
+      - name: Run script
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: python send_newsletter.py
