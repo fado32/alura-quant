@@ -46,65 +46,84 @@ def obtener_suscriptores():
     return emails
 
 def extraer_datos_supabase():
-    """Extrae los snapshots de la última semana y procesa tanto cerradas como el ranking de abiertas"""
+    """Extrae los snapshots de la última semana y procesa tanto cerradas/saltadas como el ranking de activas"""
     hoy = datetime.now().date()
     inicio_semana = hoy - timedelta(days=7)
     
     print(f"Extrayendo datos de Supabase desde {inicio_semana} al {hoy}...")
     
-    response = supabase.table("backtesting_diario_alertas") \
+    # 1. Extraer registros de la última semana para operaciones cerradas/saltadas
+    response_semana = supabase.table("backtesting_diario_alertas") \
         .select("*") \
         .gte("fecha_snapshot", inicio_semana.isoformat()) \
         .execute()
     
-    df = pd.DataFrame(response.data)
-    if df.empty:
+    df_semana = pd.DataFrame(response_semana.data)
+    
+    # 2. Extraer TODAS las posiciones en estado 'ACTIVA' para evaluar el ranking global actual
+    response_activas = supabase.table("backtesting_diario_alertas") \
+        .select("*") \
+        .eq("estado", "ACTIVA") \
+        .execute()
+    
+    df_activas = pd.DataFrame(response_activas.data)
+    
+    if df_semana.empty and df_activas.empty:
         return None, "No hay registros en la tabla para este periodo."
     
-    # 1. Métricas de operaciones cerradas
-    operaciones_cerradas = df[df['estado'].isin(['WIN', 'LOSS'])]
+    # Identificar campo de activo (ticker o symbol)
+    col_ticker = 'ticker' if 'ticker' in df_semana.columns else ('symbol' if 'symbol' in df_semana.columns else None)
+    if df_activas.empty and not df_semana.empty:
+        df_activas = df_semana.copy()
+
+    # Procesar operaciones cerradas o con stop saltado en la semana
+    operaciones_cerradas = pd.DataFrame()
+    if not df_semana.empty and 'estado' in df_semana.columns:
+        operaciones_cerradas = df_semana[df_semana['estado'].str.upper().isin(['STOP_SALTADO', 'WIN', 'LOSS', 'CERRADA', 'CLOSED', 'TP', 'SL'])]
+    
     total_cerradas = len(operaciones_cerradas)
-    
     win_rate = 0.0
-    pnl_medio = 0.0
-    if total_cerradas > 0:
-        wins = len(operaciones_cerradas[operaciones_cerradas['estado'] == 'WIN'])
-        win_rate = round((wins / total_cerradas) * 100, 2)
-        pnl_medio = round(operaciones_cerradas['pnl_actual_pct'].mean(), 2)
-        
-    # 2. Análisis de posiciones abiertas (Top 3 mejores y Top 3 peores de la semana)
-    open_df = df[df['estado'] == 'ACTIVA']
-    top_3_str = "No hay suficientes datos de posiciones abiertas."
-    worst_3_str = "No hay suficientes datos de posiciones abiertas."
+    pnl_medio_cerradas = 0.0
     
-    if not open_df.empty and 'pnl_actual_pct' in open_df.columns:
-        if 'symbol' in open_df.columns:
-            open_df = open_df.sort_values('fecha_snapshot').drop_duplicates(subset=['symbol'], keep='last')
+    if total_cerradas > 0:
+        # Consideramos éxito (Win) si el PnL es positivo o el estado es WIN/TP
+        wins = len(operaciones_cerradas[(operaciones_cerradas['estado'].str.upper().isin(['WIN', 'TP'])) | (operaciones_cerradas['pnl_actual_pct'] > 0)])
+        win_rate = round((wins / total_cerradas) * 100, 2)
+        if 'pnl_actual_pct' in operaciones_cerradas.columns:
+            pnl_medio_cerradas = round(operaciones_cerradas['pnl_actual_pct'].mean(), 2)
+
+    # Procesar posiciones activas para Top 3 y Worst 3
+    top_3_str = "No hay suficientes datos de posiciones activas."
+    worst_3_str = "No hay suficientes datos de posiciones activas."
+    
+    if not df_activas.empty and 'pnl_actual_pct' in df_activas.columns and col_ticker:
+        # Nos quedamos con el snapshot más reciente por activo
+        df_activas_unicas = df_activas.sort_values('fecha_snapshot').drop_duplicates(subset=[col_ticker], keep='last')
         
-        open_sorted = open_df.sort_values(by='pnl_actual_pct', ascending=False)
+        open_sorted = df_activas_unicas.sort_values(by='pnl_actual_pct', ascending=False)
         top_3 = open_sorted.head(3)
         worst_3 = open_sorted.tail(3).sort_values(by='pnl_actual_pct', ascending=True)
         
-        top_3_str = "\n".join([f"- {row.get('symbol', 'Activo')}: PnL actual {row.get('pnl_actual_pct', 0)}%" for _, row in top_3.iterrows()])
-        worst_3_str = "\n".join([f"- {row.get('symbol', 'Activo')}: PnL actual {row.get('pnl_actual_pct', 0)}%" for _, row in worst_3.iterrows()])
+        top_3_str = "\n".join([f"- **{row.get(col_ticker, 'Activo')}**: PnL actual **{row.get('pnl_actual_pct', 0)}%** (RSI: {row.get('rsi_actual', 'N/A')}, Score: {row.get('score_actual', 'N/A')})" for _, row in top_3.iterrows()])
+        worst_3_str = "\n".join([f"- **{row.get(col_ticker, 'Activo')}**: PnL actual **{row.get('pnl_actual_pct', 0)}%** (RSI: {row.get('rsi_actual', 'N/A')}, Distancia SL: {row.get('distancia_sl_pct', 'N/A')}%)" for _, row in worst_3.iterrows()])
 
     metricas = {
         "periodo": f"Del {inicio_semana} al {hoy}",
         "total_operaciones_semana": total_cerradas,
         "win_rate_semanal": win_rate,
-        "pnl_medio_semanal": pnl_medio,
-        "alertas_activas_actuales": len(open_df),
+        "pnl_medio_semanal": pnl_medio_cerradas,
+        "alertas_activas_actuales": len(df_activas_unicas) if not df_activas.empty else 0,
         "top_3_abiertas": top_3_str,
         "worst_3_abiertas": worst_3_str
     }
     
-    return metricas, df.to_string()
+    return metricas, df_semana.to_string() if not df_semana.empty else "Sin datos semanales"
 
 def generar_html_newsletter(metricas):
-    """Redacta la newsletter analizando cerradas, abiertas, top/worst y generando el HTML corporativo"""
+    """Redacta la newsletter analizando el comportamiento de la cartera y generando el HTML corporativo"""
     
     prompt = f"""
-    Eres el gestor cuantitativo senior de Alura Quant. Tienes que redactar la newsletter semanal para los suscriptores en formato HTML limpio, moderno y profesional.
+    Eres el gestor cuantitativo senior de Alura Quant. Tienes que redactar la newsletter semanal para los inversores en formato HTML limpio, moderno y profesional.
     
     Utiliza un diseño corporativo elegante: fondo blanco, contenedores limpios, tipografía sans-serif, y una paleta de colores sobria con azul marino (#1e293b) y gris claro (#f8fafc).
     
@@ -112,24 +131,23 @@ def generar_html_newsletter(metricas):
     
     Por favor, redacta el informe combinando un comentario analítico experto con los datos reales de nuestra cartera cuantitativa de esta semana:
        - Periodo: {metricas['periodo']}
-       - Operaciones cerradas: {metricas['total_operaciones_semana']}
+       - Alertas cerradas / saltadas esta semana: {metricas['total_operaciones_semana']}
        - Win Rate semanal: {metricas['win_rate_semanal']}%
-       - PnL medio por operación: {metricas['pnl_medio_semanal']}%
-       - Posiciones/Alertas activas totales: {metricas['alertas_activas_actuales']}
+       - PnL medio por operación cerrada: {metricas['pnl_medio_semanal']}%
+       - Alertas activas totales en cartera: {metricas['alertas_activas_actuales']}
        
-       - TOP 3 POSICIONES ABIERTAS CON MEJOR RENDIMIENTO:
+       - TOP 3 POSICIONES ACTIVAS CON MEJOR RENDIMIENTO:
        {metricas['top_3_abiertas']}
        
-       - TOP 3 POSICIONES ABIERTAS CON PEOR RENDIMIENTO / RETRASO:
+       - TOP 3 POSICIONES ACTIVAS CON PEOR RENDIMIENTO / RETRASO:
        {metricas['worst_3_abiertas']}
        
     Estructura requerida para el HTML (usa etiquetas <h2>, <p>, <ul>, <li>, <strong>, etc.):
-    - **Cabecera**: Título del reporte ("Alura Quant — Informe Semanal de Inversores") y fechas.
-    - **Contexto Global**: Breve comentario experto sobre la evolución de los mercados financieros.
-    - **Radiografía de Cartera Cerrada**: Análisis de las métricas cuantitativas y del comportamiento del algoritmo en las operaciones cerradas.
-    - **Comportamiento de Posiciones Abiertas**: Revisión de cómo están evolucionando las posiciones vivas en la cartera global.
-    - **Foco en Activos Destacados (Top 3 Mejores y Top 3 Peores)**: Un análisis cualitativo y crítico por parte de la IA explicando el comportamiento de las 3 mejores y las 3 peores posiciones abiertas de la semana.
-    - **Outlook**: Perspectiva, riesgos y objetivos para la próxima semana.
+    - **Cabecera**: Título del reporte ("Alura Quant — Informe Semanal de Cartera") y fechas.
+    - **Contexto Global**: Breve comentario experto sobre la evolución de los mercados financieros y el comportamiento macro de la semana.
+    - **Radiografía de Cartera (Beneficios y Alertas)**: Análisis detallado del rendimiento global, nuevas alertas, estado de las operaciones cerradas/saltadas y Win Rate.
+    - **Foco en Activos Destacados (Top 3 Mejores y Top 3 Peores)**: Un análisis cualitativo y crítico personalizado por parte de la IA explicando individualmente el comportamiento, los indicadores técnicos (como RSI o Score) y la perspectiva de las 3 mejores y las 3 peores posiciones de la semana.
+    - **Outlook Estratégico**: Perspectiva, gestión de riesgo y objetivos para la próxima semana.
     
     IMPORTANTE: Devuelve **únicamente** el código HTML puro dentro de un bloque de texto, sin explicaciones adicionales, listo para ser inyectado en el cuerpo de un email.
     """
@@ -163,7 +181,7 @@ def enviar_correo(html_content, destinatarios):
     params = {
         "from": "Alura Quant <onboarding@resend.dev>", 
         "to": destinatarios_limpios,
-        "subject": f"Alura Quant | Informe Semanal — {datetime.now().strftime('%d/%m/%Y')}",
+        "subject": f"Alura Quant | Informe Semanal de Cartera — {datetime.now().strftime('%d/%m/%Y')}",
         "html": html_content,
     }
 
