@@ -4,12 +4,11 @@ import pandas as pd
 from datetime import datetime, timedelta
 from supabase import create_client, Client
 from openai import OpenAI
-import resend
+import requests
 
-# 1. Configuración de Credenciales y Parámetros de IA (igual que en bot.py)
+# 1. Configuración de Credenciales y Parámetros de IA
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-resend.api_key = os.environ.get("RESEND_API_KEY")
 
 IA_PROVIDER = os.getenv("IA_PROVIDER", "gemini").strip().lower()
 MODELO_GEMINI = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite").strip()
@@ -116,25 +115,41 @@ def generar_html_newsletter(metricas):
     return html_content
 
 def enviar_correo(html_content, destinatarios):
-    """Envía el correo utilizando la API de Resend a todos los suscriptores de la tabla"""
+    """Envía el correo utilizando la API REST de Mailjet"""
     if not destinatarios:
         print("No hay destinatarios a los que enviar el correo.")
         return
 
-    print(f"Enviando newsletter a {len(destinatarios)} suscriptor(es)...")
+    print(f"Enviando newsletter a través de Mailjet a {len(destinatarios)} suscriptor(es)...")
     
-    params = {
-        "from": "Alura Quant <updates@aluraquant.com>",
-        "to": destinatarios,
-        "subject": f"Alura Quant | Informe Semanal — {datetime.now().strftime('%d/%m/%Y')}",
-        "html": html_content,
+    api_key = os.environ.get("MAILJET_API_KEY")
+    secret_key = os.environ.get("MAILJET_SECRET_KEY")
+    
+    url = "https://api.mailjet.com/v3.1/send"
+    to_list = [{"Email": email} for email in destinatarios]
+    
+    payload = {
+        "Messages": [
+            {
+                "From": {
+                    "Email": "updates@aluraquant.com", # Asegúrate de que este correo esté verificado en Mailjet
+                    "Name": "Alura Quant"
+                },
+                "To": to_list,
+                "Subject": f"Alura Quant | Informe Semanal — {datetime.now().strftime('%d/%m/%Y')}",
+                "HTMLPart": html_content
+            }
+        ]
     }
 
     try:
-        email = resend.Emails.send(params)
-        print("¡Correo enviado con éxito! ID:", email)
+        response = requests.post(url, json=payload, auth=(api_key, secret_key))
+        if response.status_code in [200, 201]:
+            print("¡Correo enviado con éxito a través de Mailjet!", response.json())
+        else:
+            print(f"Error al enviar el correo con Mailjet ({response.status_code}):", response.text)
     except Exception as e:
-        print("Error al enviar el correo:", e)
+        print("Excepción al conectar con la API de Mailjet:", e)
 
 if __name__ == "__main__":
     lista_suscriptores = obtener_suscriptores()
