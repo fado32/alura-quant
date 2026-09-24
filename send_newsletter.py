@@ -6,7 +6,7 @@ from google import genai
 from google.genai import types
 import resend
 
-# 1. Configuración de Credenciales (leyendo de las variables de entorno)
+# 1. Configuración de Credenciales
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -15,6 +15,20 @@ resend.api_key = os.environ.get("RESEND_API_KEY")
 # Inicializar clientes
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 client = genai.Client(api_key=GEMINI_API_KEY)
+
+def obtener_suscriptores():
+    """Extrae la lista de correos electrónicos desde la tabla suscriptores_free de Supabase"""
+    print("Consultando lista de suscriptores en Supabase...")
+    response = supabase.table("suscriptores_free").select("email").execute()
+    
+    if not response.data:
+        print("No se encontraron suscriptores en la tabla suscriptores_free.")
+        return []
+    
+    # Extraemos los emails en una lista de Python simple
+    emails = [sub['email'] for sub in response.data]
+    print(f"Se han encontrado {len(emails)} suscriptores.")
+    return emails
 
 def extraer_datos_supabase():
     """Extrae los snapshots de la última semana desde la tabla backtesting_diario_alertas"""
@@ -57,7 +71,7 @@ def generar_html_newsletter(metricas):
     """Utiliza Gemini con búsqueda web para redactar la newsletter directamente en HTML estilizado"""
     
     prompt = f"""
-    Eres el gestor cuantitativo senior de Alura Quant. Tienes que redactar la newsletter semanal para los inversores en formato HTML limpio, moderno y profesional.
+    Eres el gestor cuantitativo senior de Alura Quant. Tienes que redactar la newsletter semanal para los suscriptores en formato HTML limpio, moderno y profesional.
     
     ESTAMOS EN EL PRESENTE (Fecha actual: {datetime.now().strftime('%Y-%m-%d')}).
     
@@ -90,17 +104,20 @@ def generar_html_newsletter(metricas):
         ),
     )
     
-    # Limpiamos posibles etiquetas de bloque de código markdown que la IA pueda incluir
     html_content = response.text.replace("```html", "").replace("```", "").strip()
     return html_content
 
-def enviar_correo(html_content):
-    """Envía el correo utilizando la API de Resend"""
-    print("Enviando newsletter por correo electrónico...")
+def enviar_correo(html_content, destinatarios):
+    """Envía el correo utilizando la API de Resend a todos los suscriptores de la tabla"""
+    if not destinatarios:
+        print("No hay destinatarios a los que enviar el correo.")
+        return
+
+    print(f"Enviando newsletter a {len(destinatarios)} suscriptor(es)...")
     
     params = {
         "from": "Alura Quant <updates@aluraquant.com>",
-        "to": ["inversores@tudominio.com"],  # Reemplaza con el destinatario o lista de correos
+        "to": destinatarios,  # Lista dinámica extraída de Supabase
         "subject": f"Alura Quant | Informe Semanal — {datetime.now().strftime('%d/%m/%Y')}",
         "html": html_content,
     }
@@ -112,13 +129,21 @@ def enviar_correo(html_content):
         print("Error al enviar el correo:", e)
 
 if __name__ == "__main__":
-    metricas, datos_str = extraer_datos_supabase()
+    # 1. Obtener la lista de suscriptores de Supabase
+    lista_suscriptores = obtener_suscriptores()
     
-    if metricas:
-        html_newsletter = generar_html_newsletter(metricas)
-        print("\n--- HTML GENERADO CORRECTAMENTE --ِن")
+    if lista_suscriptores:
+        # 2. Extraer métricas de la cartera
+        metricas, datos_str = extraer_datos_supabase()
         
-        # Enviar el correo de forma automatizada
-        enviar_correo(html_newsletter)
+        if metricas:
+            # 3. Generar la newsletter con IA
+            html_newsletter = generar_html_newsletter(metricas)
+            print("\n--- HTML GENERADO CORRECTAMENTE ---\n")
+            
+            # 4. Enviar a todos los suscriptores
+            enviar_correo(html_newsletter, lista_suscriptores)
+        else:
+            print(datos_str)
     else:
-        print(datos_str)
+        print("Operación cancelada: la tabla de suscriptores está vacía.")
