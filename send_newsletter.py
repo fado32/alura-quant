@@ -96,7 +96,7 @@ def generar_html_newsletter(metricas):
     print("Generando el HTML de la newsletter con IA y búsqueda web...")
     
     response = client.models.generate_content(
-        model='gemini-2.5-flash',
+        model='gemini-3.5-flash',
         contents=prompt,
         config=types.GenerateContentConfig(
             tools=[types.Tool(google_search=types.GoogleSearch())],
