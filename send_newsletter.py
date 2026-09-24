@@ -162,7 +162,7 @@ def enviar_correo(html_content, destinatarios):
         "Messages": [
             {
                 "From": {
-                    "Email": "updates@aluraquant.com", # Asegúrate de que esté verificado en Mailjet o usa tu correo autorizado
+                    "Email": "adelgadosanz@gmail.com", # Asegúrate de que esté verificado en Mailjet o usa tu correo autorizado
                     "Name": "Alura Quant"
                 },
                 "To": to_list,
