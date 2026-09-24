@@ -28,8 +28,6 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          MAILJET_API_KEY: ${{ secrets.MAILJET_API_KEY }}
-          MAILJET_SECRET_KEY: ${{ secrets.MAILJET_SECRET_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           IA_PROVIDER: "gemini"
           GEMINI_MODEL: "gemini-3.5-flash-lite"
