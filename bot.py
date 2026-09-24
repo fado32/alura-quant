@@ -184,7 +184,7 @@ def modo_actual():
         return MODO_EJECUCION
     hora = ahora().hour
     minuto = ahora().minute
-    if hora < 16:
+    if 8 < hora < 16:
         return "14"
     if hora < 21 or (hora == 21 and minuto < 30):
         return "18"
