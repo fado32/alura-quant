@@ -864,7 +864,7 @@ div[data-testid="stStatusWidget"] {
         1380px;
 
     padding-top:
-        30px;
+        8px !important;
 
     padding-bottom:
         60px;
