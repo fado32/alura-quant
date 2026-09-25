@@ -4190,7 +4190,7 @@ with tab_inicio:
     if not _demo_rows.empty:
         _ticker_series = _demo_rows["Ticker"].astype(str).str.upper() if "Ticker" in _demo_rows.columns else pd.Series("", index=_demo_rows.index)
         _empresa_series = _demo_rows["Empresa"].astype(str).str.upper() if "Empresa" in _demo_rows.columns else pd.Series("", index=_demo_rows.index)
-        _bbva_mask = _ticker_series.str.contains("BBVA", na=False) | _empresa_series.str.contains("BBVA", na=False)
+        _bbva_mask = _ticker_series.str.contains("A3M", na=False) | _empresa_series.str.contains("A3M", na=False)
 
     if _bbva_mask.any():
         _demo_row = _demo_rows[_bbva_mask].iloc[0]
