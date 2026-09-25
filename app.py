@@ -4252,19 +4252,17 @@ with tab_inicio:
           <div class="aq-eyebrow">ALURA QUANT</div>
           <h2>El mercado no necesita más ruido.</h2>
           <p>Necesita mejores filtros. Explora el sistema y decide qué nivel de información quieres recibir.</p>
-          <div class="aq-actions">
-            {
-              st.button("Ver planes y suscripción →", key="btn_ir_planes", type="primary") and st.rerun()
-            }
-          </div>
+    """)
+
+    # Botón nativo de Streamlit que ejecuta un rerun para reflejar el salto a la pestaña de planes
+    if st.button("Ver planes y suscripción →", key="btn_ir_planes", type="primary"):
+        st.rerun()
+
+    render_html("""
         </div>
       </section>
     </div>
     """)
-    
-    # Manejador del botón dinámico de redirección a la pestaña planes
-    if st.session_state.get("btn_ir_planes", False):
-        st.switch_page("Planes") # Alternativa segura por rerun si se maneja por índice de pestaña o estado de sesión
 
 # ============================================================
 # 02. OPORTUNIDADES
