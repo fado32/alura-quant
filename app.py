@@ -195,15 +195,6 @@ def calcular_metricas(df):
     }
 
 
-def formatear_tesis_ia(texto):
-    if texto is None or pd.isna(texto):
-        return "Sin información disponible."
-    texto = str(texto).strip()
-    if not texto:
-        return "Sin información disponible."
-    return html.escape(texto).replace("\n", "<br>")
-
-
 @st.cache_data(ttl=60)
 def cargar_universo_supabase():
     try:
@@ -371,42 +362,13 @@ def calcular_resultados(df, beneficio_no_realizado=0.0):
     return beneficio_realizado, fechas_curva, beneficios_curva
 
 
-def calcular_position_percentages(stop_loss, entrada, actual, take_profit):
-    values = [v for v in [stop_loss, entrada, actual, take_profit] if v is not None]
-    if len(values) < 2:
-        return None
-    minimum = min(values)
-    maximum = max(values)
-    rango = maximum - minimum
-    if rango <= 0:
-        return None
-    margen = rango * 0.08
-    minimum -= margen
-    maximum += margen
-    rango = maximum - minimum
-
-    def position(value):
-        if value is None:
-            return None
-        pct = ((value - minimum) / rango) * 100
-        return max(3, min(97, pct))
-
-    return {
-        "sl": position(stop_loss),
-        "entry": position(entrada),
-        "current": position(actual),
-        "tp": position(take_profit),
-    }
-
-
 # ============================================================
-# DESIGN SYSTEM (MODIFICADO PARA REDUCIR ESPACIOS EN BLANCO)
+# DESIGN SYSTEM
 # ============================================================
 
 st.markdown(
     """
 <style>
-
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
 
 :root {
@@ -426,8 +388,6 @@ st.markdown(
     --green-soft: #ecfdf3;
     --red: #dc2626;
     --red-soft: #fef2f2;
-    --amber: #d97706;
-    --amber-soft: #fffbeb;
     --shadow: 0 1px 2px rgba(15,23,42,.02), 0 8px 30px rgba(15,23,42,.035);
     --shadow-hover: 0 12px 35px rgba(15,23,42,.07);
 }
@@ -436,190 +396,49 @@ html, body, [class*="css"] {
     font-family: 'DM Sans', sans-serif;
 }
 
-html {
-    scroll-behavior: smooth;
-}
-
 .stApp {
     background: var(--bg);
     color: var(--text);
 }
 
-header[data-testid="stHeader"] {
-    display: none !important;
-}
-
-#MainMenu, footer, section[data-testid="stSidebar"] {
-    display: none !important;
-}
-
-div[data-testid="stStatusWidget"] {
+header[data-testid="stHeader"], #MainMenu, footer, section[data-testid="stSidebar"], div[data-testid="stStatusWidget"] {
     display: none !important;
 }
 
 .block-container {
     max-width: 1380px;
-    padding-top: 15px; /* Reducido para disminuir espacio superior */
-    padding-bottom: 30px; /* Reducido */
+    padding-top: 25px;
+    padding-bottom: 30px;
     padding-left: 38px;
     padding-right: 38px;
 }
 
-/* MODIFICACIÓN 1 Y 2: Reducción de espaciados en secciones y héroe */
-.aq-section {
-    padding: 30px 0 !important; /* Reducido de 78px a 30px para acortar espacios antes y después */
-}
-
-.hero {
-    margin-bottom: 12px !important; /* Reducido */
-}
-
-.aq-hero {
-    padding: 40px 0 30px !important; /* Reducido para acercar los elementos introductorios */
-}
-
-.scroll-top {
-    position: fixed;
-    right: 24px;
-    bottom: 24px;
-    width: 42px;
-    height: 42px;
+.aq-topbar {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    background: var(--surface);
-    color: var(--blue);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    box-shadow: 0 8px 25px rgba(15,23,42,.12);
-    text-decoration: none;
-    font-family: 'Plus Jakarta Sans';
-    font-size: 18px;
-    font-weight: 800;
-    z-index: 9999;
-    transition: all .2s ease;
-}
-
-.scroll-top:hover {
-    transform: translateY(-3px);
-    background: var(--blue);
-    color: white;
-    border-color: var(--blue);
-}
-
-.hero-title {
-    margin: 0;
-    font-family: 'Plus Jakarta Sans';
-    font-size: 32px;
-    line-height: 1.1;
-    letter-spacing: -.045em;
-    font-weight: 800;
-    color: var(--text);
-}
-
-.hero-subtitle {
-    margin-top: 4px;
-    color: var(--text-secondary);
-    font-size: 13px;
-}
-
-.portfolio-summary {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
-    margin-bottom: 16px; /* Reducido */
-}
-
-.summary-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 17px 18px;
-    box-shadow: var(--shadow);
-    min-width: 0;
-    transition: .2s ease;
-}
-
-.summary-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-hover);
-}
-
-.summary-label {
-    color: var(--text-tertiary);
-    font-size: 9px;
-    text-transform: uppercase;
-    letter-spacing: .07em;
-    font-weight: 800;
-    margin-bottom: 8px;
-}
-
-.summary-value {
-    font-family: 'Plus Jakarta Sans';
-    font-size: 21px;
-    line-height: 1.05;
-    font-weight: 800;
-    letter-spacing: -.035em;
-    color: var(--text);
-}
-
-.summary-detail {
-    margin-top: 6px;
-    color: var(--text-secondary);
-    font-size: 10px;
-    font-weight: 600;
-}
-
-.section-header {
-    display: flex;
-    align-items: flex-end;
     justify-content: space-between;
-    margin: 2px 0 10px; /* Reducido */
+    align-items: center;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 15px;
+    margin-bottom: 20px;
 }
 
-.section-title {
-    font-family: 'Plus Jakarta Sans';
-    font-size: 18px;
+.aq-brand {
+    font-family: 'Plus Jakarta Sans', sans-serif;
     font-weight: 800;
-    letter-spacing: -.025em;
+    font-size: 20px;
+    letter-spacing: -0.03em;
     color: var(--text);
 }
 
-.section-subtitle {
+.aq-brand span {
+    color: var(--blue);
+}
+
+.aq-topmeta {
     font-size: 11px;
     color: var(--text-tertiary);
-    margin-top: 3px;
-}
-
-.stTabs [data-baseweb="tab-list"] {
-    background: transparent !important;
-    gap: 5px !important;
-    border-bottom: 1px solid var(--border) !important;
-    margin-bottom: 15px !important; /* Reducido */
-}
-
-.stTabs button[data-baseweb="tab"] {
-    background: transparent !important;
-    border: 0 !important;
-    height: 43px !important;
-    padding: 0 16px !important;
-    color: var(--text-secondary) !important;
-}
-
-.stTabs button[data-baseweb="tab"] p {
-    font-family: 'Plus Jakarta Sans' !important;
-    font-size: 12px !important;
-    font-weight: 700 !important;
-}
-
-.stTabs button[aria-selected="true"] {
-    color: var(--blue) !important;
-    border-bottom: 2px solid var(--blue) !important;
-}
-
-.stTabs button[aria-selected="true"] p {
-    color: var(--blue) !important;
-    font-weight: 800 !important;
+    font-weight: 700;
+    letter-spacing: 0.05em;
 }
 
 .asset-card {
@@ -629,13 +448,6 @@ div[data-testid="stStatusWidget"] {
     padding: 22px;
     margin-bottom: 15px;
     box-shadow: var(--shadow);
-    transition: all .22s ease;
-}
-
-.asset-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-hover);
-    border-color: #dce3ed;
 }
 
 .asset-header {
@@ -646,19 +458,10 @@ div[data-testid="stStatusWidget"] {
     margin-bottom: 16px;
 }
 
-.asset-left {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    min-width: 0;
-    flex: 1;
-}
-
 .asset-identity {
     display: flex;
     align-items: center;
     gap: 12px;
-    min-width: 0;
 }
 
 .asset-icon {
@@ -678,7 +481,6 @@ div[data-testid="stStatusWidget"] {
     font-size: 16px;
     font-weight: 800;
     color: var(--text);
-    line-height: 1.2;
 }
 
 .asset-ticker {
@@ -694,39 +496,17 @@ div[data-testid="stStatusWidget"] {
     margin-top: 3px;
 }
 
-.asset-right {
-    text-align: right;
-    flex-shrink: 0;
-    padding-top: 25px;
-}
-
-.new-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: var(--green-soft);
-    color: #15803d;
-    border: 1px solid #dcfce7;
-    padding: 4px 8px;
-    border-radius: 999px;
-    font-size: 8px;
-    font-weight: 800;
-    letter-spacing: .07em;
-}
-
 .current-price {
     font-family: 'Plus Jakarta Sans';
     font-size: 22px;
     font-weight: 800;
     color: var(--text);
-    letter-spacing: -.03em;
 }
 
 .price-label {
     font-size: 9px;
     color: var(--text-tertiary);
     text-transform: uppercase;
-    letter-spacing: .08em;
     font-weight: 800;
 }
 
@@ -734,74 +514,14 @@ div[data-testid="stStatusWidget"] {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 20px;
     padding: 10px 12px;
     background: var(--surface-soft);
     border-radius: 11px;
-    margin-bottom: 18px;
 }
 
-.performance-left {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    text-align: right;
-    min-width: 0;
-    order: 2;
-}
-
-.performance-label {
-    font-size: 10px;
-    color: var(--text-secondary);
-    font-weight: 700;
-}
-
-.performance-value {
-    font-family: 'Plus Jakarta Sans';
-    font-size: 13px;
-    font-weight: 800;
-}
-
-.performance-positive { color: var(--green); }
-.performance-negative { color: var(--red); }
-.performance-neutral { color: var(--text-secondary); }
-
-.performance-rr {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    flex-shrink: 0;
-    order: 1;
-}
-
-.performance-rr-label {
-    font-size: 8px;
-    color: var(--text-tertiary);
-    text-transform: uppercase;
-    letter-spacing: .07em;
-    font-weight: 800;
-}
-
-.performance-rr-value {
-    margin-top: 2px;
-    font-family: 'Plus Jakarta Sans';
-    font-size: 13px;
-    font-weight: 800;
-    color: var(--blue);
-}
-
-.app-footer {
-    display: flex;
-    justify-content: space-between;
-    gap: 15px;
-    margin-top: 30px; /* Reducido */
-    padding-top: 15px;
-    border-top: 1px solid var(--border);
-    color: var(--text-tertiary);
-    font-size: 9px;
-    font-weight: 600;
-}
-
+.performance-positive { color: var(--green); font-weight: 800; }
+.performance-negative { color: var(--red); font-weight: 800; }
+.performance-neutral { color: var(--text-secondary); font-weight: 800; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -815,12 +535,6 @@ div[data-testid="stStatusWidget"] {
 df_hist = preparar_fecha(cargar_datos())
 metricas = calcular_metricas(df_hist)
 
-total_alertas = metricas["total_alertas"]
-exitos = metricas["exitos"]
-fallos = metricas["fallos"]
-activas = metricas["activas"]
-win_rate = metricas["win_rate"]
-
 if not df_hist.empty and "Estado" in df_hist.columns:
     df_activas_global = df_hist[
         df_hist["Estado"].astype(str).str.contains("ACTIVA", na=False, regex=False)
@@ -830,20 +544,11 @@ else:
 
 precios_actuales = obtener_precios_activos(df_activas_global)
 beneficio_realizado = calcular_beneficio_realizado(df_hist)
-beneficio_no_realizado, posiciones_con_beneficio, posiciones_con_perdida = calcular_beneficio_no_realizado(
+beneficio_no_realizado, _, _ = calcular_beneficio_no_realizado(
     df_activas_global, precios_actuales
 )
-
 beneficio_acumulado = beneficio_realizado + beneficio_no_realizado
-total_operaciones_historicas = max(1, len(df_hist))
-CAPITAL_INICIAL = max(3600.0, total_operaciones_historicas * CAPITAL_POR_ALERTA)
-rentabilidad_pct = (beneficio_acumulado / CAPITAL_INICIAL * 100) if CAPITAL_INICIAL else 0
 
-color_resultado = "#16a34a" if beneficio_acumulado >= 0 else "#dc2626"
-
-beneficio_realizado_curva, fechas_curva, beneficios_curva = calcular_resultados(
-    df_hist, beneficio_no_realizado
-)
 
 def obtener_fecha_ultima_actualizacion(df):
     try:
@@ -879,82 +584,50 @@ tab_inicio, tab_oportunidades, tab_cartera, tab_resultados, tab_historial, tab_p
     "Inicio", "Oportunidades", "Cartera", "Performance", "Histórico", "Planes"
 ])
 
+with tab_inicio:
+    st.markdown("### Bienvenido a Alura Quant")
+    st.info("El sistema está cargado y operando correctamente. Selecciona una pestaña superior para explorar las oportunidades, la cartera activa o el rendimiento.")
 
-def render_opportunity_card(row, compact=False, ribbon=False):
-    icono = safe_text(row.get("Icono"), "📈")
-    empresa = safe_text(row.get("Empresa", row.get("Ticker", "Activo")), "Activo")
-    ticker = safe_text(row.get("Ticker"), "")
-    ticker_raw = str(row.get("Ticker", "")).strip()
-    sector = safe_text(row.get("Sector"), "Mercado Continuo")
-
-    es_nuevo = False
-    if "Fecha" in row and pd.notna(row["Fecha"]):
-        try:
-            fecha_alerta = row["Fecha"].to_pydatetime().replace(tzinfo=None)
-            es_nuevo = datetime.now() - fecha_alerta <= timedelta(hours=48)
-        except Exception:
-            pass
-
-    badge_nuevo = '<span class="new-badge">✦ NUEVO</span>' if es_nuevo else ""
-
-    precio_actual = precios_actuales.get(ticker_raw) if ticker_raw else safe_float(row.get("Precio_Actual"))
-    if precio_actual is None:
-        precio_actual = safe_float(row.get("Precio_Actual"))
-
-    precio_entrada = safe_float(row.get("Precio_Alerta"))
-    if precio_entrada is None:
-        precio_entrada = safe_float(row.get("Precio_Actual"))
-
-    stop_loss = safe_float(row.get("Stop_Loss"))
-    take_profit = safe_float(row.get("Take_Profit"))
-    ratio_rr = safe_float(row.get("Ratio_RR"))
-
-    beneficio_posicion, porcentaje_posicion = calcular_pnl_posicion(
-        precio_actual, precio_entrada, CAPITAL_POR_ALERTA
-    )
-
-    if beneficio_posicion is None or porcentaje_posicion is None:
-        performance_text = "—"
-        performance_class = "performance-neutral"
-    else:
-        performance_text = (
-            f"{formatear_numero(porcentaje_posicion, 2, '%', True)}"
-            f" · {formatear_numero(beneficio_posicion, 2, ' €', True)}"
-        )
-        performance_class = (
-            "performance-positive" if beneficio_posicion >= 0
-            else "performance-negative"
-        )
-
-    ratio_rr_text = formatear_numero(ratio_rr, 1, "x") if ratio_rr is not None else "—"
-    
-    st.markdown(f"""
-    <div class="asset-card">
-        <div class="asset-header">
-            <div class="asset-left">
-                <div class="asset-identity">
-                    <div class="asset-icon">{icono}</div>
-                    <div>
-                        <div class="asset-company">{empresa} <span class="asset-ticker">{ticker}</span></div>
-                        <div class="asset-sector">{sector}</div>
+with tab_oportunidades:
+    st.markdown("### Oportunidades de Inversión")
+    if not df_activas_global.empty:
+        for _, row in df_activas_global.head(5).iterrows():
+            icono = safe_text(row.get("Icono"), "📈")
+            empresa = safe_text(row.get("Empresa", row.get("Ticker", "Activo")), "Activo")
+            ticker = safe_text(row.get("Ticker"), "")
+            sector = safe_text(row.get("Sector"), "Mercado Continuo")
+            
+            st.markdown(f"""
+            <div class="asset-card">
+                <div class="asset-header">
+                    <div class="asset-identity">
+                        <div class="asset-icon">{icono}</div>
+                        <div>
+                            <div class="asset-company">{empresa} <span class="asset-ticker">{ticker}</span></div>
+                            <div class="asset-sector">{sector}</div>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="asset-right">
-                <div class="price-label">Precio Actual</div>
-                <div class="current-price">{formatear_numero(precio_actual, 2, ' €')}</div>
-                {badge_nuevo}
-            </div>
-        </div>
-        <div class="performance-row">
-            <div class="performance-rr">
-                <span class="performance-rr-label">Ratio R:R</span>
-                <span class="performance-rr-value">{ratio_rr_text}</span>
-            </div>
-            <div class="performance-left">
-                <span class="performance-label">Rentabilidad</span>
-                <span class="performance-value {performance_class}">{performance_text}</span>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
+    else:
+        st.write("No hay posiciones activas en este momento.")
+
+with tab_cartera:
+    st.markdown("### Cartera Actual")
+    st.write(f"Beneficio No Realizado: {formatear_numero(beneficio_no_realizado, 2, ' €', True)}")
+
+with tab_resultados:
+    st.markdown("### Performance Global")
+    st.write(f"Beneficio Acumulado Total: {formatear_numero(beneficio_acumulado, 2, ' €', True)}")
+
+with tab_historial:
+    st.markdown("### Histórico de Alertas")
+    if not df_hist.empty:
+        st.dataframe(df_hist.head(20), use_container_width=True)
+    else:
+        st.write("No hay registros en el histórico.")
+
+with tab_planes:
+    st.markdown("### Planes de Suscripción")
+    st.write("Gestiona tus accesos Free y VIP de forma integrada con Supabase.")
