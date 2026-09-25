@@ -3342,7 +3342,7 @@ render_html("""
 
 /* ---------- HERO ---------- */
 .aq-hero{
-    padding:92px 0 72px;
+    padding:42px 0 55px;
     text-align:center;
     position:relative;
 }
@@ -3884,7 +3884,7 @@ render_html("""
     .performance-total{text-align:left}
 }
 @media(max-width:650px){
-    .aq-hero{padding:60px 0 50px}
+    .aq-hero{padding:30px 0 35px}
     .aq-hero h1{font-size:43px}
     .aq-hero p{font-size:16px}
     .aq-kpis,.performance-kpis,.aq-pricing-grid{grid-template-columns:1fr}
@@ -4174,7 +4174,7 @@ with tab_inicio:
         </div>
       </section>
 
-      <section class="aq-section" id="oportunidad-demo">
+      <section class="aq-section" id="oportunidad-demo" style="padding-top:42px;">
         <div class="aq-section-head">
           <div>
             <div class="aq-eyebrow">PRODUCTO</div>
