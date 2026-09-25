@@ -3298,7 +3298,7 @@ render_html("""
     letter-spacing:.16em;
     text-transform:uppercase;
 }
-.aq-section{padding:78px 0}
+.aq-section{padding:30px 0}
 .aq-section.center{text-align:center}
 .aq-section h2{
     color:var(--aq-text);
