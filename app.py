@@ -967,7 +967,7 @@ div[data-testid="stStatusWidget"] {
 .hero {
 
     margin-bottom:
-        25px;
+        10px;
 
 }
 
