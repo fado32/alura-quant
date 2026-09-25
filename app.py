@@ -1531,6 +1531,210 @@ div[data-testid="stStatusWidget"] {
 
 
 /* =========================================================
+   V4 POLISH — OPPORTUNITY CARD
+   ========================================================= */
+
+.opportunity-card-landing {
+    position: relative;
+    overflow: hidden;
+}
+
+.example-alert-ribbon {
+    position: absolute;
+    top: 20px;
+    right: -42px;
+    z-index: 20;
+    width: 155px;
+    padding: 7px 0;
+    transform: rotate(38deg);
+    background: var(--aq-blue);
+    color: #fff;
+    text-align: center;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .1em;
+    box-shadow: 0 8px 20px rgba(37,99,235,.18);
+}
+
+.asset-header {
+    position: relative;
+}
+
+.asset-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    min-width: 118px;
+}
+
+.asset-right .asset-score {
+    order: 0;
+    margin-bottom: 7px;
+}
+
+.asset-right .current-price {
+    order: 1;
+}
+
+.asset-right .price-label {
+    order: 2;
+}
+
+.asset-score {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-end;
+    padding: 7px 10px;
+    border: 1px solid #dbe7ff;
+    border-radius: 10px;
+    background: #f4f7ff;
+}
+
+.asset-score strong {
+    color: var(--aq-blue);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 20px;
+    line-height: 1;
+    font-weight: 800;
+}
+
+.asset-score small {
+    margin-top: 3px;
+    color: #7b8ba7;
+    font-size: 7px;
+    line-height: 1;
+    font-weight: 800;
+    letter-spacing: .08em;
+}
+
+.performance-row {
+    width: calc(100% - 28px);
+    margin: 0 auto 18px;
+    padding: 11px 14px;
+    box-sizing: border-box;
+    border: 1px solid #1e3a8a;
+    border-radius: 12px;
+    background: #f8fbff;
+}
+
+.performance-row .performance-rr,
+.performance-row .performance-left {
+    min-width: 0;
+}
+
+.performance-row .performance-value,
+.performance-row .performance-rr-value {
+    white-space: nowrap;
+}
+
+.aq-demo-wrap {
+    position: relative;
+    width: min(100%, 920px);
+    margin: 0 auto;
+}
+
+.aq-demo-card {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid #dce5f2;
+    border-radius: 22px;
+    background: #fff;
+    box-shadow: 0 16px 45px rgba(15,23,42,.07);
+}
+
+.aq-demo-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 24px 28px 18px;
+}
+
+.aq-demo-company {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -.025em;
+}
+
+.aq-demo-company span {
+    margin-left: 7px;
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.aq-demo-sector {
+    margin-top: 5px;
+    color: #64748b;
+    font-size: 11px;
+}
+
+.aq-demo-score {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    padding: 9px 12px;
+    border: 1px solid #dbe7ff;
+    border-radius: 11px;
+    background: #f4f7ff;
+}
+
+.aq-demo-score strong {
+    color: var(--aq-blue);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 25px;
+    line-height: 1;
+}
+
+.aq-demo-score span {
+    margin-top: 4px;
+    color: #7b8ba7;
+    font-size: 7px;
+    font-weight: 800;
+    letter-spacing: .08em;
+}
+
+.aq-demo-card-body {
+    padding: 0 14px 14px;
+}
+
+.aq-demo-card-body .asset-card {
+    margin: 0;
+    box-shadow: none;
+    border-color: #e5eaf1;
+}
+
+@media (max-width: 650px) {
+    .example-alert-ribbon {
+        top: 15px;
+        right: -48px;
+    }
+
+    .performance-row {
+        width: calc(100% - 16px);
+        padding: 10px;
+    }
+
+    .asset-right {
+        min-width: 100px;
+    }
+
+    .asset-score strong {
+        font-size: 17px;
+    }
+
+    .aq-demo-card-head {
+        padding: 20px 18px 14px;
+    }
+
+    .aq-demo-card-body {
+        padding: 0 8px 8px;
+    }
+}
+
+/* =========================================================
    PERFORMANCE / RISK REWARD
    ========================================================= */
 
@@ -2713,109 +2917,28 @@ div[data-testid="stDataFrame"] {
 }
 
 
-/* ============================================================
-   V4 POLISH — EXAMPLE + OPPORTUNITY CARDS
-   ============================================================ */
-
-.example-opportunity {
-    position: relative;
-    overflow: hidden;
+/* FINAL CARD POLISH */
+.opportunity-card-landing .asset-header {
+    min-height: 74px;
 }
 
-.example-ribbon {
-    position: absolute;
-    top: 18px;
-    right: -42px;
-    z-index: 5;
-    transform: rotate(38deg);
-    width: 150px;
-    padding: 7px 0;
-    text-align: center;
-    background: var(--blue);
-    color: #fff;
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: .09em;
-    text-transform: uppercase;
-    box-shadow: 0 5px 18px rgba(37,99,235,.22);
+.opportunity-card-landing .asset-right {
+    padding-top: 0;
 }
 
-.opportunity-meta {
-    padding: 0 18px;
+.opportunity-card-landing .asset-score {
+    margin-bottom: 8px;
 }
 
-.opportunity-meta-inner {
-    width: 100%;
-    max-width: 94%;
-    margin: 0 auto;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
-    padding: 12px;
-    box-sizing: border-box;
-    border: 1px solid #1e3a8a;
-    border-radius: 12px;
-    background: #f8fbff;
+.opportunity-card-landing .performance-row {
+    width: calc(100% - 32px);
+    margin-left: auto;
+    margin-right: auto;
 }
 
-.opportunity-meta .meta-item {
-    min-width: 0;
-    padding: 11px 14px;
-    border-radius: 9px;
-    background: #ffffff;
-    box-sizing: border-box;
-}
-
-.opportunity-meta .meta-item span {
-    display: block;
-    margin-bottom: 4px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.opportunity-meta .meta-item strong {
-    display: block;
-    white-space: nowrap;
-}
-
-.example-opportunity .quant-score,
-.example-opportunity .score-badge {
-    position: absolute !important;
-    top: 24px;
-    right: 24px;
-    z-index: 4;
-}
-
-.example-opportunity .opportunity-header {
-    padding-right: 130px;
-}
-
-@media (max-width: 700px) {
-    .example-ribbon {
-        top: 15px;
-        right: -45px;
-    }
-
-    .example-opportunity .quant-score,
-    .example-opportunity .score-badge {
-        position: static !important;
-        margin-top: 12px;
-    }
-
-    .example-opportunity .opportunity-header {
-        padding-right: 0;
-    }
-
-    .opportunity-meta {
-        padding: 0 10px;
-    }
-
-    .opportunity-meta-inner {
-        max-width: 100%;
-        grid-template-columns: 1fr;
-    }
+.opportunity-card-landing .ai-box {
+    margin-left: 0;
+    margin-right: 0;
 }
 
 </style>
@@ -3709,7 +3832,7 @@ tab_inicio, tab_oportunidades, tab_cartera, tab_resultados, tab_historial, tab_p
 # SHARED UI — OPPORTUNITY CARD
 # ------------------------------------------------------------
 
-def render_opportunity_card(row, compact=False):
+def render_opportunity_card(row, compact=False, ribbon=False):
     """Renderiza la ficha visual clásica de Alura Quant."""
     icono = safe_text(row.get("Icono"), "📈")
     empresa = safe_text(row.get("Empresa", row.get("Ticker", "Activo")), "Activo")
@@ -3818,6 +3941,7 @@ def render_opportunity_card(row, compact=False):
 
     render_html(f"""
     <div class="{card_class}">
+        {"<div class='example-alert-ribbon'>EJEMPLO ALERTA</div>" if ribbon else ""}
         <div class="asset-header">
             <div class="asset-left">
                 <div class="asset-new-row">{badge_nuevo}</div>
@@ -3830,9 +3954,9 @@ def render_opportunity_card(row, compact=False):
                 </div>
             </div>
             <div class="asset-right">
+                {score_html}
                 <div class="current-price">{actual_text}</div>
                 <div class="price-label">Precio actual</div>
-                {score_html}
             </div>
         </div>
 
@@ -3927,7 +4051,7 @@ def render_equity_chart_svg(fechas, valores):
 # ============================================================
 
 with tab_inicio:
-    render_html("""
+    render_html(f"""
     <div class="aq-wrap">
       <section class="aq-hero">
         <div class="aq-hero-badge"><i></i> ALURA QUANT · INVESTMENT INTELLIGENCE</div>
@@ -3968,38 +4092,42 @@ with tab_inicio:
             <div class="aq-eyebrow">PRODUCTO</div>
             <h2>Una oportunidad, de un vistazo.</h2>
           </div>
-          <p>La misma ficha que utiliza el sistema para visualizar entrada, riesgo, objetivo, evolución y tesis de IA.</p>
         </div>
-        <div class="aq-feature-card">
-          <div class="aq-feature-intro">
-            <div class="aq-eyebrow">EJEMPLO DE SEÑAL</div>
-            <h3>Todo el contexto en una sola lectura.</h3>
-            <p>Sin tablas interminables. Los niveles importantes quedan visibles de inmediato.</p>
-          </div>
-          <div class="aq-feature-body">
+        <div class="aq-demo-wrap">
     """)
 
-    demo = df_activas_global.iloc[0] if not df_activas_global.empty else (df_hist.iloc[0] if not df_hist.empty else None)
-    if demo is not None:
-        render_opportunity_card(demo, compact=True)
+    # Preferimos BBVA para la demo; si no existe en los datos, usamos la primera señal disponible.
+    _demo_rows = df_hist.copy()
+    _bbva_mask = pd.Series(False, index=_demo_rows.index)
+    if not _demo_rows.empty:
+        _ticker_series = _demo_rows["Ticker"].astype(str).str.upper() if "Ticker" in _demo_rows.columns else pd.Series("", index=_demo_rows.index)
+        _empresa_series = _demo_rows["Empresa"].astype(str).str.upper() if "Empresa" in _demo_rows.columns else pd.Series("", index=_demo_rows.index)
+        _bbva_mask = _ticker_series.str.contains("BBVA", na=False) | _empresa_series.str.contains("BBVA", na=False)
+
+    if _bbva_mask.any():
+        _demo_row = _demo_rows[_bbva_mask].iloc[0]
+    elif not df_activas_global.empty:
+        _demo_row = df_activas_global.iloc[0]
+    elif not df_hist.empty:
+        _demo_row = df_hist.iloc[0]
+    else:
+        _demo_row = None
+
+    if _demo_row is not None:
+        render_opportunity_card(_demo_row, compact=True, ribbon=True)
     else:
         render_html("""
-          <div style="padding:28px;">
             <div class="empty-state">
               <div class="empty-title">Todavía no hay señales registradas</div>
               <div class="empty-text">Cuando Alura Quant genere señales aparecerá aquí un ejemplo real.</div>
             </div>
-          </div>
         """)
 
     render_html("""
-          </div>
         </div>
       </section>
 
       <section class="aq-section center" id="como-funciona">
-        <div class="aq-eyebrow">EL MOTOR QUANT</div>
-        <h2>Un proceso sistemático.</h2>
         <div class="aq-engine-line">
           <div class="aq-engine-item"><span>01</span> QUANT</div>
           <div class="aq-engine-item"><span>02</span> FILTERS</div>
@@ -4070,7 +4198,6 @@ with tab_inicio:
       </section>
     </div>
     """)
-
 
 # ============================================================
 # 02. OPORTUNIDADES
@@ -4244,7 +4371,7 @@ with tab_planes:
         <h2>Elige cómo quieres utilizar Alura Quant.</h2>
         <p class="aq-section-intro">Empieza gratis para conocer la plataforma o accede a Pro cuando quieras profundizar en las oportunidades y el análisis.</p>
 
-        <div class="aq-pricing-grid">
+        <div class="aq-pricing-grid" id="planes-top">
           <div class="aq-price">
             <div class="aq-price-badge">FREE</div>
             <h3>Explora Alura Quant</h3>
