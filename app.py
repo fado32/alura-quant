@@ -4141,14 +4141,12 @@ def render_equity_chart_svg(fechas, valores):
 
 with tab_inicio:
     render_html(f"""
-    <div class="aq-wrap">
       <section class="aq-hero">
         <h1>El mercado genera miles de señales.<br><span>Nosotros filtramos el ruido.</span></h1>
         <p>Algoritmos cuantitativos, análisis técnico e inteligencia artificial para detectar, puntuar y monitorizar oportunidades de mercado.</p>
         <div class="aq-actions">
           <a class="aq-btn primary" href="#oportunidad-demo">Ver una oportunidad →</a>
           <a class="aq-btn" href="#por-que-existe">Cómo funciona</a>
-        </div>
       </section>
 
       <section class="aq-kpis">
