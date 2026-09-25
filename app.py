@@ -2,16 +2,13 @@ import os
 import re
 import html
 from datetime import datetime, timedelta
-import gspread
 import pandas as pd
 import streamlit as st
 import yfinance as yf
-from google.oauth2.service_account import Credentials
 from supabase import create_client
 
-
 # ============================================================
-# ALURA QUANT — INVESTMENT INTELLIGENCE UI
+# CONFIGURACIÓN DE LA PÁGINA
 # ============================================================
 st.set_page_config(
     page_title="Alura Quant",
@@ -20,60 +17,42 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+# ============================================================
+# CONEXIÓN SEGURA A SUPABASE
+# ============================================================
+def conectar_supabase():
+    url = key = ""
+    try:
+        if "supabase" in st.secrets:
+            bloque = st.secrets["supabase"]
+            url = str(bloque.get("url", "")).strip()
+            key = str(bloque.get("key", "")).strip()
+    except Exception:
+        pass
+    
+    if not url or not key:
+        url = os.getenv("SUPABASE_URL", "").strip()
+        key = os.getenv("SUPABASE_KEY", "").strip()
+        
+    if not url or not key:
+        return None
+    try:
+        return create_client(url, key)
+    except Exception as e:
+        return None
+
+supabase = conectar_supabase()
+
+if not supabase:
+    st.error("⚠️ **Supabase no está configurado correctamente.** Comprueba tus variables de entorno (`SUPABASE_URL`, `SUPABASE_KEY`) o los Streamlit Secrets.")
+    st.stop()
 
 # ============================================================
-# SUSCRIPCIONES — SUPABASE
+# CONSTANTES Y MAPEOS
 # ============================================================
-
+CAPITAL_POR_ALERTA = 300.0
 TABLA_FREE = "suscriptores_free"
 TABLA_VIP = "suscriptores_vip"
-
-def normalizar_email(email):
-    return str(email or "").strip().lower()
-
-def email_valido(email):
-    email = normalizar_email(email)
-    return bool(re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email))
-
-def guardar_suscriptor_supabase(email, tipo="free"):
-    email = normalizar_email(email)
-    tabla = TABLA_VIP if tipo == "vip" else TABLA_FREE
-    if not email_valido(email):
-        return "invalid"
-    try:
-        existente = supabase.table(tabla).select("id,email").eq("email", email).limit(1).execute()
-        if getattr(existente, "data", None):
-            return "exists"
-        supabase.table(tabla).insert({"email": email}).execute()
-        return "success"
-    except Exception as e:
-        if "duplicate" in str(e).lower() or "unique" in str(e).lower():
-            return "exists"
-        print(f"Error guardando suscriptor {tipo}: {e}")
-        return "error"
-
-def comprobar_suscripcion(email):
-    email = normalizar_email(email)
-    if not email_valido(email):
-        return "none"
-    try:
-        free = supabase.table(TABLA_FREE).select("id").eq("email", email).limit(1).execute()
-        vip = supabase.table(TABLA_VIP).select("id").eq("email", email).limit(1).execute()
-        has_free = bool(getattr(free, "data", None))
-        has_vip = bool(getattr(vip, "data", None))
-        if has_vip and has_free: return "both"
-        if has_vip: return "vip"
-        if has_free: return "free"
-    except Exception as e:
-        print(f"Error comprobando suscripción: {e}")
-    return "none"
-
-
-# ============================================================
-# CONFIGURACIÓN SUPABASE
-# ============================================================
-
-CAPITAL_POR_ALERTA = 300.0
 
 MAPEO_COLUMNAS_SUPABASE = {
     "Fecha": "fecha", "Ticker": "ticker", "Empresa": "empresa", "Sector": "sector", "Icono": "icono", "Modo": "modo",
@@ -93,34 +72,9 @@ MAPEO_COLUMNAS_SUPABASE = {
 }
 CAMPOS_HISTORIAL = list(MAPEO_COLUMNAS_SUPABASE.keys())
 
-def conectar_supabase():
-    url = key = ""
-    try:
-        if "supabase" in st.secrets:
-            bloque = st.secrets["supabase"]
-            url = str(bloque.get("url", "")).strip()
-            key = str(bloque.get("key", "")).strip()
-    except Exception:
-        pass
-    if not url or not key:
-        url = os.getenv("SUPABASE_URL", "").strip()
-        key = os.getenv("SUPABASE_KEY", "").strip()
-    if not url or not key:
-        st.error("Supabase no está configurado. Comprueba Streamlit Secrets: [supabase] con url y key.")
-        st.stop()
-    try:
-        return create_client(url, key)
-    except Exception as e:
-        st.error(f"No se pudo inicializar Supabase: {e}")
-        st.stop()
-
-supabase = conectar_supabase()
-
-
 # ============================================================
-# UTILIDADES Y FUNCIONES AUXILIARES
+# UTILIDADES
 # ============================================================
-
 def render_html(content, **kwargs):
     if hasattr(st, "html"):
         st.html(content)
@@ -142,7 +96,7 @@ def safe_float(value, default=None):
         return default
 
 def preparar_fecha(df):
-    if df is None:
+    if df is None or df.empty:
         return pd.DataFrame()
     df = df.copy()
     for col in ("Fecha", "Ultima_Actualizacion", "Fecha_Mercado_Actual", "Ultima_Ejecucion"):
@@ -186,18 +140,6 @@ def calcular_metricas(df):
         "win_rate": win_rate,
     }
 
-@st.cache_data(ttl=60)
-def cargar_universo_supabase():
-    try:
-        response = supabase.table("universo_activos").select("ticker, empresa, sector, icono, activo").eq("activo", True).execute()
-        df = pd.DataFrame(response.data or [])
-        if df.empty:
-            return pd.DataFrame(columns=["Ticker", "Empresa", "Sector", "Icono", "Activo"])
-        return df.rename(columns={"ticker":"Ticker", "empresa":"Empresa", "sector":"Sector", "icono":"Icono", "activo":"Activo"})
-    except Exception as e:
-        st.error(f"Error cargando universo desde Supabase: {e}")
-        return pd.DataFrame(columns=["Ticker", "Empresa", "Sector", "Icono", "Activo"])
-
 @st.cache_data(ttl=30)
 def cargar_datos():
     try:
@@ -220,7 +162,7 @@ def cargar_datos():
                 df[col] = None
         return df
     except Exception as e:
-        st.error(f"Error cargando historial desde Supabase: {e}")
+        print(f"Error cargando historial: {e}")
         return pd.DataFrame(columns=CAMPOS_HISTORIAL)
 
 @st.cache_data(ttl=300)
@@ -297,8 +239,7 @@ def calcular_beneficio_no_realizado(df_activas, precios_actuales):
 
 def calcular_resultados(df, beneficio_no_realizado=0.0):
     beneficio_realizado = 0.0
-    fechas_curva = []
-    beneficios_curva = []
+    fechas_curva, beneficios_curva = [], []
     if df.empty or "Fecha" not in df.columns:
         return beneficio_realizado, fechas_curva, beneficios_curva
     df_sim = df.dropna(subset=["Fecha"]).sort_values("Fecha")
@@ -372,11 +313,9 @@ def obtener_fecha_ultima_actualizacion(df):
         pass
     return datetime.now().strftime("%d/%m/%Y %H:%M")
 
-
 # ============================================================
-# CARGA ÚNICA DE DATOS Y CÁLCULOS GLOBALES
+# CARGA DE DATOS Y ESTADOS
 # ============================================================
-
 df_hist = preparar_fecha(cargar_datos())
 metricas = calcular_metricas(df_hist)
 total_alertas = metricas["total_alertas"]
@@ -404,3 +343,96 @@ beneficio_realizado_curva, fechas_curva, beneficios_curva = calcular_resultados(
     df_hist, beneficio_no_realizado
 )
 fecha_actualizacion_sistema = obtener_fecha_ultima_actualizacion(df_hist)
+color_resultado = "#16a34a" if beneficio_acumulado >= 0 else "#dc2626"
+
+# ============================================================
+# ESTILOS CSS GENERALES
+# ============================================================
+render_html("""
+<style>
+:root{
+    --aq-bg:#f7f9fc; --aq-surface:#ffffff; --aq-text:#0b1220; --aq-muted:#667085;
+    --aq-border:#e7ebf2; --aq-blue:#2563eb; --aq-green:#16a34a; --aq-red:#dc2626;
+}
+.stApp{background:var(--aq-bg); color:var(--aq-text);}
+.block-container{max-width:1320px !important; padding-top:1rem !important;}
+.aq-wrap{max-width:1180px; margin:0 auto;}
+.aq-eyebrow{color:var(--aq-blue); font-size:11px; font-weight:800; letter-spacing:.16em; text-transform:uppercase;}
+.aq-hero{padding:70px 0 50px; text-align:center;}
+.aq-hero h1{font-family:'Plus Jakarta Sans',sans-serif; font-size:clamp(36px,5vw,60px); font-weight:800; line-height:1.1;}
+.aq-hero h1 span{color:var(--aq-blue);}
+.aq-hero p{max-width:650px; margin:15px auto 25px; color:var(--aq-muted); font-size:16px;}
+.aq-kpis{display:grid; grid-template-columns:repeat(4,1fr); background:#fff; border:1px solid var(--aq-border); border-radius:18px; overflow:hidden;}
+.aq-kpi{padding:22px;}
+.aq-kpi + .aq-kpi{border-left:1px solid var(--aq-border);}
+.aq-kpi-label{color:#7b8798; font-size:10px; font-weight:800; text-transform:uppercase;}
+.aq-kpi-value{font-size:26px; font-weight:800; margin-top:6px;}
+.empty-state{background:#fff; border:1px dashed #dce3ed; border-radius:18px; padding:45px 20px; text-align:center;}
+.empty-title{font-weight:800; font-size:15px;}
+.empty-text{color:var(--aq-muted); font-size:12px; margin-top:5px;}
+</style>
+""")
+
+# ============================================================
+# INTERFAZ PRINCIPAL (TABS)
+# ============================================================
+tab_inicio, tab_oportunidades, tab_cartera, tab_resultados, tab_historial, tab_planes = st.tabs([
+    "Inicio", "Oportunidades", "Cartera", "Performance", "Histórico", "Planes"
+])
+
+with tab_inicio:
+    render_html(f"""
+    <div class="aq-wrap">
+      <section class="aq-hero">
+        <h1>El mercado genera miles de señales.<br><span>Nosotros filtramos el ruido.</span></h1>
+        <p>Algoritmos cuantitativos e inteligencia artificial para detectar y monitorizar oportunidades.</p>
+      </section>
+      <section class="aq-kpis">
+        <div class="aq-kpi">
+          <div class="aq-kpi-label">Beneficio total</div>
+          <div class="aq-kpi-value" style="color:{color_resultado};">{formatear_numero(beneficio_acumulado,2," €",True)}</div>
+        </div>
+        <div class="aq-kpi">
+          <div class="aq-kpi-label">Rentabilidad</div>
+          <div class="aq-kpi-value" style="color:{color_resultado};">{formatear_numero(rentabilidad_pct,2,"%",True)}</div>
+        </div>
+        <div class="aq-kpi">
+          <div class="aq-kpi-label">Posiciones activas</div>
+          <div class="aq-kpi-value">{activas}</div>
+        </div>
+        <div class="aq-kpi">
+          <div class="aq-kpi-label">Win Rate</div>
+          <div class="aq-kpi-value">{formatear_numero(win_rate,1,"%")}</div>
+        </div>
+      </section>
+    </div>
+    """)
+
+with tab_oportunidades:
+    st.subheader("Oportunidades activas")
+    if df_activas_global.empty:
+        st.info("No hay oportunidades activas en este momento.")
+    else:
+        st.dataframe(df_activas_global, use_container_width=True)
+
+with tab_cartera:
+    st.subheader("Cartera monitorizada")
+    if df_activas_global.empty:
+        st.info("No hay posiciones abiertas en cartera.")
+    else:
+        st.dataframe(df_activas_global, use_container_width=True)
+
+with tab_resultados:
+    st.subheader("Performance del Sistema")
+    st.metric("Beneficio Acumulado", formatear_numero(beneficio_acumulado, 2, " €", True))
+
+with tab_historial:
+    st.subheader("Histórico de Alertas")
+    if df_hist.empty:
+        st.info("No hay registros en el histórico.")
+    else:
+        st.dataframe(df_hist, use_container_width=True)
+
+with tab_planes:
+    st.subheader("Planes de Suscripción")
+    st.write("Elige tu plan para acceder a todas las señales cuantitativas avanzadas.")
