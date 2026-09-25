@@ -3298,7 +3298,7 @@ render_html("""
     letter-spacing:.16em;
     text-transform:uppercase;
 }
-.aq-section{padding:30px 0}
+.aq-section{padding:78px 0}
 .aq-section.center{text-align:center}
 .aq-section h2{
     color:var(--aq-text);
@@ -3575,7 +3575,7 @@ render_html("""
 
 /* ---------- AI ---------- */
 .aq-ai-section{
-    padding:30px 0;
+    padding:78px 0;
 }
 .aq-ai-panel{
     display:grid;
