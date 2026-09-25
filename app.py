@@ -3575,7 +3575,7 @@ render_html("""
 
 /* ---------- AI ---------- */
 .aq-ai-section{
-    padding:78px 0;
+    padding:30px 0;
 }
 .aq-ai-panel{
     display:grid;
