@@ -1604,9 +1604,9 @@ div[data-testid="stStatusWidget"] {
 }
 
 .performance-row {
-    width: calc(100% - 28px);
-    margin: 0 auto 18px;
-    padding: 11px 28px;
+    width: 100%;
+    margin: 0 0 18px;
+    padding: 11px 18px;
     box-sizing: border-box;
     border: 1px solid #dbe7ff;
     border-radius: 12px;
@@ -1708,12 +1708,13 @@ div[data-testid="stStatusWidget"] {
     }
 
     .performance-row {
-        width: calc(100% - 16px);
-        padding: 10px;
+        width: 100%;
+        padding: 10px 14px;
     }
 
     .asset-right {
         min-width: 100px;
+        padding-top: 31px;
     }
 
     .asset-score strong {
@@ -2808,7 +2809,7 @@ div[data-testid="stDataFrame"] {
 .opportunity-count{
     margin:8px 0 14px;color:#94a3b8;font-size:10px;font-weight:800;letter-spacing:.08em;
 }
-.asset-score{display:block;margin-top:9px;text-align:right}
+.asset-score{display:block;margin:0 0 8px;text-align:left}
 .asset-score strong{display:block;font-family:'Plus Jakarta Sans';font-size:18px;line-height:1;color:var(--blue)}
 .asset-score small{display:block;margin-top:3px;color:var(--text-tertiary);font-size:8px;letter-spacing:.09em;font-weight:800}
 .position-empty{padding:12px 0;color:var(--text-tertiary);font-size:11px}
@@ -2912,6 +2913,34 @@ div[data-testid="stDataFrame"] {
 }
 
 
+
+html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stAppViewBlockContainer"] {
+    max-width: 100%;
+    overflow-x: hidden !important;
+}
+.aq-wrap, .aq-section, .aq-hero, .aq-kpis {
+    max-width: 100%;
+    box-sizing: border-box;
+}
+@media (max-width: 650px) {
+    .aq-wrap {
+        width: 100%;
+        overflow-x: hidden;
+    }
+    .aq-hero {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+    .aq-hero h1, .aq-hero p {
+        max-width: 100%;
+        overflow-wrap: anywhere;
+    }
+    .aq-hero:before {
+        width: 100vw;
+        max-width: 100%;
+    }
+}
+
 /* FINAL CARD POLISH */
 .opportunity-card-landing .asset-header {
     min-height: 74px;
@@ -2922,7 +2951,8 @@ div[data-testid="stDataFrame"] {
 }
 
 .opportunity-card-landing .asset-score {
-    margin-bottom: 8px;
+    margin: 0 0 8px;
+    text-align: left;
 }
 
 .opportunity-card-landing .performance-row {
@@ -2934,6 +2964,72 @@ div[data-testid="stDataFrame"] {
 .opportunity-card-landing .ai-box {
     margin-left: 0;
     margin-right: 0;
+}
+
+
+/* FINAL REQUESTED LAYOUT OVERRIDES */
+.asset-header {
+    align-items: flex-start !important;
+}
+.asset-right {
+    justify-content: flex-start !important;
+    padding-top: 35px !important;
+}
+.asset-score {
+    margin: 0 0 8px !important;
+    text-align: left !important;
+}
+.performance-row {
+    width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 18px !important;
+    padding-right: 18px !important;
+}
+.performance-rr {
+    align-items: flex-start !important;
+    text-align: left !important;
+}
+.performance-left {
+    align-items: flex-end !important;
+    text-align: right !important;
+}
+.opportunity-card-landing .asset-right {
+    padding-top: 35px !important;
+}
+.opportunity-card-landing .performance-row {
+    width: 100% !important;
+}
+html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stAppViewBlockContainer"] {
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+}
+@media (max-width: 650px) {
+    .asset-right, .opportunity-card-landing .asset-right {
+        padding-top: 31px !important;
+        min-width: 92px;
+    }
+    .performance-row, .opportunity-card-landing .performance-row {
+        width: 100% !important;
+        padding-left: 14px !important;
+        padding-right: 14px !important;
+    }
+    .aq-wrap, .aq-section, .aq-hero, .aq-kpis {
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+    }
+    .aq-hero {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+    .aq-hero h1, .aq-hero p {
+        max-width: 100%;
+        overflow-wrap: anywhere;
+    }
+    .aq-hero:before {
+        width: 100%;
+        max-width: 100%;
+    }
 }
 
 </style>
@@ -3938,7 +4034,6 @@ def render_opportunity_card(row, compact=False, ribbon=False):
         {"<div class='example-alert-ribbon'>EJEMPLO ALERTA</div>" if ribbon else ""}
         <div class="asset-header">
             <div class="asset-left">
-                <div class="asset-new-row">{badge_nuevo}</div>
                 {score_html}
                 <div class="asset-identity">
                     <div class="asset-icon">{icono}</div>
@@ -4048,12 +4143,11 @@ with tab_inicio:
     render_html(f"""
     <div class="aq-wrap">
       <section class="aq-hero">
-        <div class="aq-hero-badge"><i></i> ALURA QUANT · INVESTMENT INTELLIGENCE</div>
         <h1>El mercado genera miles de señales.<br><span>Nosotros filtramos el ruido.</span></h1>
         <p>Algoritmos cuantitativos, análisis técnico e inteligencia artificial para detectar, puntuar y monitorizar oportunidades de mercado.</p>
         <div class="aq-actions">
           <a class="aq-btn primary" href="#oportunidad-demo">Ver una oportunidad →</a>
-          <a class="aq-btn" href="#como-funciona">Cómo funciona</a>
+          <a class="aq-btn" href="#por-que-existe">Cómo funciona</a>
         </div>
       </section>
 
@@ -4121,7 +4215,7 @@ with tab_inicio:
         </div>
       </section>
 
-      <section class="aq-section">
+      <section class="aq-section" id="por-que-existe">
         <div class="aq-section-head">
           <div>
             <div class="aq-eyebrow">POR QUÉ EXISTE</div>
@@ -4159,7 +4253,7 @@ with tab_inicio:
           <h2>El mercado no necesita más ruido.</h2>
           <p>Necesita mejores filtros. Explora el sistema y decide qué nivel de información quieres recibir.</p>
           <div class="aq-actions">
-            <a class="aq-btn primary" href="#planes-top" style="background:#fff;color:#0b1220;border-color:#fff;">Ver planes y suscripción →</a>
+            <a class="aq-btn primary" href="#planes-top" onclick="(function(){var b=[...document.querySelectorAll('button[data-baseweb=\"tab\"]')].find(function(x){return x.innerText.trim()==='Planes';});if(b)b.click();})();" style="background:#fff;color:#0b1220;border-color:#fff;">Ver planes y suscripción →</a>
           </div>
         </div>
       </section>
@@ -4417,7 +4511,6 @@ with tab_planes:
 render_html(f"""
 <div class="aq-wrap">
   <div class="aq-footer">
-    <span>ALURA QUANT · INVESTMENT INTELLIGENCE</span>
     <span>Última actualización: <strong>{html.escape(fecha_actualizacion_sistema)}</strong></span>
   </div>
 </div>
