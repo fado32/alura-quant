@@ -2604,6 +2604,114 @@ div[data-testid="stDataFrame"] {
 .pricing-hero{text-align:center;padding:28px 20px 18px;margin:8px 0 24px}.pricing-hero .eyebrow{font-size:11px;font-weight:800;letter-spacing:.16em;color:var(--blue);margin-bottom:10px}.pricing-hero h2{font-family:'Plus Jakarta Sans',sans-serif;font-size:34px;line-height:1.1;margin:0 0 10px}.pricing-hero p{max-width:680px;margin:0 auto;color:var(--text-secondary);font-size:15px;line-height:1.65}.pricing-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin:0 0 28px}.pricing-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px;box-shadow:var(--shadow);position:relative}.pricing-card-pro{border:1.5px solid #2563eb;box-shadow:0 14px 40px rgba(37,99,235,.10)}.pricing-badge{display:inline-flex;padding:6px 10px;border-radius:999px;background:var(--surface-soft);color:var(--text-secondary);font-size:10px;font-weight:800;letter-spacing:.1em}.pricing-badge.pro{background:var(--blue-soft);color:var(--blue)}.pricing-card h3{font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;margin:18px 0 10px}.pricing-price{font-family:'Plus Jakarta Sans',sans-serif;font-size:34px;font-weight:800;margin-bottom:8px}.pricing-price span{font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text-tertiary);font-weight:500}.pricing-description{color:var(--text-secondary);min-height:44px;line-height:1.5}.pricing-card ul{list-style:none;padding:0;margin:20px 0 0;color:var(--text-secondary);line-height:2;font-size:14px}.stripe-cta{margin-top:10px;text-align:center}.stripe-cta a{display:block;padding:12px 18px;border-radius:10px;background:var(--blue);color:white!important;text-decoration:none!important;font-weight:700}.subscription-note{margin-top:24px;padding:14px 16px;border:1px solid var(--border);background:var(--surface-soft);border-radius:12px;color:var(--text-secondary);font-size:12px;line-height:1.6}@media(max-width:800px){.pricing-grid{grid-template-columns:1fr}.pricing-hero h2{font-size:28px}}
 
 .hero-v2{display:grid!important;grid-template-columns:minmax(0,1.35fr) minmax(260px,.65fr);gap:30px;align-items:center;padding:52px 48px!important;min-height:300px!important;background:radial-gradient(circle at 80% 20%,rgba(37,99,235,.10),transparent 34%),linear-gradient(135deg,#ffffff,#f5f8ff)!important;border:1px solid var(--border);border-radius:24px;overflow:hidden}.hero-eyebrow{font-size:10px;letter-spacing:.16em;font-weight:800;color:var(--blue);margin-bottom:14px}.hero-v2 .hero-title{font-family:'Plus Jakarta Sans',sans-serif!important;font-size:clamp(34px,4vw,54px)!important;line-height:1.04!important;letter-spacing:-.045em!important;max-width:760px}.hero-v2 .hero-subtitle{max-width:680px!important;font-size:16px!important;line-height:1.65!important;margin-top:18px!important}.hero-actions{display:flex;gap:10px;margin-top:24px;flex-wrap:wrap}.hero-btn{display:inline-flex;padding:11px 16px;border-radius:10px;text-decoration:none!important;font-weight:700;font-size:13px}.hero-btn.primary{background:var(--blue);color:#fff!important}.hero-btn.secondary{background:#fff;color:var(--text)!important;border:1px solid var(--border)}.hero-orbit{display:flex;justify-content:center;align-items:center;min-height:220px;position:relative}.orbit-card{width:190px;height:190px;border-radius:50%;background:#fff;border:1px solid var(--border);box-shadow:0 20px 55px rgba(15,23,42,.10);display:flex;flex-direction:column;justify-content:center;align-items:center;position:relative;z-index:2}.orbit-card span{font-size:9px;font-weight:800;letter-spacing:.12em;color:var(--text-tertiary)}.orbit-card strong{font-family:'Plus Jakarta Sans',sans-serif;font-size:56px;line-height:1;margin:7px 0}.orbit-card small{font-size:11px;color:var(--green);font-weight:700}.orbit-line{position:absolute;width:245px;height:245px;border:1px dashed #cbd5e1;border-radius:50%;}.hero-v2 + .portfolio-summary{margin-top:18px}@media(max-width:800px){.hero-v2{grid-template-columns:1fr;padding:34px 24px!important}.hero-orbit{display:none}}
+
+/* V3 — opportunity / performance polish */
+.opportunity-count{
+    margin:8px 0 14px;color:#94a3b8;font-size:10px;font-weight:800;letter-spacing:.08em;
+}
+.asset-score{display:block;margin-top:9px;text-align:right}
+.asset-score strong{display:block;font-family:'Plus Jakarta Sans';font-size:18px;line-height:1;color:var(--blue)}
+.asset-score small{display:block;margin-top:3px;color:var(--text-tertiary);font-size:8px;letter-spacing:.09em;font-weight:800}
+.position-empty{padding:12px 0;color:var(--text-tertiary);font-size:11px}
+.opportunity-card-landing{max-width:980px;margin:0 auto 10px}
+
+.aq-engine-labels{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:28px
+}
+.aq-engine-labels div{
+    background:#fff;border:1px solid var(--aq-border);border-radius:16px;
+    padding:18px 16px;text-align:left;font-family:'Plus Jakarta Sans';
+    font-size:14px;font-weight:800;box-shadow:var(--aq-shadow)
+}
+.aq-engine-labels span{
+    display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;
+    margin-right:9px;border-radius:9px;background:#eff6ff;color:#2563eb;font-size:10px
+}
+.aq-ai-process{
+    display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;
+    margin:30px auto 0;max-width:900px
+}
+.aq-ai-process div{
+    padding:13px 18px;background:#fff;border:1px solid var(--aq-border);
+    border-radius:12px;font-size:11px;font-weight:800;letter-spacing:.06em;
+    box-shadow:var(--aq-shadow)
+}
+.aq-ai-process span{color:#94a3b8;font-weight:800}
+.aq-home-stats .summary-card{padding:22px 21px;border-radius:18px}
+.aq-home-stats .summary-value{font-size:25px}
+.aq-home-stats .summary-label{font-size:9px}
+.aq-home-stats .summary-detail{font-size:10px}
+.equity-chart{
+    margin-top:18px;border:1px solid #edf1f6;border-radius:16px;background:#fbfcfe;
+    overflow:hidden;height:330px
+}
+.equity-chart svg{width:100%;height:100%;display:block}
+.equity-grid{stroke:#e9eef5;stroke-width:1}
+.equity-label{font-family:'DM Sans';font-size:11px;fill:#94a3b8}
+.equity-date{font-family:'DM Sans';font-size:11px;fill:#94a3b8}
+.equity-line{fill:none;stroke:#2563eb;stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+.equity-area{fill:rgba(37,99,235,.07)}
+.equity-dot{fill:#fff;stroke:#2563eb;stroke-width:4}
+.equity-final{font-family:'Plus Jakarta Sans';font-size:12px;font-weight:800}
+.equity-empty{height:100%;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:13px}
+.performance-page-head{
+    display:flex;justify-content:space-between;align-items:flex-end;gap:30px;
+    padding:20px 0 25px;border-bottom:1px solid var(--border);margin-bottom:20px
+}
+.performance-page-head h2{
+    font-family:'Plus Jakarta Sans';font-size:36px;letter-spacing:-.045em;margin:6px 0 7px
+}
+.performance-page-head p{margin:0;color:var(--text-secondary);font-size:13px}
+.performance-total{text-align:right;min-width:190px}
+.performance-total span{display:block;font-size:9px;color:#94a3b8;letter-spacing:.1em;font-weight:800}
+.performance-total strong{display:block;font-family:'Plus Jakarta Sans';font-size:29px;letter-spacing:-.04em;margin-top:4px}
+.performance-total small{display:block;color:#64748b;font-size:10px;margin-top:5px}
+.performance-kpis{
+    display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:18px
+}
+.performance-kpi{
+    background:#fff;border:1px solid var(--border);border-radius:16px;padding:17px 15px;
+    box-shadow:var(--shadow);min-width:0
+}
+.performance-kpi span{display:block;color:#64748b;font-size:9px;text-transform:uppercase;letter-spacing:.07em;font-weight:800}
+.performance-kpi strong{display:block;font-family:'Plus Jakarta Sans';font-size:22px;line-height:1.1;margin-top:8px}
+.performance-kpi small{display:block;color:#94a3b8;font-size:9px;margin-top:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.performance-kpi.positive strong{color:#16a34a}
+.performance-kpi.negative strong{color:#dc2626}
+.performance-chart-card{
+    background:#fff;border:1px solid var(--border);border-radius:20px;padding:24px;
+    box-shadow:var(--shadow)
+}
+.performance-chart-head{display:flex;justify-content:space-between;align-items:center;gap:20px}
+.performance-chart-title{font-family:'Plus Jakarta Sans';font-size:18px;font-weight:800}
+.performance-chart-subtitle{color:#94a3b8;font-size:11px;margin-top:4px}
+.chart-legend{font-size:10px;color:#64748b;font-weight:700}
+.chart-legend i{display:inline-block;width:8px;height:8px;background:#2563eb;border-radius:50%;margin-right:6px}
+.performance-chart-footer{
+    display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;
+    margin-top:14px;padding-top:14px;border-top:1px solid #eef1f5;
+    color:#64748b;font-size:10px
+}
+.performance-chart-footer strong{color:#334155}
+.performance-disclaimer{
+    margin:14px 0;color:#94a3b8;font-size:10px;line-height:1.6
+}
+@media(max-width:1000px){
+    .performance-kpis{grid-template-columns:repeat(3,1fr)}
+    .aq-engine-labels{grid-template-columns:repeat(2,1fr)}
+}
+@media(max-width:650px){
+    .performance-page-head{align-items:flex-start;flex-direction:column}
+    .performance-total{text-align:left}
+    .performance-kpis{grid-template-columns:repeat(2,1fr)}
+    .performance-chart-card{padding:16px}
+    .performance-chart-head{align-items:flex-start;flex-direction:column}
+    .equity-chart{height:270px}
+    .aq-engine-labels{grid-template-columns:1fr}
+    .aq-ai-process{gap:8px}
+    .aq-ai-process span{display:none}
+}
+
 </style>
 """,
     unsafe_allow_html=True,
@@ -2872,164 +2980,372 @@ tab_inicio, tab_oportunidades, tab_cartera, tab_resultados, tab_historial, tab_p
 ])
 
 # ------------------------------------------------------------
-# 01. LANDING
 # ------------------------------------------------------------
+# SHARED UI — OPPORTUNITY CARD
+# ------------------------------------------------------------
+
+def render_opportunity_card(row, compact=False):
+    """Renderiza la ficha visual clásica de Alura Quant."""
+    icono = safe_text(row.get("Icono"), "📈")
+    empresa = safe_text(row.get("Empresa", row.get("Ticker", "Activo")), "Activo")
+    ticker = safe_text(row.get("Ticker"), "")
+    ticker_raw = str(row.get("Ticker", "")).strip()
+    sector = safe_text(row.get("Sector"), "Mercado Continuo")
+
+    es_nuevo = False
+    if "Fecha" in row and pd.notna(row["Fecha"]):
+        try:
+            fecha_alerta = row["Fecha"].to_pydatetime().replace(tzinfo=None)
+            es_nuevo = datetime.now() - fecha_alerta <= timedelta(hours=48)
+        except Exception:
+            pass
+
+    badge_nuevo = '<span class="new-badge">✦ NUEVO</span>' if es_nuevo else ""
+
+    precio_actual = precios_actuales.get(ticker_raw) if ticker_raw else safe_float(row.get("Precio_Actual"))
+    if precio_actual is None:
+        precio_actual = safe_float(row.get("Precio_Actual"))
+
+    precio_entrada = safe_float(row.get("Precio_Alerta"))
+    if precio_entrada is None:
+        precio_entrada = safe_float(row.get("Precio_Actual"))
+
+    stop_loss = safe_float(row.get("Stop_Loss"))
+    take_profit = safe_float(row.get("Take_Profit"))
+    ratio_rr = safe_float(row.get("Ratio_RR"))
+
+    beneficio_posicion, porcentaje_posicion = calcular_pnl_posicion(
+        precio_actual, precio_entrada, CAPITAL_POR_ALERTA
+    )
+
+    if beneficio_posicion is None or porcentaje_posicion is None:
+        performance_text = "—"
+        performance_class = "performance-neutral"
+    else:
+        performance_text = (
+            f"{formatear_numero(porcentaje_posicion, 2, '%', True)}"
+            f" · {formatear_numero(beneficio_posicion, 2, ' €', True)}"
+        )
+        performance_class = (
+            "performance-positive" if beneficio_posicion >= 0
+            else "performance-negative"
+        )
+
+    ratio_rr_text = formatear_numero(ratio_rr, 1, "x") if ratio_rr is not None else "—"
+
+    stop_loss_text = formatear_numero(stop_loss, 2) if stop_loss is not None else "—"
+    entrada_text = formatear_numero(precio_entrada, 2) if precio_entrada is not None else "—"
+    actual_text = formatear_numero(precio_actual, 2) if precio_actual is not None else "—"
+    take_profit_text = formatear_numero(take_profit, 2) if take_profit is not None else "—"
+
+    positions = calcular_position_percentages(
+        stop_loss, precio_entrada, precio_actual, take_profit
+    )
+
+    if positions:
+        sl_pct = positions["sl"] if positions["sl"] is not None else 0
+        entry_pct = positions["entry"] if positions["entry"] is not None else 25
+        current_pct = positions["current"] if positions["current"] is not None else entry_pct
+        tp_pct = positions["tp"] if positions["tp"] is not None else 100
+
+        risk_width = max(0, min(entry_pct, current_pct) - sl_pct)
+        reward_width = max(0, tp_pct - max(entry_pct, current_pct))
+
+        position_tracker = f"""
+        <div class="position-wrapper">
+            <div class="position-labels">
+                <div class="position-label-item"><span class="position-label">Stop</span><span class="position-price">{stop_loss_text}</span></div>
+                <div class="position-label-item"><span class="position-label">Entrada</span><span class="position-price">{entrada_text}</span></div>
+                <div class="position-label-item"><span class="position-label">Actual</span><span class="position-price">{actual_text}</span></div>
+                <div class="position-label-item"><span class="position-label">Take Profit</span><span class="position-price">{take_profit_text}</span></div>
+            </div>
+            <div class="position-track">
+                <div class="position-risk" style="left:{sl_pct:.2f}%;width:{risk_width:.2f}%;"></div>
+                <div class="position-reward" style="left:{current_pct:.2f}%;width:{reward_width:.2f}%;"></div>
+                <div class="position-marker marker-sl" style="left:{sl_pct:.2f}%;"></div>
+                <div class="position-marker marker-entry" style="left:{entry_pct:.2f}%;"></div>
+                <div class="position-marker marker-current" style="left:{current_pct:.2f}%;"></div>
+                <div class="position-marker marker-tp" style="left:{tp_pct:.2f}%;"></div>
+            </div>
+        </div>
+        """
+    else:
+        position_tracker = """
+        <div class="position-wrapper">
+            <div class="position-empty">Información de riesgo/objetivo no disponible.</div>
+        </div>
+        """
+
+    analisis_ia_raw = row.get("Analisis_IA_Actual", "")
+    if pd.isna(analisis_ia_raw) or not str(analisis_ia_raw).strip():
+        analisis_ia_raw = row.get("Analisis_IA_Entrada", "")
+    if pd.isna(analisis_ia_raw) or not str(analisis_ia_raw).strip():
+        analisis_ia_raw = row.get("Analisis_IA", "")
+    analisis_ia = formatear_tesis_ia(analisis_ia_raw)
+
+    score = safe_float(row.get("Score_Entrada"), safe_float(row.get("Score_Actual")))
+    score_html = (
+        f"<span class='asset-score'><strong>{formatear_numero(score,0)}</strong><small>QUANT SCORE</small></span>"
+        if score is not None else ""
+    )
+
+    card_class = "asset-card opportunity-card-landing" if compact else "asset-card"
+
+    render_html(f"""
+    <div class="{card_class}">
+        <div class="asset-header">
+            <div class="asset-left">
+                <div class="asset-new-row">{badge_nuevo}</div>
+                <div class="asset-identity">
+                    <div class="asset-icon">{icono}</div>
+                    <div>
+                        <div class="asset-company">{empresa} <span class="asset-ticker">{ticker}</span></div>
+                        <div class="asset-sector">{sector}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="asset-right">
+                <div class="current-price">{actual_text}</div>
+                <div class="price-label">Precio actual</div>
+                {score_html}
+            </div>
+        </div>
+
+        <div class="performance-row">
+            <div class="performance-rr">
+                <div class="performance-rr-label">Risk / Reward</div>
+                <div class="performance-rr-value">{ratio_rr_text}</div>
+            </div>
+            <div class="performance-left">
+                <div class="performance-label">Rendimiento desde entrada</div>
+                <div class="performance-value {performance_class}">{performance_text}</div>
+            </div>
+        </div>
+
+        {position_tracker}
+
+        <div class="ai-box">
+            <div class="ai-header">✦ Tesis del analista</div>
+            <div class="ai-text">{analisis_ia}</div>
+        </div>
+    </div>
+    """)
+
+
+def render_equity_chart_svg(fechas, valores):
+    """Gráfico de equity ligero y visual, sin depender de una librería adicional."""
+    if not fechas or not valores or len(valores) < 2:
+        return '<div class="equity-empty">Se requieren más operaciones para construir la curva.</div>'
+
+    vals = [safe_float(v, 0) or 0 for v in valores]
+    width, height = 1000, 330
+    left, right, top, bottom = 56, 24, 24, 48
+    plot_w = width - left - right
+    plot_h = height - top - bottom
+    vmin, vmax = min(vals), max(vals)
+    if abs(vmax - vmin) < 1e-9:
+        vmax += 1
+        vmin -= 1
+    pad = (vmax - vmin) * 0.10
+    vmin -= pad
+    vmax += pad
+
+    points = []
+    for i, value in enumerate(vals):
+        x = left + (plot_w * i / max(1, len(vals)-1))
+        y = top + (vmax - value) / (vmax - vmin) * plot_h
+        points.append((x, y))
+
+    path = " ".join(
+        (f"M {x:.1f} {y:.1f}" if i == 0 else f"L {x:.1f} {y:.1f}")
+        for i, (x, y) in enumerate(points)
+    )
+    area = f"M {points[0][0]:.1f} {height-bottom:.1f} " + " ".join(
+        f"L {x:.1f} {y:.1f}" for x,y in points
+    ) + f" L {points[-1][0]:.1f} {height-bottom:.1f} Z"
+
+    grid = []
+    for i in range(5):
+        y = top + plot_h * i / 4
+        val = vmax - (vmax-vmin) * i / 4
+        grid.append(
+            f'<line x1="{left}" y1="{y:.1f}" x2="{width-right}" y2="{y:.1f}" class="equity-grid"/>'
+            f'<text x="{left-10}" y="{y+4:.1f}" text-anchor="end" class="equity-label">{formatear_numero(val,0," €")}</text>'
+        )
+
+    first_date = pd.to_datetime(fechas[0], errors="coerce")
+    last_date = pd.to_datetime(fechas[-1], errors="coerce")
+    date_a = first_date.strftime("%d/%m/%y") if pd.notna(first_date) else ""
+    date_b = last_date.strftime("%d/%m/%y") if pd.notna(last_date) else ""
+
+    final_value = vals[-1]
+    final_color = "#16a34a" if final_value >= 0 else "#dc2626"
+
+    return f"""
+    <div class="equity-chart">
+      <svg viewBox="0 0 {width} {height}" preserveAspectRatio="none" role="img" aria-label="Curva de resultados">
+        {''.join(grid)}
+        <path d="{area}" class="equity-area"/>
+        <path d="{path}" class="equity-line"/>
+        <circle cx="{points[-1][0]:.1f}" cy="{points[-1][1]:.1f}" r="6" class="equity-dot"/>
+        <text x="{points[-1][0]-8:.1f}" y="{max(18,points[-1][1]-13):.1f}" text-anchor="end" class="equity-final" style="fill:{final_color}">{formatear_numero(final_value,0," €",True)}</text>
+        <text x="{left}" y="{height-14}" class="equity-date">{date_a}</text>
+        <text x="{width-right}" y="{height-14}" text-anchor="end" class="equity-date">{date_b}</text>
+      </svg>
+    </div>
+    """
+
+
+# ============================================================
+# NAVEGACIÓN
+# ============================================================
+
+tab_inicio, tab_oportunidades, tab_cartera, tab_resultados, tab_historial, tab_planes = st.tabs([
+    "Inicio", "Oportunidades", "Cartera", "Resultados", "Histórico", "Planes"
+])
+
+
+# ============================================================
+# 01. INICIO
+# ============================================================
+
 with tab_inicio:
     render_html(f"""
-    <div class='aq-wrap'>
-      <section class='aq-hero'>
-        <div class='aq-hero-grid'>
-          <div>
-            <div class='aq-eyebrow'>ALURA QUANT · INVESTMENT INTELLIGENCE</div>
-            <h1>El mercado genera miles de señales.<br><span>Nosotros filtramos el ruido.</span></h1>
-            <p>Algoritmos cuantitativos, análisis técnico e inteligencia artificial para detectar, puntuar y monitorizar oportunidades de mercado.</p>
-            <div class='aq-actions'>
-              <a class='aq-btn primary' href='#planes'>Explorar Alura Quant →</a>
-              <a class='aq-btn' href='#motor'>Cómo funciona</a>
-            </div>
-          </div>
-          <div class='aq-terminal'>
-            <div class='aq-terminal-top'><span>MARKET SCANNER</span><span class='aq-live'><i></i> LIVE ENGINE</span></div>
-            <div class='aq-scan'>{TOTAL_ACTIVOS_UNIVERSO:,}</div>
-            <div class='aq-terminal-muted'>activos monitorizados por el sistema</div>
-            <div style='height:15px'></div>
-            {''.join([f"<div class='aq-mini-row'><div><div class='aq-mini-ticker'>{safe_text(r.get('Ticker'))}</div><div class='aq-mini-bar'><span style='width:{max(8,min(100,int(safe_float(r.get('Score_Entrada'), safe_float(r.get('Score_Actual'), 0)) or 0)))}%'></span></div></div><div class='aq-mini-score'>{formatear_numero(safe_float(r.get('Score_Entrada'), safe_float(r.get('Score_Actual'), 0)),0)}</div><div class='aq-mini-state'>ACTIVE</div></div>" for _,r in df_activas_global.head(4).iterrows()]) if not df_activas_global.empty else "<div style='padding:24px 0;color:#94a3b8;font-size:13px;'>El motor mostrará aquí las oportunidades activas.</div>"}
+    <div class="aq-wrap" id="top">
+      <section class="hero-v2">
+        <div>
+          <div class="hero-eyebrow">ALURA QUANT · INVESTMENT INTELLIGENCE</div>
+          <h1 class="hero-title">El mercado genera miles de señales.<br><span>Nosotros filtramos el ruido.</span></h1>
+          <p class="hero-subtitle">Algoritmos cuantitativos, análisis técnico e inteligencia artificial para detectar, puntuar y monitorizar oportunidades de mercado.</p>
+          <div class="hero-actions">
+            <a class="hero-btn primary" href="#planes-top">Explorar Alura Quant →</a>
+            <a class="hero-btn secondary" href="#motor">Cómo funciona</a>
           </div>
         </div>
-      </section>
-
-      <div class='aq-stats'>
-        <div class='aq-stat'><div class='aq-stat-value'>{TOTAL_ACTIVOS_UNIVERSO:,}</div><div class='aq-stat-label'>activos monitorizados</div></div>
-        <div class='aq-stat'><div class='aq-stat-value'>{activas}</div><div class='aq-stat-label'>oportunidades activas</div></div>
-        <div class='aq-stat'><div class='aq-stat-value'>{formatear_numero(win_rate,1,'%')}</div><div class='aq-stat-label'>win rate histórico</div></div>
-        <div class='aq-stat'><div class='aq-stat-value'>{formatear_numero(rentabilidad_pct,1,'% ',True)}</div><div class='aq-stat-label'>rentabilidad del modelo</div></div>
-      </div>
-
-      <section class='aq-section'>
-        <div class='aq-problem'>
-          <div class='aq-problem-card'><div class='aq-eyebrow'>EL PROBLEMA</div><h3>El problema no es encontrar información.</h3><p>Cada día aparecen miles de movimientos, indicadores, noticias y señales. El reto es decidir qué merece realmente tu atención.</p></div>
-          <div class='aq-problem-card accent'><div class='aq-eyebrow' style='color:#60a5fa;'>LA PROPUESTA</div><h3>Del mercado completo a unas pocas oportunidades.</h3><p>Alura Quant automatiza el proceso de análisis, aplica filtros cuantitativos y convierte los resultados en oportunidades que puedes monitorizar.</p></div>
+        <div class="hero-orbit">
+          <div class="orbit-line"></div>
+          <div class="orbit-card"><span>QUANT SCORE</span><strong>{formatear_numero(safe_float(df_activas_global.iloc[0].get("Score_Entrada"), safe_float(df_activas_global.iloc[0].get("Score_Actual"), 0)),0) if not df_activas_global.empty else "—"}</strong><small>OPORTUNIDAD ACTIVA</small></div>
         </div>
       </section>
 
-      <section class='aq-section center' id='motor'>
-        <div class='aq-eyebrow'>EL MOTOR QUANT</div>
-        <h2>Menos ruido. Más proceso.</h2>
-        <p class='aq-section-intro'>No buscamos predecir el mercado. Construimos un proceso sistemático para filtrar, puntuar y seguir configuraciones que cumplen nuestros criterios.</p>
-        <div class='aq-flow'>
-          <div class='aq-flow-item'><strong>Mercado</strong><span>universo de activos</span></div><div class='aq-arrow'>→</div>
-          <div class='aq-flow-item'><strong>Filtros</strong><span>liquidez y tendencia</span></div><div class='aq-arrow'>→</div>
-          <div class='aq-flow-item'><strong>Quant Score</strong><span>factores técnicos</span></div><div class='aq-arrow'>→</div>
-          <div class='aq-flow-item'><strong>AI Thesis</strong><span>contexto y seguimiento</span></div>
+      <section class="portfolio-summary aq-home-stats">
+        <div class="summary-card"><div class="summary-label">Beneficio total</div><div class="summary-value" style="color:{color_resultado};">{formatear_numero(beneficio_acumulado,2," €",True)}</div><div class="summary-detail">Realizado + abierto</div></div>
+        <div class="summary-card"><div class="summary-label">Rentabilidad</div><div class="summary-value" style="color:{color_resultado};">{formatear_numero(rentabilidad_pct,2,"%",True)}</div><div class="summary-detail">Sobre {formatear_numero(CAPITAL_INICIAL,0," €")}</div></div>
+        <div class="summary-card"><div class="summary-label">Posiciones activas</div><div class="summary-value">{activas}</div><div class="summary-detail">{TOTAL_ACTIVOS_UNIVERSO} activos monitorizados</div></div>
+        <div class="summary-card"><div class="summary-label">Win Rate</div><div class="summary-value">{formatear_numero(win_rate,1,"%")}</div><div class="summary-detail">{exitos} TP · {fallos} SL</div></div>
+      </section>
+
+      <section class="aq-section" id="ejemplo">
+        <div class="section-header">
+          <div><div class="section-title">Así se presenta una señal</div><div class="section-subtitle">Entrada, riesgo, objetivo, evolución y tesis de IA en una única ficha.</div></div>
+        </div>
+    </div>
+    """)
+
+    demo = df_activas_global.iloc[0] if not df_activas_global.empty else (df_hist.iloc[0] if not df_hist.empty else None)
+    if demo is not None:
+        render_opportunity_card(demo, compact=True)
+    else:
+        render_html('<div class="aq-wrap"><div class="empty-state"><div class="empty-title">Todavía no hay señales registradas</div><div class="empty-text">Cuando Alura Quant genere señales aparecerá aquí un ejemplo real.</div></div></div>')
+
+    render_html("""
+    <div class="aq-wrap">
+      <section class="aq-section center" id="motor">
+        <div class="aq-eyebrow">EL MOTOR QUANT</div>
+        <h2>Un proceso sistemático para filtrar el mercado.</h2>
+        <div class="aq-engine-labels">
+          <div><span>01</span> QUANT</div>
+          <div><span>02</span> FILTERS</div>
+          <div><span>03</span> SCORE</div>
+          <div><span>04</span> AI THESIS</div>
         </div>
       </section>
 
-      <section class='aq-section'>
-        <div class='aq-engine'>
-          <div class='aq-engine-card'><div class='aq-engine-number'>01 · QUANT</div><h3>Motor cuantitativo</h3><p>Precio, tendencia, momentum, volatilidad, volumen y estructura técnica en una única capa de análisis.</p></div>
-          <div class='aq-engine-card'><div class='aq-engine-number'>02 · FILTERS</div><h3>Filtros de mercado</h3><p>Reducimos el universo para concentrar el análisis en activos que cumplen las condiciones definidas.</p></div>
-          <div class='aq-engine-card'><div class='aq-engine-number'>03 · SCORE</div><h3>Quant Score</h3><p>Cada oportunidad recibe una puntuación para facilitar la comparación y priorización.</p></div>
-          <div class='aq-engine-card'><div class='aq-engine-number'>04 · AI</div><h3>AI Thesis</h3><p>La IA convierte el contexto cuantitativo en una tesis legible y monitorizable.</p></div>
+      <section class="aq-section center">
+        <div class="aq-eyebrow">CÓMO FUNCIONA</div>
+        <h2>Del mercado completo a unas pocas oportunidades.</h2>
+        <p class="aq-section-intro">Analizamos el universo, aplicamos filtros cuantitativos, puntuamos cada configuración y utilizamos IA para convertir el contexto en una tesis comprensible y monitorizable.</p>
+        <div class="aq-flow">
+          <div class="aq-flow-item"><strong>Mercado</strong><span>universo de activos</span></div><div class="aq-arrow">→</div>
+          <div class="aq-flow-item"><strong>Filtros</strong><span>liquidez y tendencia</span></div><div class="aq-arrow">→</div>
+          <div class="aq-flow-item"><strong>Quant Score</strong><span>factores técnicos</span></div><div class="aq-arrow">→</div>
+          <div class="aq-flow-item"><strong>AI Thesis</strong><span>contexto y seguimiento</span></div>
         </div>
       </section>
 
-      <section class='aq-section center'>
-        <div class='aq-eyebrow'>UNA OPORTUNIDAD, DE PRINCIPIO A FIN</div>
-        <h2>Así se presenta una señal</h2>
-        <p class='aq-section-intro'>Una única ficha reúne entrada, riesgo, objetivo, score y tesis para que entiendas el contexto sin saltar entre herramientas.</p>
+      <section class="aq-section center">
+        <div class="aq-eyebrow">INTELIGENCIA ARTIFICIAL</div>
+        <h2>La IA convierte los datos en una tesis.</h2>
+        <p class="aq-section-intro">La hipótesis inicial se contrasta con la evolución de la operación para entender si el contexto se mantiene, se refuerza, se debilita o se invalida.</p>
+        <div class="aq-ai-process">
+          <div>DATOS</div><span>→</span><div>QUANT SCORE</div><span>→</span><div>AI THESIS</div><span>→</span><div>MONITORIZACIÓN</div>
+        </div>
+      </section>
+
+      <section class="aq-section center">
+        <div class="aq-eyebrow">TRANSPARENCIA</div>
+        <h2>El sistema muestra el proceso.</h2>
+        <p class="aq-section-intro">Alura Quant no elimina el riesgo del mercado. Hace visible la información que hay detrás de cada oportunidad para que puedas evaluar el contexto por ti mismo.</p>
+        <div class="aq-steps">
+          <div class="aq-step"><strong>01 · Detectar</strong><p>El motor analiza el universo y encuentra configuraciones que cumplen los filtros.</p></div>
+          <div class="aq-step"><strong>02 · Entender</strong><p>El Quant Score y la tesis explican por qué una oportunidad ha pasado el filtro.</p></div>
+          <div class="aq-step"><strong>03 · Monitorizar</strong><p>La operación continúa evolucionando y el sistema actualiza su estado.</p></div>
+        </div>
+      </section>
+
+      <section class="aq-section" id="planes">
+        <div class="aq-cta"><div class="aq-eyebrow" style="color:#93c5fd;">ALURA QUANT</div><h2>El mercado no necesita más ruido.</h2><p>Necesita mejores filtros. Explora el sistema y decide qué nivel de información quieres recibir.</p><a class="aq-btn" href="#planes-top">Ver planes y suscripción →</a></div>
       </section>
     </div>
     """)
 
-    # Demo dinámica de oportunidad
-    demo = df_activas_global.iloc[0] if not df_activas_global.empty else (df_hist.iloc[0] if not df_hist.empty else None)
-    if demo is not None:
-        ticker=safe_text(demo.get('Ticker')); empresa=safe_text(demo.get('Empresa'))
-        entrada=safe_float(demo.get('Precio_Alerta'), safe_float(demo.get('Precio_Actual')))
-        actual=safe_float(demo.get('Precio_Actual'), entrada); sl=safe_float(demo.get('Stop_Loss')); tp=safe_float(demo.get('Take_Profit'))
-        score=safe_float(demo.get('Score_Entrada'), safe_float(demo.get('Score_Actual'),0)) or 0
-        rr=safe_float(demo.get('Ratio_RR'))
-        tesis=formatear_tesis_ia(demo.get('Analisis_IA_Entrada'))
-        estado=safe_text(demo.get('Estado_Estrategia'), 'Monitorizada')
-        render_html(f"""
-        <div class='aq-wrap'>
-          <section class='aq-section'>
-            <div class='aq-opportunity'>
-              <div class='aq-op-card'>
-                <div class='aq-op-head'><div><div class='aq-eyebrow'>OPORTUNIDAD ACTIVA</div><div class='aq-ticker'>{ticker}</div><div class='aq-company'>{empresa}</div></div><div class='aq-score'>{formatear_numero(score,0)}<small>QUANT SCORE</small></div></div>
-                <div class='aq-op-metrics'>
-                  <div class='aq-metric'><label>Entrada</label><strong>{formatear_numero(entrada,2,' €') if entrada is not None else '—'}</strong></div>
-                  <div class='aq-metric'><label>Actual</label><strong>{formatear_numero(actual,2,' €') if actual is not None else '—'}</strong></div>
-                  <div class='aq-metric'><label>Stop Loss</label><strong>{formatear_numero(sl,2,' €') if sl is not None else '—'}</strong></div>
-                  <div class='aq-metric'><label>Take Profit</label><strong>{formatear_numero(tp,2,' €') if tp is not None else '—'}</strong></div>
-                </div>
-                <div class='aq-bar'></div>
-                <div style='display:flex;justify-content:space-between;font-size:11px;color:#94a3b8;'><span>STOP</span><span>ENTRADA / ACTUAL</span><span>TAKE PROFIT</span></div>
-                <div style='margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;'><span style='background:#ecfdf3;color:#15803d;padding:7px 10px;border-radius:99px;font-size:12px;font-weight:700;'>● {estado}</span>{f"<span style='background:#eff6ff;color:#1d4ed8;padding:7px 10px;border-radius:99px;font-size:12px;font-weight:700;'>R:R {formatear_numero(rr,1)}</span>" if rr is not None else ''}</div>
-              </div>
-              <div class='aq-ai'><div class='aq-eyebrow'>AI THESIS ENGINE</div><div class='aq-ai-state'>● TESIS MONITORIZADA</div><h3>Datos → Score → Tesis</h3><p>{tesis}</p><p style='font-size:12px;color:#94a3b8;'>La tesis se compara con la situación actual para detectar si el contexto se mantiene, se refuerza, se debilita o se invalida.</p></div>
-            </div>
-          </section>
+
+# ============================================================
+# 02. OPORTUNIDADES
+# ============================================================
+
+with tab_oportunidades:
+    render_html("""
+    <div class="section-header">
+      <div>
+        <div class="section-title">Oportunidades activas</div>
+        <div class="section-subtitle">Cada ficha muestra la misma lectura visual de riesgo, objetivo y tesis que utilizamos en la cartera.</div>
+      </div>
+    </div>
+    """)
+
+    if df_activas_global.empty:
+        render_html("""
+        <div class="empty-state">
+          <div class="empty-icon">◌</div>
+          <div class="empty-title">No hay oportunidades activas</div>
+          <div class="empty-text">Las nuevas señales aparecerán automáticamente en esta sección.</div>
         </div>
         """)
     else:
-        render_html("<div class='aq-wrap'><div class='aq-panel'>Todavía no hay una oportunidad disponible para mostrar como ejemplo.</div></div>")
+        col_filtro_1, col_filtro_2 = st.columns([1,1], gap="small")
+        with col_filtro_1:
+            sectores = sorted(df_activas_global["Sector"].dropna().astype(str).unique().tolist()) if "Sector" in df_activas_global.columns else []
+            filtro_sector = st.selectbox("Sector", ["Todos los sectores"] + sectores, key="opp_sector")
+        with col_filtro_2:
+            busqueda = st.text_input("Buscar", placeholder="⌕  Buscar empresa o ticker...", key="opp_search")
 
-    render_html("""
-    <div class='aq-wrap'>
-      <section class='aq-section center'>
-        <div class='aq-eyebrow'>TRANSPARENCIA</div>
-        <h2>Del dato a la decisión informada.</h2>
-        <p class='aq-section-intro'>Alura Quant no elimina el riesgo del mercado. Hace visible el proceso que hay detrás de cada oportunidad para que puedas evaluar el contexto por ti mismo.</p>
-        <div class='aq-steps'>
-          <div class='aq-step'><strong>01 · Detectar</strong><p>El motor analiza el universo y encuentra configuraciones que cumplen los filtros.</p></div>
-          <div class='aq-step'><strong>02 · Entender</strong><p>El Quant Score y la tesis explican por qué una oportunidad ha pasado el filtro.</p></div>
-          <div class='aq-step'><strong>03 · Monitorizar</strong><p>La operación continúa evolucionando y el sistema actualiza su estado.</p></div>
-        </div>
-      </section>
-    </div>
-    """)
-
-    # Performance breve
-    render_html(f"""
-    <div class='aq-wrap'>
-      <section class='aq-section'>
-        <div class='aq-panel'>
-          <div class='aq-eyebrow'>PERFORMANCE</div>
-          <div style='display:flex;justify-content:space-between;align-items:end;gap:20px;flex-wrap:wrap;'><div><h2 style='font-family:Plus Jakarta Sans,sans-serif;font-size:32px;letter-spacing:-.04em;margin:0;'>Resultados del sistema</h2><p style='color:#64748b;'>Histórico calculado a partir de las operaciones registradas.</p></div><div style='font-size:30px;font-weight:800;color:{'#16a34a' if beneficio_acumulado>=0 else '#dc2626'};'>{formatear_numero(beneficio_acumulado,2,' €',True)}</div></div>
-        </div>
-      </section>
-      <section class='aq-section' id='planes'>
-        <div class='aq-cta'><div class='aq-eyebrow' style='color:#93c5fd;'>ALURA QUANT</div><h2>El mercado no necesita más ruido.</h2><p>Necesita mejores filtros. Explora el sistema y decide qué nivel de información quieres recibir.</p><a class='aq-btn' href='#planes'>Ver planes y suscripción →</a></div>
-      </section>
-    </div>
-    """)
-
-# ------------------------------------------------------------
-# 02. OPORTUNIDADES
-# ------------------------------------------------------------
-with tab_oportunidades:
-    render_html("<div class='aq-dashboard-head'><div><h2>Oportunidades activas</h2><p>Señales que actualmente cumplen las condiciones de monitorización.</p></div></div>")
-    if df_activas_global.empty:
-        st.info("No hay oportunidades activas en este momento.")
-    else:
-        c1,c2=st.columns([1,1])
-        with c1:
-            sectores=sorted(df_activas_global['Sector'].dropna().astype(str).unique().tolist()) if 'Sector' in df_activas_global.columns else []
-            filtro_sector=st.selectbox('Sector',['Todos']+sectores,key='opp_sector')
-        with c2:
-            busqueda=st.text_input('Buscar',placeholder='Ticker o empresa...',key='opp_search')
-        dfo=df_activas_global.copy()
-        if filtro_sector!='Todos' and 'Sector' in dfo.columns: dfo=dfo[dfo['Sector'].astype(str)==filtro_sector]
+        dfo = df_activas_global.copy()
+        if filtro_sector != "Todos los sectores" and "Sector" in dfo.columns:
+            dfo = dfo[dfo["Sector"].astype(str) == filtro_sector]
         if busqueda:
-            q=busqueda.lower(); dfo=dfo[dfo.apply(lambda r:q in str(r.get('Ticker','')).lower() or q in str(r.get('Empresa','')).lower(),axis=1)]
-        for _,r in dfo.iterrows():
-            ticker=safe_text(r.get('Ticker')); empresa=safe_text(r.get('Empresa')); score=safe_float(r.get('Score_Entrada'),safe_float(r.get('Score_Actual'),0)) or 0
-            entrada=safe_float(r.get('Precio_Alerta'),safe_float(r.get('Precio_Actual'))); actual=safe_float(r.get('Precio_Actual')); sl=safe_float(r.get('Stop_Loss')); tp=safe_float(r.get('Take_Profit')); rr=safe_float(r.get('Ratio_RR'))
-            st.markdown(f"**{ticker} — {empresa}**  ·  **Score {formatear_numero(score,0)}**  ·  Entrada {formatear_numero(entrada,2,' €')}  ·  Actual {formatear_numero(actual,2,' €')}  ·  SL {formatear_numero(sl,2,' €')}  ·  TP {formatear_numero(tp,2,' €')}  ·  R:R {formatear_numero(rr,1) if rr is not None else '—'}")
-            st.divider()
+            q = busqueda.strip().lower()
+            dfo = dfo[dfo.apply(
+                lambda r: q in str(r.get("Ticker","")).lower() or q in str(r.get("Empresa","")).lower(),
+                axis=1
+            )]
 
-# ------------------------------------------------------------
+        render_html(f'<div class="opportunity-count">MOSTRANDO {len(dfo)} OPORTUNIDADES</div>')
+        for _, row in dfo.iterrows():
+            render_opportunity_card(row)
+
+
+# ============================================================
 # 03. CARTERA
 # ------------------------------------------------------------
 with tab_cartera:
@@ -3041,26 +3357,68 @@ with tab_cartera:
         st.dataframe(df_activas_global[cols],use_container_width=True,hide_index=True)
 
 # ------------------------------------------------------------
-# 04. RESULTADOS
+# 04. PERFORMANCE
 # ------------------------------------------------------------
+
 with tab_resultados:
     render_html(f"""
-    <div class='aq-dashboard-head'><div><h2>Performance</h2><p>Resultados históricos del sistema cuantitativo.</p></div></div>
-    <div class='aq-stats'>
-      <div class='aq-stat'><div class='aq-stat-value'>{formatear_numero(beneficio_acumulado,2,' €',True)}</div><div class='aq-stat-label'>beneficio total</div></div>
-      <div class='aq-stat'><div class='aq-stat-value'>{formatear_numero(rentabilidad_pct,2,'% ',True)}</div><div class='aq-stat-label'>rentabilidad</div></div>
-      <div class='aq-stat'><div class='aq-stat-value'>{formatear_numero(win_rate,1,'%')}</div><div class='aq-stat-label'>win rate</div></div>
-      <div class='aq-stat'><div class='aq-stat-value'>{total_alertas}</div><div class='aq-stat-label'>operaciones registradas</div></div>
+    <div class="aq-wrap">
+      <div class="performance-page-head">
+        <div>
+          <div class="aq-eyebrow">PERFORMANCE</div>
+          <h2>Resultados del sistema</h2>
+          <p>Beneficio realizado + valoración actual de las posiciones abiertas.</p>
+        </div>
+        <div class="performance-total">
+          <span>BENEFICIO TOTAL</span>
+          <strong style="color:{color_resultado};">{formatear_numero(beneficio_acumulado,2," €",True)}</strong>
+          <small>{formatear_numero(rentabilidad_pct,2,"%",True)} sobre {formatear_numero(CAPITAL_INICIAL,0," €")}</small>
+        </div>
+      </div>
+
+      <div class="performance-kpis">
+        <div class="performance-kpi">
+          <span>Señales activas</span><strong>{activas}</strong><small>posiciones monitorizadas</small>
+        </div>
+        <div class="performance-kpi positive">
+          <span>Posiciones en beneficio</span><strong>{posiciones_con_beneficio}</strong><small>de las posiciones abiertas</small>
+        </div>
+        <div class="performance-kpi positive">
+          <span>Take Profit</span><strong>{exitos}</strong><small>objetivos alcanzados</small>
+        </div>
+        <div class="performance-kpi negative">
+          <span>Stop Loss</span><strong>{fallos}</strong><small>stops ejecutados</small>
+        </div>
+        <div class="performance-kpi">
+          <span>Win Rate</span><strong>{formatear_numero(win_rate,1,"%")}</strong><small>sobre operaciones cerradas</small>
+        </div>
+        <div class="performance-kpi">
+          <span>Beneficio realizado</span><strong style="color:{'#16a34a' if beneficio_realizado >= 0 else '#dc2626'};">{formatear_numero(beneficio_realizado,2," €",True)}</strong><small>operaciones cerradas</small>
+        </div>
+      </div>
+
+      <div class="performance-chart-card">
+        <div class="performance-chart-head">
+          <div>
+            <div class="performance-chart-title">Evolución de beneficios</div>
+            <div class="performance-chart-subtitle">Curva acumulada del resultado del sistema</div>
+          </div>
+          <div class="chart-legend"><i></i> Equity curve</div>
+        </div>
+        {render_equity_chart_svg(fechas_curva, beneficios_curva)}
+        <div class="performance-chart-footer">
+          <span>Realizado: <strong>{formatear_numero(beneficio_realizado,2," €",True)}</strong></span>
+          <span>Abierto: <strong>{formatear_numero(beneficio_no_realizado,2," €",True)}</strong></span>
+          <span>Capital de referencia: <strong>{formatear_numero(CAPITAL_INICIAL,0," €")}</strong></span>
+        </div>
+      </div>
+
+      <div class="performance-disclaimer">
+        Resultados históricos calculados a partir de las operaciones registradas. No constituyen una garantía de resultados futuros ni asesoramiento financiero.
+      </div>
     </div>
     """)
-    if fechas_curva and beneficios_curva:
-        chart_df=pd.DataFrame({'Fecha':pd.to_datetime(fechas_curva),'Resultado':beneficios_curva}).set_index('Fecha')
-        st.line_chart(chart_df,use_container_width=True)
-    else:
-        st.info("Todavía no hay suficientes datos para mostrar la curva de resultados.")
-    render_html("<div class='aq-note'>Los resultados históricos no garantizan resultados futuros. La información mostrada tiene carácter informativo y no constituye asesoramiento financiero.</div>")
 
-# ------------------------------------------------------------
 # 05. HISTÓRICO
 # ------------------------------------------------------------
 with tab_historial:
