@@ -1565,30 +1565,25 @@ div[data-testid="stStatusWidget"] {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
+    justify-content: center;
     min-width: 118px;
-}
-
-.asset-right .asset-score {
-    order: 0;
-    margin-bottom: 7px;
-}
-
-.asset-right .current-price {
-    order: 1;
-}
-
-.asset-right .price-label {
-    order: 2;
+    padding-top: 0;
 }
 
 .asset-score {
     display: inline-flex;
     flex-direction: column;
-    align-items: flex-end;
-    padding: 7px 10px;
-    border: 1px solid #dbe7ff;
-    border-radius: 10px;
-    background: #f4f7ff;
+    align-items: flex-start;
+    margin-bottom: 8px;
+}
+
+.asset-score strong {
+    color: var(--aq-blue);
+}
+
+.asset-score small {
+    margin-top: 3px;
+    color: #7b8ba7;
 }
 
 .asset-score strong {
@@ -1611,9 +1606,9 @@ div[data-testid="stStatusWidget"] {
 .performance-row {
     width: calc(100% - 28px);
     margin: 0 auto 18px;
-    padding: 11px 14px;
+    padding: 11px 28px;
     box-sizing: border-box;
-    border: 1px solid #1e3a8a;
+    border: 1px solid #dbe7ff;
     border-radius: 12px;
     background: #f8fbff;
 }
@@ -3607,9 +3602,8 @@ render_html("""
 .current-price{font-size:25px !important}
 .performance-row{
     margin-top:2px !important;
-    border-top:1px solid #edf0f5 !important;
-    border-bottom:1px solid #edf0f5 !important;
-    padding:16px 0 !important;
+    border:1px solid #dbe7ff !important;
+    padding:16px 28px !important;
 }
 .ai-box{
     margin-top:20px !important;
@@ -3933,7 +3927,7 @@ def render_opportunity_card(row, compact=False, ribbon=False):
 
     score = safe_float(row.get("Score_Entrada"), safe_float(row.get("Score_Actual")))
     score_html = (
-        f"<span class='asset-score'><strong>{formatear_numero(score,0)}</strong><small>QUANT SCORE</small></span>"
+        f"<div class='asset-score'><strong>{formatear_numero(score,0)}</strong><small>QUANT SCORE</small></div>"
         if score is not None else ""
     )
 
@@ -3945,6 +3939,7 @@ def render_opportunity_card(row, compact=False, ribbon=False):
         <div class="asset-header">
             <div class="asset-left">
                 <div class="asset-new-row">{badge_nuevo}</div>
+                {score_html}
                 <div class="asset-identity">
                     <div class="asset-icon">{icono}</div>
                     <div>
@@ -3954,7 +3949,6 @@ def render_opportunity_card(row, compact=False, ribbon=False):
                 </div>
             </div>
             <div class="asset-right">
-                {score_html}
                 <div class="current-price">{actual_text}</div>
                 <div class="price-label">Precio actual</div>
             </div>
@@ -4127,15 +4121,6 @@ with tab_inicio:
         </div>
       </section>
 
-      <section class="aq-section center" id="como-funciona">
-        <div class="aq-engine-line">
-          <div class="aq-engine-item"><span>01</span> QUANT</div>
-          <div class="aq-engine-item"><span>02</span> FILTERS</div>
-          <div class="aq-engine-item"><span>03</span> SCORE</div>
-          <div class="aq-engine-item"><span>04</span> AI THESIS</div>
-        </div>
-      </section>
-
       <section class="aq-section">
         <div class="aq-section-head">
           <div>
@@ -4164,24 +4149,6 @@ with tab_inicio:
               <div><i></i> Momentum y volumen</div>
               <div><i></i> Score + tesis de IA</div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      <section class="aq-ai-section">
-        <div class="aq-ai-panel">
-          <div class="aq-ai-side">
-            <div class="aq-eyebrow">INTELIGENCIA ARTIFICIAL</div>
-            <h2>La IA convierte los datos en una tesis.</h2>
-            <p>La IA no sustituye las reglas cuantitativas. Recibe el contexto generado por el sistema y lo convierte en una explicación que puede seguirse a medida que evoluciona la operación.</p>
-          </div>
-          <div class="aq-ai-chain">
-            <div class="aq-ai-chain-row">
-              <div class="node">DATOS</div><div class="arrow">→</div>
-              <div class="node">QUANT SCORE</div><div class="arrow">→</div>
-              <div class="node">AI THESIS</div>
-            </div>
-            <div class="aq-ai-state"><strong>MONITORIZACIÓN</strong><br>La tesis puede mantenerse, reforzarse, debilitarse o invalidarse según cambie el contexto.</div>
           </div>
         </div>
       </section>
