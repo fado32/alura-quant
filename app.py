@@ -3342,7 +3342,7 @@ render_html("""
 
 /* ---------- HERO ---------- */
 .aq-hero{
-    padding:42px 0 55px;
+    padding:92px 0 72px;
     text-align:center;
     position:relative;
 }
@@ -3464,7 +3464,7 @@ render_html("""
     align-items:flex-end;
     justify-content:space-between;
     gap:20px;
-    margin-bottom:10px;
+    margin-bottom:25px;
 }
 .aq-section-head h2{margin:7px 0 0}
 .aq-section-head p{
@@ -3884,7 +3884,7 @@ render_html("""
     .performance-total{text-align:left}
 }
 @media(max-width:650px){
-    .aq-hero{padding:30px 0 35px}
+    .aq-hero{padding:60px 0 50px}
     .aq-hero h1{font-size:43px}
     .aq-hero p{font-size:16px}
     .aq-kpis,.performance-kpis,.aq-pricing-grid{grid-template-columns:1fr}
@@ -4174,8 +4174,8 @@ with tab_inicio:
         </div>
       </section>
 
-      <section class="aq-section" id="oportunidad-demo" style="padding-top:20px;">
-        <div class="aq-section-head">
+      <section class="aq-section" id="oportunidad-demo" style="padding-bottom: 20px;">
+        <div class="aq-section-head" style="margin-bottom: 12px;">
           <div>
             <div class="aq-eyebrow">PRODUCTO</div>
             <h2>Una oportunidad, de un vistazo.</h2>
@@ -4253,12 +4253,18 @@ with tab_inicio:
           <h2>El mercado no necesita más ruido.</h2>
           <p>Necesita mejores filtros. Explora el sistema y decide qué nivel de información quieres recibir.</p>
           <div class="aq-actions">
-            <a class="aq-btn primary" href="#planes-top" onclick="event.preventDefault();setTimeout(function(){var tabs=document.querySelectorAll('[role=\"tab\"]');var b=Array.from(tabs).find(function(x){return x.innerText.trim().toLowerCase()==='planes';});if(b){b.scrollIntoView({behavior:'smooth',block:'center'});b.click();setTimeout(function(){var target=document.getElementById('planes-top');if(target)target.scrollIntoView({behavior:'smooth',block:'start'});},250);}},50);return false;" style="background:#fff;color:#0b1220;border-color:#fff;">Ver planes y suscripción →</a>
+            {
+              st.button("Ver planes y suscripción →", key="btn_ir_planes", type="primary") and st.rerun()
+            }
           </div>
         </div>
       </section>
     </div>
     """)
+    
+    # Manejador del botón dinámico de redirección a la pestaña planes
+    if st.session_state.get("btn_ir_planes", False):
+        st.switch_page("Planes") # Alternativa segura por rerun si se maneja por índice de pestaña o estado de sesión
 
 # ============================================================
 # 02. OPORTUNIDADES
