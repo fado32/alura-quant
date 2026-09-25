@@ -3464,7 +3464,7 @@ render_html("""
     align-items:flex-end;
     justify-content:space-between;
     gap:20px;
-    margin-bottom:25px;
+    margin-bottom:5px;
 }
 .aq-section-head h2{margin:7px 0 0}
 .aq-section-head p{
