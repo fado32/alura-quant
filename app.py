@@ -2712,6 +2712,112 @@ div[data-testid="stDataFrame"] {
     .aq-ai-process span{display:none}
 }
 
+
+/* ============================================================
+   V4 POLISH — EXAMPLE + OPPORTUNITY CARDS
+   ============================================================ */
+
+.example-opportunity {
+    position: relative;
+    overflow: hidden;
+}
+
+.example-ribbon {
+    position: absolute;
+    top: 18px;
+    right: -42px;
+    z-index: 5;
+    transform: rotate(38deg);
+    width: 150px;
+    padding: 7px 0;
+    text-align: center;
+    background: var(--blue);
+    color: #fff;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    box-shadow: 0 5px 18px rgba(37,99,235,.22);
+}
+
+.opportunity-meta {
+    padding: 0 18px;
+}
+
+.opportunity-meta-inner {
+    width: 100%;
+    max-width: 94%;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    padding: 12px;
+    box-sizing: border-box;
+    border: 1px solid #1e3a8a;
+    border-radius: 12px;
+    background: #f8fbff;
+}
+
+.opportunity-meta .meta-item {
+    min-width: 0;
+    padding: 11px 14px;
+    border-radius: 9px;
+    background: #ffffff;
+    box-sizing: border-box;
+}
+
+.opportunity-meta .meta-item span {
+    display: block;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.opportunity-meta .meta-item strong {
+    display: block;
+    white-space: nowrap;
+}
+
+.example-opportunity .quant-score,
+.example-opportunity .score-badge {
+    position: absolute !important;
+    top: 24px;
+    right: 24px;
+    z-index: 4;
+}
+
+.example-opportunity .opportunity-header {
+    padding-right: 130px;
+}
+
+@media (max-width: 700px) {
+    .example-ribbon {
+        top: 15px;
+        right: -45px;
+    }
+
+    .example-opportunity .quant-score,
+    .example-opportunity .score-badge {
+        position: static !important;
+        margin-top: 12px;
+    }
+
+    .example-opportunity .opportunity-header {
+        padding-right: 0;
+    }
+
+    .opportunity-meta {
+        padding: 0 10px;
+    }
+
+    .opportunity-meta-inner {
+        max-width: 100%;
+        grid-template-columns: 1fr;
+    }
+}
+
 </style>
 """,
     unsafe_allow_html=True,
