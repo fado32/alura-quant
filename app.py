@@ -1195,7 +1195,7 @@ div[data-testid="stStatusWidget"] {
         1px solid var(--border) !important;
 
     margin-bottom:
-        27px !important;
+        10px !important;
 
 }
 
