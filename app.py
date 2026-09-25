@@ -22,42 +22,51 @@ st.set_page_config(
 
 
 # ============================================================
-# CONFIGURACIÓN DE GOOGLE SHEETS — SUSCRIPCIONES
+# SUSCRIPCIONES — SUPABASE
 # ============================================================
 
-def conectar_google_sheets(nombre_pestana):
-    scope = [
-        "https://spreadsheets.google.com/feeds",
-        "https://www.googleapis.com/auth/drive"
-    ]
-    try:
-        if "gcp_service_account" in st.secrets:
-            creds_dict = dict(st.secrets["gcp_service_account"])
-            creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
-        else:
-            creds = Credentials.from_service_account_file("credentials.json", scopes=scope)
-        client = gspread.authorize(creds)
-        return client.open("Alura_DB").worksheet(nombre_pestana)
-    except Exception as e:
-        print(f"Error conectando a Google Sheets: {e}")
-        return None
+TABLA_FREE = "suscriptores_free"
+TABLA_VIP = "suscriptores_vip"
 
-def guardar_suscriptor_cloud(email, tipo="free"):
+def normalizar_email(email):
+    return str(email or "").strip().lower()
+
+def email_valido(email):
+    email = normalizar_email(email)
+    return bool(re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email))
+
+def guardar_suscriptor_supabase(email, tipo="free"):
+    email = normalizar_email(email)
+    tabla = TABLA_VIP if tipo == "vip" else TABLA_FREE
+    if not email_valido(email):
+        return "invalid"
     try:
-        pestana = "free" if tipo == "free" else "vip"
-        sheet = conectar_google_sheets(pestana)
-        if sheet is None:
-            return "error"
-        registros = sheet.get_all_records()
-        df = pd.DataFrame(registros)
-        if not df.empty and "email" in df.columns and email in df["email"].values:
+        existente = supabase.table(tabla).select("id,email").eq("email", email).limit(1).execute()
+        if getattr(existente, "data", None):
             return "exists"
-        fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        sheet.append_row([email, fecha_actual])
+        supabase.table(tabla).insert({"email": email}).execute()
         return "success"
     except Exception as e:
-        print(f"Error guardando suscriptor: {e}")
+        if "duplicate" in str(e).lower() or "unique" in str(e).lower():
+            return "exists"
+        print(f"Error guardando suscriptor {tipo}: {e}")
         return "error"
+
+def comprobar_suscripcion(email):
+    email = normalizar_email(email)
+    if not email_valido(email):
+        return "none"
+    try:
+        free = supabase.table(TABLA_FREE).select("id").eq("email", email).limit(1).execute()
+        vip = supabase.table(TABLA_VIP).select("id").eq("email", email).limit(1).execute()
+        has_free = bool(getattr(free, "data", None))
+        has_vip = bool(getattr(vip, "data", None))
+        if has_vip and has_free: return "both"
+        if has_vip: return "vip"
+        if has_free: return "free"
+    except Exception as e:
+        print(f"Error comprobando suscripción: {e}")
+    return "none"
 
 # ============================================================
 # CONFIGURACIÓN SUPABASE
@@ -2590,6 +2599,11 @@ div[data-testid="stDataFrame"] {
 
 }
 
+
+/* V2 PRODUCT / PRICING UI */
+.pricing-hero{text-align:center;padding:28px 20px 18px;margin:8px 0 24px}.pricing-hero .eyebrow{font-size:11px;font-weight:800;letter-spacing:.16em;color:var(--blue);margin-bottom:10px}.pricing-hero h2{font-family:'Plus Jakarta Sans',sans-serif;font-size:34px;line-height:1.1;margin:0 0 10px}.pricing-hero p{max-width:680px;margin:0 auto;color:var(--text-secondary);font-size:15px;line-height:1.65}.pricing-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;margin:0 0 28px}.pricing-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:28px;box-shadow:var(--shadow);position:relative}.pricing-card-pro{border:1.5px solid #2563eb;box-shadow:0 14px 40px rgba(37,99,235,.10)}.pricing-badge{display:inline-flex;padding:6px 10px;border-radius:999px;background:var(--surface-soft);color:var(--text-secondary);font-size:10px;font-weight:800;letter-spacing:.1em}.pricing-badge.pro{background:var(--blue-soft);color:var(--blue)}.pricing-card h3{font-family:'Plus Jakarta Sans',sans-serif;font-size:22px;margin:18px 0 10px}.pricing-price{font-family:'Plus Jakarta Sans',sans-serif;font-size:34px;font-weight:800;margin-bottom:8px}.pricing-price span{font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text-tertiary);font-weight:500}.pricing-description{color:var(--text-secondary);min-height:44px;line-height:1.5}.pricing-card ul{list-style:none;padding:0;margin:20px 0 0;color:var(--text-secondary);line-height:2;font-size:14px}.stripe-cta{margin-top:10px;text-align:center}.stripe-cta a{display:block;padding:12px 18px;border-radius:10px;background:var(--blue);color:white!important;text-decoration:none!important;font-weight:700}.subscription-note{margin-top:24px;padding:14px 16px;border:1px solid var(--border);background:var(--surface-soft);border-radius:12px;color:var(--text-secondary);font-size:12px;line-height:1.6}@media(max-width:800px){.pricing-grid{grid-template-columns:1fr}.pricing-hero h2{font-size:28px}}
+
+.hero-v2{display:grid!important;grid-template-columns:minmax(0,1.35fr) minmax(260px,.65fr);gap:30px;align-items:center;padding:52px 48px!important;min-height:300px!important;background:radial-gradient(circle at 80% 20%,rgba(37,99,235,.10),transparent 34%),linear-gradient(135deg,#ffffff,#f5f8ff)!important;border:1px solid var(--border);border-radius:24px;overflow:hidden}.hero-eyebrow{font-size:10px;letter-spacing:.16em;font-weight:800;color:var(--blue);margin-bottom:14px}.hero-v2 .hero-title{font-family:'Plus Jakarta Sans',sans-serif!important;font-size:clamp(34px,4vw,54px)!important;line-height:1.04!important;letter-spacing:-.045em!important;max-width:760px}.hero-v2 .hero-subtitle{max-width:680px!important;font-size:16px!important;line-height:1.65!important;margin-top:18px!important}.hero-actions{display:flex;gap:10px;margin-top:24px;flex-wrap:wrap}.hero-btn{display:inline-flex;padding:11px 16px;border-radius:10px;text-decoration:none!important;font-weight:700;font-size:13px}.hero-btn.primary{background:var(--blue);color:#fff!important}.hero-btn.secondary{background:#fff;color:var(--text)!important;border:1px solid var(--border)}.hero-orbit{display:flex;justify-content:center;align-items:center;min-height:220px;position:relative}.orbit-card{width:190px;height:190px;border-radius:50%;background:#fff;border:1px solid var(--border);box-shadow:0 20px 55px rgba(15,23,42,.10);display:flex;flex-direction:column;justify-content:center;align-items:center;position:relative;z-index:2}.orbit-card span{font-size:9px;font-weight:800;letter-spacing:.12em;color:var(--text-tertiary)}.orbit-card strong{font-family:'Plus Jakarta Sans',sans-serif;font-size:56px;line-height:1;margin:7px 0}.orbit-card small{font-size:11px;color:var(--green);font-weight:700}.orbit-line{position:absolute;width:245px;height:245px;border:1px dashed #cbd5e1;border-radius:50%;}.hero-v2 + .portfolio-summary{margin-top:18px}@media(max-width:800px){.hero-v2{grid-template-columns:1fr;padding:34px 24px!important}.hero-orbit{display:none}}
 </style>
 """,
     unsafe_allow_html=True,
@@ -2778,14 +2792,23 @@ render_html(
 
 render_html(
     """
-<div class="hero">
-    <div>
+<div class="hero hero-v2">
+    <div class="hero-copy">
+        <div class="hero-eyebrow">ALURA QUANT · INVESTMENT INTELLIGENCE</div>
         <h1 class="hero-title">
-            Alura Quant | Inteligencia Financiera
+            Inteligencia cuantitativa<br>para encontrar oportunidades.
         </h1>
         <div class="hero-subtitle">
-            Procesamos todo el mercado con rigor matematico, para identificar oportunidades de valor
+            Monitorizamos el mercado, filtramos el ruido y combinamos métricas cuantitativas con IA para detectar y seguir oportunidades de inversión.
         </div>
+        <div class="hero-actions">
+            <a href="#oportunidades" class="hero-btn primary">Explorar oportunidades →</a>
+            <a href="#metodologia" class="hero-btn secondary">Cómo funciona</a>
+        </div>
+    </div>
+    <div class="hero-orbit" aria-hidden="true">
+        <div class="orbit-card"><span>QUANT SCORE</span><strong>82</strong><small>Alta convicción</small></div>
+        <div class="orbit-line"></div>
     </div>
 </div>
 """,
@@ -2950,6 +2973,7 @@ with tab_cartera:
 
     render_html(
         """
+<div id="oportunidades"></div>
 <div class="section-header">
 
     <div>
@@ -4228,64 +4252,96 @@ with tab_historial:
 # ============================================================
 
 with tab_planes:
-
     render_html(
-        """
-<div class="section-header">
-    <div>
-        <div class="section-title">Planes y Comunidad</div>
-        <div class="section-subtitle">Únete a nuestros planes cuantitativos y sincroniza tu acceso con Alura Strategy.</div>
+        '''
+<div class="pricing-hero">
+    <div class="eyebrow">ALURA QUANT MEMBERSHIP</div>
+    <h2>Más señal. Menos ruido.</h2>
+    <p>Accede a la inteligencia cuantitativa de Alura Quant y recibe las oportunidades que cumplen nuestros criterios.</p>
+</div>
+<div class="pricing-grid">
+    <div class="pricing-card">
+        <div class="pricing-badge">FREE</div>
+        <h3>Explora Alura Quant</h3>
+        <div class="pricing-price">0 € <span>/ mes</span></div>
+        <p class="pricing-description">Para conocer el sistema y seguir una selección de señales.</p>
+        <ul>
+            <li>✓ Acceso al dashboard</li>
+            <li>✓ Resumen de mercado</li>
+            <li>✓ Señales seleccionadas</li>
+            <li>✓ Métricas cuantitativas básicas</li>
+        </ul>
+    </div>
+    <div class="pricing-card pricing-card-pro">
+        <div class="pricing-badge pro">PRO</div>
+        <h3>Alura Quant Pro</h3>
+        <div class="pricing-price">19 € <span>/ mes</span></div>
+        <p class="pricing-description">Para recibir las señales de mayor convicción y el análisis completo.</p>
+        <ul>
+            <li>✓ Alertas con Score &gt; 80</li>
+            <li>✓ Envío prioritario</li>
+            <li>✓ Tesis cuantitativa + IA</li>
+            <li>✓ Histórico de tesis detalladas</li>
+            <li>✓ Informe semanal</li>
+        </ul>
     </div>
 </div>
-""",
+''',
         unsafe_allow_html=True,
     )
 
-    col1, col2 = st.columns(2)
+    col_free, col_vip = st.columns(2, gap="large")
 
-    with col1:
-        st.subheader("Plan Gratuito (Free)")
-        st.markdown("""
-        * Alertas con score moderado.
-        * Resumen de mercado básico.
-        * Acceso a informes públicos.
-        """)
-        
-        email_free = st.text_input("Tu correo electrónico:", key="input_free")
-        if st.button("Unirme Gratis"):
-            if "@" in email_free and "." in email_free:
-                resultado = guardar_suscriptor_cloud(email_free, tipo="free")
-                if resultado == "success":
-                    st.success("¡Te has registrado con éxito en el plan gratuito!")
-                elif resultado == "exists":
-                    st.warning("Este correo ya se encuentra registrado.")
-                else:
-                    st.error("Hubo un error al procesar el registro.")
+    with col_free:
+        st.markdown("### Crear acceso gratuito")
+        email_free = st.text_input(
+            "Email",
+            placeholder="tu@email.com",
+            key="input_free",
+            label_visibility="collapsed",
+        )
+        if st.button("Crear acceso Free", use_container_width=True, type="secondary"):
+            resultado = guardar_suscriptor_supabase(email_free, "free")
+            if resultado == "success":
+                st.success("Registro completado. Ya formas parte de Alura Quant Free.")
+            elif resultado == "exists":
+                st.info("Este email ya está registrado en el plan Free.")
+            elif resultado == "invalid":
+                st.error("Introduce un email válido.")
             else:
-                    st.error("Introduce un correo electrónico válido.")
+                st.error("No hemos podido completar el registro. Inténtalo de nuevo.")
 
-    with col2:
-        st.subheader("PROXIMAMENTE - Plan VIP")
-        st.markdown("""
-        * **Alertas exclusivas con Score > 80**.
-        * Envío prioritario en tiempo real.
-        * Informe semanal cuantitativo completo.
-        * Acceso al histórico de tesis detalladas.
-        """)
-        
-        url_stripe = "https://buy.stripe.com/tu_enlace_de_pago_real"
-        
-        st.markdown(f"""
-        <div style="text-align: center; margin-top: 30px;">
-            <a href="{url_stripe}" target="_blank">
-                <button style="background-color: #00e676; color: black; padding: 12px 24px; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer;">
-                    Suscribirse a VIP (19€/mes)
-                </button>
-            </a>
-        </div>
-        """, unsafe_allow_html=True)
-        st.caption(" ")
+    with col_vip:
+        st.markdown("### Activar Alura Quant Pro")
+        email_vip = st.text_input(
+            "Email Pro",
+            placeholder="El email que usarás para tu suscripción",
+            key="input_vip",
+            label_visibility="collapsed",
+        )
+        url_stripe = os.getenv("STRIPE_PAYMENT_LINK", "https://buy.stripe.com/tu_enlace_de_pago_real")
+        if st.button("Continuar con Pro · 19 €/mes", use_container_width=True, type="primary"):
+            resultado = guardar_suscriptor_supabase(email_vip, "vip")
+            if resultado in ("success", "exists"):
+                url_segura = html.escape(url_stripe, quote=True)
+                render_html(
+                    f'''<div class="stripe-cta"><a href="{url_segura}" target="_blank" rel="noopener noreferrer">Continuar al pago seguro →</a></div>''',
+                    unsafe_allow_html=True,
+                )
+                st.caption(
+                    "Tu email ha quedado registrado para Pro. Completa ahora el pago."
+                    if resultado == "success"
+                    else "Tu email ya estaba registrado. Puedes continuar al pago."
+                )
+            elif resultado == "invalid":
+                st.error("Introduce un email válido antes de continuar.")
+            else:
+                st.error("No hemos podido preparar tu suscripción. Inténtalo de nuevo.")
 
+    render_html(
+        '''<div class="subscription-note"><strong>Importante:</strong> el registro en Supabase identifica tu email. Para considerar una suscripción Pro como <strong>pagada y activa</strong>, conecta Stripe mediante un webhook que confirme el pago y gestione altas, renovaciones y cancelaciones.</div>''',
+        unsafe_allow_html=True,
+    )
 
 # ============================================================
 # FOOTER
