@@ -4174,8 +4174,8 @@ with tab_inicio:
         </div>
       </section>
 
-      <section class="aq-section" id="oportunidad-demo" style="padding-bottom: 20px;">
-        <div class="aq-section-head" style="margin-bottom: 12px;">
+      <section class="aq-section" id="oportunidad-demo">
+        <div class="aq-section-head">
           <div>
             <div class="aq-eyebrow">PRODUCTO</div>
             <h2>Una oportunidad, de un vistazo.</h2>
@@ -4252,13 +4252,9 @@ with tab_inicio:
           <div class="aq-eyebrow">ALURA QUANT</div>
           <h2>El mercado no necesita más ruido.</h2>
           <p>Necesita mejores filtros. Explora el sistema y decide qué nivel de información quieres recibir.</p>
-    """)
-
-    # Botón nativo de Streamlit que ejecuta un rerun para reflejar el salto a la pestaña de planes
-    if st.button("Ver planes y suscripción →", key="btn_ir_planes", type="primary"):
-        st.rerun()
-
-    render_html("""
+          <div class="aq-actions">
+            <a class="aq-btn primary" href="#planes-top" onclick="(function(){var b=[...document.querySelectorAll('button[data-baseweb=\"tab\"]')].find(function(x){return x.innerText.trim()==='Planes';});if(b)b.click();})();" style="background:#fff;color:#0b1220;border-color:#fff;">Ver planes y suscripción →</a>
+          </div>
         </div>
       </section>
     </div>
