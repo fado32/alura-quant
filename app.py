@@ -2775,1601 +2775,347 @@ fecha_actualizacion_sistema = obtener_fecha_ultima_actualizacion(df_hist)
 
 
 # ============================================================
-# ANCLA SUPERIOR
+# ALURA QUANT — LANDING + PRODUCT UI V2
 # ============================================================
 
-render_html(
-    """
-<div id="top"></div>
-""",
-    unsafe_allow_html=True,
+# Datos globales
+
+df_hist = preparar_fecha(cargar_datos())
+metricas = calcular_metricas(df_hist)
+total_alertas = metricas["total_alertas"]
+exitos = metricas["exitos"]
+fallos = metricas["fallos"]
+activas = metricas["activas"]
+win_rate = metricas["win_rate"]
+
+if not df_hist.empty and "Estado" in df_hist.columns:
+    df_activas_global = df_hist[
+        df_hist["Estado"].astype(str).str.contains("ACTIVA", na=False, regex=False)
+    ].copy()
+else:
+    df_activas_global = pd.DataFrame()
+
+precios_actuales = obtener_precios_activos(df_activas_global)
+beneficio_realizado = calcular_beneficio_realizado(df_hist)
+beneficio_no_realizado, posiciones_con_beneficio, posiciones_con_perdida = calcular_beneficio_no_realizado(
+    df_activas_global, precios_actuales
+)
+beneficio_acumulado = beneficio_realizado + beneficio_no_realizado
+capital_inicial = max(3600.0, max(1, len(df_hist)) * CAPITAL_POR_ALERTA)
+rentabilidad_pct = (beneficio_acumulado / capital_inicial * 100) if capital_inicial else 0
+beneficio_realizado_curva, fechas_curva, beneficios_curva = calcular_resultados(
+    df_hist, beneficio_no_realizado
 )
 
 
-# ============================================================
-# HERO
-# ============================================================
+def obtener_fecha_ultima_actualizacion(df):
+    try:
+        candidatos = []
+        for col in ("Ultima_Actualizacion", "Fecha", "Fecha_Mercado_Actual"):
+            if col in df.columns:
+                serie = pd.to_datetime(df[col], errors="coerce").dropna()
+                if not serie.empty:
+                    candidatos.append(serie.max())
+        if candidatos:
+            return max(candidatos).strftime("%d/%m/%Y %H:%M")
+    except Exception:
+        pass
+    return datetime.now().strftime("%d/%m/%Y %H:%M")
 
-render_html(
-    """
-<div class="hero hero-v2">
-    <div class="hero-copy">
-        <div class="hero-eyebrow">ALURA QUANT · INVESTMENT INTELLIGENCE</div>
-        <h1 class="hero-title">
-            Inteligencia cuantitativa<br>para encontrar oportunidades.
-        </h1>
-        <div class="hero-subtitle">
-            Monitorizamos el mercado, filtramos el ruido y combinamos métricas cuantitativas con IA para detectar y seguir oportunidades de inversión.
-        </div>
-        <div class="hero-actions">
-            <a href="#oportunidades" class="hero-btn primary">Explorar oportunidades →</a>
-            <a href="#metodologia" class="hero-btn secondary">Cómo funciona</a>
-        </div>
-    </div>
-    <div class="hero-orbit" aria-hidden="true">
-        <div class="orbit-card"><span>QUANT SCORE</span><strong>82</strong><small>Alta convicción</small></div>
-        <div class="orbit-line"></div>
-    </div>
+fecha_actualizacion_sistema = obtener_fecha_ultima_actualizacion(df_hist)
+
+# ------------------------------------------------------------
+# LANDING / APP CSS
+# ------------------------------------------------------------
+render_html("""
+<style>
+:root{
+    --aq-bg:#f6f8fb; --aq-surface:#fff; --aq-text:#0f172a; --aq-muted:#64748b;
+    --aq-border:#e5eaf1; --aq-blue:#2563eb; --aq-blue-dark:#1d4ed8;
+    --aq-blue-soft:#eff6ff; --aq-green:#16a34a; --aq-red:#dc2626;
+    --aq-shadow:0 18px 55px rgba(15,23,42,.07);
+}
+.aq-wrap{max-width:1240px;margin:0 auto}.aq-eyebrow{font-size:12px;letter-spacing:.16em;font-weight:800;color:var(--aq-blue);text-transform:uppercase;margin-bottom:14px}
+.aq-hero{padding:54px 0 34px;position:relative;overflow:hidden}.aq-hero:before{content:"";position:absolute;inset:-140px 15% auto;height:360px;background:radial-gradient(circle,rgba(37,99,235,.12),transparent 68%);pointer-events:none}
+.aq-hero-grid{display:grid;grid-template-columns:1.03fr .97fr;gap:48px;align-items:center;position:relative}.aq-hero h1{font-family:'Plus Jakarta Sans',sans-serif;font-size:clamp(42px,5.5vw,72px);line-height:1.02;letter-spacing:-.055em;margin:0 0 22px;color:#0b1220;font-weight:800}.aq-hero h1 span{color:var(--aq-blue)}.aq-hero p{font-size:19px;line-height:1.65;color:var(--aq-muted);max-width:650px;margin:0 0 28px}.aq-actions{display:flex;gap:12px;flex-wrap:wrap}.aq-btn{display:inline-flex;align-items:center;justify-content:center;padding:13px 19px;border-radius:12px;font-weight:700;text-decoration:none;border:1px solid var(--aq-border);background:#fff;color:var(--aq-text);box-shadow:0 3px 12px rgba(15,23,42,.04)}.aq-btn.primary{background:var(--aq-blue);border-color:var(--aq-blue);color:#fff}.aq-btn.primary:hover{background:var(--aq-blue-dark)}
+.aq-terminal{background:#0b1220;border:1px solid #1e293b;border-radius:22px;padding:20px;box-shadow:var(--aq-shadow);color:#e2e8f0}.aq-terminal-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;color:#94a3b8;font-size:12px}.aq-live{display:inline-flex;gap:7px;align-items:center}.aq-live i{width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block}.aq-scan{font-family:'Plus Jakarta Sans',sans-serif;font-size:28px;font-weight:800;margin-bottom:3px}.aq-terminal-muted{color:#94a3b8;font-size:12px}.aq-mini-row{display:grid;grid-template-columns:1fr 70px 64px;gap:12px;align-items:center;padding:13px 0;border-top:1px solid #1e293b}.aq-mini-ticker{font-weight:700}.aq-mini-score{font-weight:800;text-align:right}.aq-mini-state{font-size:12px;text-align:right;color:#4ade80}.aq-mini-bar{height:5px;background:#1e293b;border-radius:99px;overflow:hidden;margin-top:7px}.aq-mini-bar span{display:block;height:100%;background:#60a5fa;border-radius:99px}
+.aq-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--aq-border);border:1px solid var(--aq-border);border-radius:18px;overflow:hidden;margin:28px 0 76px}.aq-stat{background:#fff;padding:25px 22px}.aq-stat-value{font-family:'Plus Jakarta Sans',sans-serif;font-size:30px;font-weight:800;letter-spacing:-.03em}.aq-stat-label{font-size:13px;color:var(--aq-muted);margin-top:5px}.aq-section{padding:34px 0 82px}.aq-section.center{text-align:center}.aq-section h2{font-family:'Plus Jakarta Sans',sans-serif;font-size:clamp(30px,4vw,46px);letter-spacing:-.045em;line-height:1.08;margin:0 0 16px}.aq-section-intro{color:var(--aq-muted);font-size:17px;line-height:1.7;max-width:700px;margin:0 auto 38px}.aq-problem{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:stretch}.aq-problem-card{background:#fff;border:1px solid var(--aq-border);border-radius:20px;padding:32px;box-shadow:0 8px 28px rgba(15,23,42,.035)}.aq-problem-card h3{font-family:'Plus Jakarta Sans',sans-serif;font-size:23px;margin:0 0 13px}.aq-problem-card p{color:var(--aq-muted);line-height:1.7;margin:0}.aq-problem-card.accent{background:linear-gradient(145deg,#0f172a,#172554);color:#fff;border-color:#172554}.aq-problem-card.accent p{color:#cbd5e1}
+.aq-flow{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;align-items:center}.aq-flow-item{background:#fff;border:1px solid var(--aq-border);border-radius:16px;padding:19px 12px;text-align:center;min-height:100px;display:flex;flex-direction:column;justify-content:center}.aq-flow-item strong{font-size:14px}.aq-flow-item span{font-size:11px;color:var(--aq-muted);margin-top:6px}.aq-arrow{text-align:center;color:#94a3b8;font-size:20px}
+.aq-engine{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}.aq-engine-card{background:#fff;border:1px solid var(--aq-border);border-radius:18px;padding:24px;min-height:190px}.aq-engine-number{font-size:12px;color:var(--aq-blue);font-weight:800;letter-spacing:.12em}.aq-engine-card h3{font-family:'Plus Jakarta Sans',sans-serif;margin:14px 0 9px;font-size:19px}.aq-engine-card p{font-size:14px;color:var(--aq-muted);line-height:1.65;margin:0}
+.aq-opportunity{display:grid;grid-template-columns:1.1fr .9fr;gap:22px}.aq-op-card{background:#fff;border:1px solid var(--aq-border);border-radius:22px;padding:28px;box-shadow:var(--aq-shadow)}.aq-op-head{display:flex;justify-content:space-between;gap:15px;align-items:flex-start}.aq-ticker{font-family:'Plus Jakarta Sans',sans-serif;font-size:28px;font-weight:800}.aq-company{font-size:13px;color:var(--aq-muted);margin-top:4px}.aq-score{font-family:'Plus Jakarta Sans',sans-serif;font-size:30px;font-weight:800;color:var(--aq-blue);text-align:right}.aq-score small{display:block;font-size:10px;letter-spacing:.12em;color:#94a3b8}.aq-op-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:24px 0}.aq-metric{background:#f8fafc;border-radius:12px;padding:12px}.aq-metric label{display:block;color:#94a3b8;font-size:10px;text-transform:uppercase;letter-spacing:.08em}.aq-metric strong{display:block;margin-top:5px;font-size:15px}.aq-bar{height:7px;background:#e8edf4;border-radius:99px;position:relative;margin:28px 0 20px}.aq-bar:before{content:"";position:absolute;left:0;top:0;height:100%;width:36%;background:#ef4444;border-radius:99px}.aq-bar:after{content:"";position:absolute;right:0;top:0;height:100%;width:22%;background:#22c55e;border-radius:99px}.aq-op-copy{color:var(--aq-muted);line-height:1.7;font-size:14px}.aq-ai{background:#0f172a;color:#fff;border-radius:22px;padding:30px}.aq-ai .aq-eyebrow{color:#60a5fa}.aq-ai h3{font-family:'Plus Jakarta Sans',sans-serif;font-size:26px;margin:0 0 15px}.aq-ai p{color:#cbd5e1;line-height:1.75}.aq-ai-state{display:inline-flex;border:1px solid #334155;border-radius:99px;padding:7px 11px;color:#86efac;font-size:12px;font-weight:700;margin-bottom:18px}
+.aq-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.aq-step{padding:26px;border:1px solid var(--aq-border);background:#fff;border-radius:18px}.aq-step strong{font-family:'Plus Jakarta Sans',sans-serif;font-size:16px}.aq-step p{font-size:14px;color:var(--aq-muted);line-height:1.65}.aq-cta{background:linear-gradient(135deg,#0f172a,#1d4ed8);border-radius:26px;color:#fff;padding:58px 45px;text-align:center;box-shadow:var(--aq-shadow)}.aq-cta h2{margin-bottom:12px}.aq-cta p{color:#dbeafe;max-width:650px;margin:0 auto 24px;line-height:1.7}.aq-cta .aq-btn{background:#fff;color:#0f172a;border-color:#fff}
+.aq-pricing-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;max-width:940px;margin:0 auto}.aq-price{background:#fff;border:1px solid var(--aq-border);border-radius:22px;padding:30px}.aq-price.pro{border:2px solid var(--aq-blue);box-shadow:0 18px 50px rgba(37,99,235,.12)}.aq-price-badge{font-size:11px;font-weight:800;letter-spacing:.14em;color:var(--aq-blue)}.aq-price h3{font-family:'Plus Jakarta Sans',sans-serif;font-size:25px;margin:10px 0}.aq-price-num{font-family:'Plus Jakarta Sans',sans-serif;font-size:38px;font-weight:800}.aq-price-num span{font-family:'DM Sans',sans-serif;font-size:13px;color:var(--aq-muted);font-weight:500}.aq-price p{color:var(--aq-muted);line-height:1.6}.aq-price ul{padding:0;margin:20px 0 24px;list-style:none}.aq-price li{padding:8px 0;color:#334155;font-size:14px}.aq-sub-box{margin-top:20px;padding-top:20px;border-top:1px solid var(--aq-border)}
+.aq-note{font-size:12px;color:#64748b;line-height:1.6;margin-top:14px}.aq-footer{border-top:1px solid var(--aq-border);padding:24px 0 10px;color:#94a3b8;font-size:12px;display:flex;justify-content:space-between;gap:15px}
+.aq-dashboard-head{display:flex;justify-content:space-between;align-items:end;gap:20px;margin:25px 0}.aq-dashboard-head h2{font-family:'Plus Jakarta Sans',sans-serif;font-size:34px;letter-spacing:-.04em;margin:0}.aq-dashboard-head p{color:var(--aq-muted);margin:6px 0 0}.aq-panel{background:#fff;border:1px solid var(--aq-border);border-radius:18px;padding:22px;margin-bottom:18px}.aq-panel-title{font-family:'Plus Jakarta Sans',sans-serif;font-size:18px;font-weight:700;margin-bottom:5px}.aq-panel-sub{font-size:13px;color:var(--aq-muted);margin-bottom:18px}
+@media(max-width:900px){.aq-hero-grid,.aq-problem,.aq-opportunity{grid-template-columns:1fr}.aq-stats{grid-template-columns:repeat(2,1fr)}.aq-engine{grid-template-columns:repeat(2,1fr)}.aq-flow{grid-template-columns:1fr}.aq-arrow{display:none}.aq-pricing-grid{grid-template-columns:1fr}.aq-hero{padding-top:30px}}
+@media(max-width:600px){.aq-stats,.aq-engine,.aq-steps{grid-template-columns:1fr}.aq-hero h1{font-size:42px}.aq-op-metrics{grid-template-columns:repeat(2,1fr)}.aq-footer{flex-direction:column}.block-container{padding-left:18px;padding-right:18px}}
+</style>
+""")
+
+# ------------------------------------------------------------
+# NAV
+# ------------------------------------------------------------
+render_html(f"""
+<div class='aq-wrap' id='top'>
+  <div style='display:flex;justify-content:space-between;align-items:center;padding:8px 0 14px;border-bottom:1px solid #e5eaf1;'>
+    <div style='font-family:Plus Jakarta Sans,sans-serif;font-weight:800;letter-spacing:-.04em;font-size:20px;'>ALURA <span style='color:#2563eb;'>QUANT</span></div>
+    <div style='font-size:12px;color:#64748b;'>INVESTMENT INTELLIGENCE · ACTUALIZADO {html.escape(fecha_actualizacion_sistema)}</div>
+  </div>
 </div>
-""",
-    unsafe_allow_html=True,
-)
+""")
 
+# ------------------------------------------------------------
+# TABS DE PRODUCTO
+# ------------------------------------------------------------
+tab_inicio, tab_oportunidades, tab_cartera, tab_resultados, tab_historial, tab_planes = st.tabs([
+    "Inicio", "Oportunidades", "Cartera", "Resultados", "Histórico", "Planes"
+])
 
-# ============================================================
-# PORTFOLIO SUMMARY
-# ============================================================
-
-render_html(
-    f"""
-<div class="portfolio-summary">
-
-    <div class="summary-card">
-
-        <div class="summary-label">
-            Beneficio total
+# ------------------------------------------------------------
+# 01. LANDING
+# ------------------------------------------------------------
+with tab_inicio:
+    render_html(f"""
+    <div class='aq-wrap'>
+      <section class='aq-hero'>
+        <div class='aq-hero-grid'>
+          <div>
+            <div class='aq-eyebrow'>ALURA QUANT · INVESTMENT INTELLIGENCE</div>
+            <h1>El mercado genera miles de señales.<br><span>Nosotros filtramos el ruido.</span></h1>
+            <p>Algoritmos cuantitativos, análisis técnico e inteligencia artificial para detectar, puntuar y monitorizar oportunidades de mercado.</p>
+            <div class='aq-actions'>
+              <a class='aq-btn primary' href='#planes'>Explorar Alura Quant →</a>
+              <a class='aq-btn' href='#motor'>Cómo funciona</a>
+            </div>
+          </div>
+          <div class='aq-terminal'>
+            <div class='aq-terminal-top'><span>MARKET SCANNER</span><span class='aq-live'><i></i> LIVE ENGINE</span></div>
+            <div class='aq-scan'>{TOTAL_ACTIVOS_UNIVERSO:,}</div>
+            <div class='aq-terminal-muted'>activos monitorizados por el sistema</div>
+            <div style='height:15px'></div>
+            {''.join([f"<div class='aq-mini-row'><div><div class='aq-mini-ticker'>{safe_text(r.get('Ticker'))}</div><div class='aq-mini-bar'><span style='width:{max(8,min(100,int(safe_float(r.get('Score_Entrada'), safe_float(r.get('Score_Actual'), 0)) or 0)))}%'></span></div></div><div class='aq-mini-score'>{formatear_numero(safe_float(r.get('Score_Entrada'), safe_float(r.get('Score_Actual'), 0)),0)}</div><div class='aq-mini-state'>ACTIVE</div></div>" for _,r in df_activas_global.head(4).iterrows()]) if not df_activas_global.empty else "<div style='padding:24px 0;color:#94a3b8;font-size:13px;'>El motor mostrará aquí las oportunidades activas.</div>"}
+          </div>
         </div>
+      </section>
 
-        <div
-            class="summary-value"
-            style="color:{color_resultado};"
-        >
-            {formatear_numero(
-                beneficio_acumulado,
-                2,
-                " €",
-                True
-            )}
+      <div class='aq-stats'>
+        <div class='aq-stat'><div class='aq-stat-value'>{TOTAL_ACTIVOS_UNIVERSO:,}</div><div class='aq-stat-label'>activos monitorizados</div></div>
+        <div class='aq-stat'><div class='aq-stat-value'>{activas}</div><div class='aq-stat-label'>oportunidades activas</div></div>
+        <div class='aq-stat'><div class='aq-stat-value'>{formatear_numero(win_rate,1,'%')}</div><div class='aq-stat-label'>win rate histórico</div></div>
+        <div class='aq-stat'><div class='aq-stat-value'>{formatear_numero(rentabilidad_pct,1,'% ',True)}</div><div class='aq-stat-label'>rentabilidad del modelo</div></div>
+      </div>
+
+      <section class='aq-section'>
+        <div class='aq-problem'>
+          <div class='aq-problem-card'><div class='aq-eyebrow'>EL PROBLEMA</div><h3>El problema no es encontrar información.</h3><p>Cada día aparecen miles de movimientos, indicadores, noticias y señales. El reto es decidir qué merece realmente tu atención.</p></div>
+          <div class='aq-problem-card accent'><div class='aq-eyebrow' style='color:#60a5fa;'>LA PROPUESTA</div><h3>Del mercado completo a unas pocas oportunidades.</h3><p>Alura Quant automatiza el proceso de análisis, aplica filtros cuantitativos y convierte los resultados en oportunidades que puedes monitorizar.</p></div>
         </div>
+      </section>
 
-        <div class="summary-detail">
-            Realizado + abierto
+      <section class='aq-section center' id='motor'>
+        <div class='aq-eyebrow'>EL MOTOR QUANT</div>
+        <h2>Menos ruido. Más proceso.</h2>
+        <p class='aq-section-intro'>No buscamos predecir el mercado. Construimos un proceso sistemático para filtrar, puntuar y seguir configuraciones que cumplen nuestros criterios.</p>
+        <div class='aq-flow'>
+          <div class='aq-flow-item'><strong>Mercado</strong><span>universo de activos</span></div><div class='aq-arrow'>→</div>
+          <div class='aq-flow-item'><strong>Filtros</strong><span>liquidez y tendencia</span></div><div class='aq-arrow'>→</div>
+          <div class='aq-flow-item'><strong>Quant Score</strong><span>factores técnicos</span></div><div class='aq-arrow'>→</div>
+          <div class='aq-flow-item'><strong>AI Thesis</strong><span>contexto y seguimiento</span></div>
         </div>
+      </section>
 
+      <section class='aq-section'>
+        <div class='aq-engine'>
+          <div class='aq-engine-card'><div class='aq-engine-number'>01 · QUANT</div><h3>Motor cuantitativo</h3><p>Precio, tendencia, momentum, volatilidad, volumen y estructura técnica en una única capa de análisis.</p></div>
+          <div class='aq-engine-card'><div class='aq-engine-number'>02 · FILTERS</div><h3>Filtros de mercado</h3><p>Reducimos el universo para concentrar el análisis en activos que cumplen las condiciones definidas.</p></div>
+          <div class='aq-engine-card'><div class='aq-engine-number'>03 · SCORE</div><h3>Quant Score</h3><p>Cada oportunidad recibe una puntuación para facilitar la comparación y priorización.</p></div>
+          <div class='aq-engine-card'><div class='aq-engine-number'>04 · AI</div><h3>AI Thesis</h3><p>La IA convierte el contexto cuantitativo en una tesis legible y monitorizable.</p></div>
+        </div>
+      </section>
+
+      <section class='aq-section center'>
+        <div class='aq-eyebrow'>UNA OPORTUNIDAD, DE PRINCIPIO A FIN</div>
+        <h2>Así se presenta una señal</h2>
+        <p class='aq-section-intro'>Una única ficha reúne entrada, riesgo, objetivo, score y tesis para que entiendas el contexto sin saltar entre herramientas.</p>
+      </section>
     </div>
+    """)
 
-
-    <div class="summary-card">
-
-        <div class="summary-label">
-            Rentabilidad
+    # Demo dinámica de oportunidad
+    demo = df_activas_global.iloc[0] if not df_activas_global.empty else (df_hist.iloc[0] if not df_hist.empty else None)
+    if demo is not None:
+        ticker=safe_text(demo.get('Ticker')); empresa=safe_text(demo.get('Empresa'))
+        entrada=safe_float(demo.get('Precio_Alerta'), safe_float(demo.get('Precio_Actual')))
+        actual=safe_float(demo.get('Precio_Actual'), entrada); sl=safe_float(demo.get('Stop_Loss')); tp=safe_float(demo.get('Take_Profit'))
+        score=safe_float(demo.get('Score_Entrada'), safe_float(demo.get('Score_Actual'),0)) or 0
+        rr=safe_float(demo.get('Ratio_RR'))
+        tesis=formatear_tesis_ia(demo.get('Analisis_IA_Entrada'))
+        estado=safe_text(demo.get('Estado_Estrategia'), 'Monitorizada')
+        render_html(f"""
+        <div class='aq-wrap'>
+          <section class='aq-section'>
+            <div class='aq-opportunity'>
+              <div class='aq-op-card'>
+                <div class='aq-op-head'><div><div class='aq-eyebrow'>OPORTUNIDAD ACTIVA</div><div class='aq-ticker'>{ticker}</div><div class='aq-company'>{empresa}</div></div><div class='aq-score'>{formatear_numero(score,0)}<small>QUANT SCORE</small></div></div>
+                <div class='aq-op-metrics'>
+                  <div class='aq-metric'><label>Entrada</label><strong>{formatear_numero(entrada,2,' €') if entrada is not None else '—'}</strong></div>
+                  <div class='aq-metric'><label>Actual</label><strong>{formatear_numero(actual,2,' €') if actual is not None else '—'}</strong></div>
+                  <div class='aq-metric'><label>Stop Loss</label><strong>{formatear_numero(sl,2,' €') if sl is not None else '—'}</strong></div>
+                  <div class='aq-metric'><label>Take Profit</label><strong>{formatear_numero(tp,2,' €') if tp is not None else '—'}</strong></div>
+                </div>
+                <div class='aq-bar'></div>
+                <div style='display:flex;justify-content:space-between;font-size:11px;color:#94a3b8;'><span>STOP</span><span>ENTRADA / ACTUAL</span><span>TAKE PROFIT</span></div>
+                <div style='margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;'><span style='background:#ecfdf3;color:#15803d;padding:7px 10px;border-radius:99px;font-size:12px;font-weight:700;'>● {estado}</span>{f"<span style='background:#eff6ff;color:#1d4ed8;padding:7px 10px;border-radius:99px;font-size:12px;font-weight:700;'>R:R {formatear_numero(rr,1)}</span>" if rr is not None else ''}</div>
+              </div>
+              <div class='aq-ai'><div class='aq-eyebrow'>AI THESIS ENGINE</div><div class='aq-ai-state'>● TESIS MONITORIZADA</div><h3>Datos → Score → Tesis</h3><p>{tesis}</p><p style='font-size:12px;color:#94a3b8;'>La tesis se compara con la situación actual para detectar si el contexto se mantiene, se refuerza, se debilita o se invalida.</p></div>
+            </div>
+          </section>
         </div>
+        """)
+    else:
+        render_html("<div class='aq-wrap'><div class='aq-panel'>Todavía no hay una oportunidad disponible para mostrar como ejemplo.</div></div>")
 
-        <div
-            class="summary-value"
-            style="color:{color_resultado};"
-        >
-            {formatear_numero(
-                rentabilidad_pct,
-                2,
-                "%",
-                True
-            )}
+    render_html("""
+    <div class='aq-wrap'>
+      <section class='aq-section center'>
+        <div class='aq-eyebrow'>TRANSPARENCIA</div>
+        <h2>Del dato a la decisión informada.</h2>
+        <p class='aq-section-intro'>Alura Quant no elimina el riesgo del mercado. Hace visible el proceso que hay detrás de cada oportunidad para que puedas evaluar el contexto por ti mismo.</p>
+        <div class='aq-steps'>
+          <div class='aq-step'><strong>01 · Detectar</strong><p>El motor analiza el universo y encuentra configuraciones que cumplen los filtros.</p></div>
+          <div class='aq-step'><strong>02 · Entender</strong><p>El Quant Score y la tesis explican por qué una oportunidad ha pasado el filtro.</p></div>
+          <div class='aq-step'><strong>03 · Monitorizar</strong><p>La operación continúa evolucionando y el sistema actualiza su estado.</p></div>
         </div>
-
-        <div class="summary-detail">
-            Sobre {formatear_numero(
-                CAPITAL_INICIAL,
-                0,
-                " €"
-            )}
-        </div>
-
+      </section>
     </div>
+    """)
 
-
-    <div class="summary-card">
-
-        <div class="summary-label">
-            Posiciones activas
+    # Performance breve
+    render_html(f"""
+    <div class='aq-wrap'>
+      <section class='aq-section'>
+        <div class='aq-panel'>
+          <div class='aq-eyebrow'>PERFORMANCE</div>
+          <div style='display:flex;justify-content:space-between;align-items:end;gap:20px;flex-wrap:wrap;'><div><h2 style='font-family:Plus Jakarta Sans,sans-serif;font-size:32px;letter-spacing:-.04em;margin:0;'>Resultados del sistema</h2><p style='color:#64748b;'>Histórico calculado a partir de las operaciones registradas.</p></div><div style='font-size:30px;font-weight:800;color:{'#16a34a' if beneficio_acumulado>=0 else '#dc2626'};'>{formatear_numero(beneficio_acumulado,2,' €',True)}</div></div>
         </div>
-
-        <div class="summary-value">
-            {activas}
-        </div>
-
-        <div class="summary-detail">
-            {TOTAL_ACTIVOS_UNIVERSO} activos monitorizados
-        </div>
-
+      </section>
+      <section class='aq-section' id='planes'>
+        <div class='aq-cta'><div class='aq-eyebrow' style='color:#93c5fd;'>ALURA QUANT</div><h2>El mercado no necesita más ruido.</h2><p>Necesita mejores filtros. Explora el sistema y decide qué nivel de información quieres recibir.</p><a class='aq-btn' href='#planes'>Ver planes y suscripción →</a></div>
+      </section>
     </div>
+    """)
 
+# ------------------------------------------------------------
+# 02. OPORTUNIDADES
+# ------------------------------------------------------------
+with tab_oportunidades:
+    render_html("<div class='aq-dashboard-head'><div><h2>Oportunidades activas</h2><p>Señales que actualmente cumplen las condiciones de monitorización.</p></div></div>")
+    if df_activas_global.empty:
+        st.info("No hay oportunidades activas en este momento.")
+    else:
+        c1,c2=st.columns([1,1])
+        with c1:
+            sectores=sorted(df_activas_global['Sector'].dropna().astype(str).unique().tolist()) if 'Sector' in df_activas_global.columns else []
+            filtro_sector=st.selectbox('Sector',['Todos']+sectores,key='opp_sector')
+        with c2:
+            busqueda=st.text_input('Buscar',placeholder='Ticker o empresa...',key='opp_search')
+        dfo=df_activas_global.copy()
+        if filtro_sector!='Todos' and 'Sector' in dfo.columns: dfo=dfo[dfo['Sector'].astype(str)==filtro_sector]
+        if busqueda:
+            q=busqueda.lower(); dfo=dfo[dfo.apply(lambda r:q in str(r.get('Ticker','')).lower() or q in str(r.get('Empresa','')).lower(),axis=1)]
+        for _,r in dfo.iterrows():
+            ticker=safe_text(r.get('Ticker')); empresa=safe_text(r.get('Empresa')); score=safe_float(r.get('Score_Entrada'),safe_float(r.get('Score_Actual'),0)) or 0
+            entrada=safe_float(r.get('Precio_Alerta'),safe_float(r.get('Precio_Actual'))); actual=safe_float(r.get('Precio_Actual')); sl=safe_float(r.get('Stop_Loss')); tp=safe_float(r.get('Take_Profit')); rr=safe_float(r.get('Ratio_RR'))
+            st.markdown(f"**{ticker} — {empresa}**  ·  **Score {formatear_numero(score,0)}**  ·  Entrada {formatear_numero(entrada,2,' €')}  ·  Actual {formatear_numero(actual,2,' €')}  ·  SL {formatear_numero(sl,2,' €')}  ·  TP {formatear_numero(tp,2,' €')}  ·  R:R {formatear_numero(rr,1) if rr is not None else '—'}")
+            st.divider()
 
-    <div class="summary-card">
-
-        <div class="summary-label">
-            Win Rate
-        </div>
-
-        <div class="summary-value">
-            {formatear_numero(
-                win_rate,
-                1,
-                "%"
-            )}
-        </div>
-
-        <div class="summary-detail">
-            {exitos} TP · {fallos} SL
-        </div>
-
-    </div>
-
-</div>
-""",
-    unsafe_allow_html=True,
-)
-
-
-# ============================================================
-# SI NO HAY DATOS
-# ============================================================
-
-if df_hist.empty:
-
-    render_html(
-        """
-<div class="empty-state">
-
-    <div class="empty-icon">
-        ◌
-    </div>
-
-    <div class="empty-title">
-        Todavía no hay señales registradas
-    </div>
-
-    <div class="empty-text">
-        Cuando Alura Quant genere señales aparecerán aquí.
-    </div>
-
-</div>
-""",
-        unsafe_allow_html=True,
-    )
-
-    st.stop()
-
-
-# ============================================================
-# NAVEGACIÓN
-# ============================================================
-
-tab_cartera, tab_resultados, tab_historial, tab_planes = st.tabs(
-    [
-        "Cartera",
-        "Resultados",
-        "Histórico",
-        "Planes y Suscripción"
-    ]
-)
-
-
-# ============================================================
-# 1. CARTERA
-# ============================================================
-
+# ------------------------------------------------------------
+# 03. CARTERA
+# ------------------------------------------------------------
 with tab_cartera:
-
-    render_html(
-        """
-<div id="oportunidades"></div>
-<div class="section-header">
-
-    <div>
-
-        <div class="section-title">
-            Posiciones activas
-        </div>
-
-        <div class="section-subtitle">
-            Señales actualmente monitorizadas por el sistema cuantitativo.
-        </div>
-
-    </div>
-
-</div>
-""",
-        unsafe_allow_html=True,
-    )
-
-
-    df_activas = df_activas_global.copy()
-
-
-    if df_activas.empty:
-
-        render_html(
-            """
-<div class="empty-state">
-
-    <div class="empty-icon">
-        ◌
-    </div>
-
-    <div class="empty-title">
-        No hay posiciones activas
-    </div>
-
-    <div class="empty-text">
-        Las nuevas señales aparecerán automáticamente en esta sección.
-    </div>
-
-</div>
-""",
-            unsafe_allow_html=True,
-        )
-
+    render_html("<div class='aq-dashboard-head'><div><h2>Cartera</h2><p>Vista operativa de las posiciones activas monitorizadas.</p></div></div>")
+    if df_activas_global.empty:
+        st.info("No hay posiciones activas.")
     else:
-
-        # ----------------------------------------------------
-        # FILTROS
-        # ----------------------------------------------------
-
-        col_filtro_1, col_filtro_2 = st.columns(
-            [1, 1],
-            gap="small"
-        )
-
-        with col_filtro_1:
-
-            if "Sector" in df_activas.columns:
-
-                sectores = (
-                    df_activas["Sector"]
-                    .dropna()
-                    .astype(str)
-                    .unique()
-                    .tolist()
-                )
-
-                sectores = sorted(
-                    sectores
-                )
-
-            else:
-
-                sectores = []
-
-            sectores_disponibles = [
-                "Todos los sectores"
-            ] + sectores
-
-            filtro_sector = st.selectbox(
-                "Sector",
-                sectores_disponibles,
-                label_visibility="collapsed"
-            )
-
-
-        with col_filtro_2:
-
-            busqueda_cartera = st.text_input(
-                "Buscar",
-                placeholder="⌕  Buscar empresa o ticker...",
-                label_visibility="collapsed"
-            )
-
-
-        # ----------------------------------------------------
-        # FILTRAR
-        # ----------------------------------------------------
-
-        df_filtrada = (
-            df_activas.copy()
-        )
-
-
-        if (
-            filtro_sector
-            != "Todos los sectores"
-            and "Sector"
-            in df_filtrada.columns
-        ):
-
-            df_filtrada = df_filtrada[
-                df_filtrada["Sector"]
-                .astype(str)
-                ==
-                filtro_sector
-            ]
-
-
-        if busqueda_cartera:
-
-            mask = (
-                df_filtrada
-                .astype(str)
-                .apply(
-                    lambda col:
-                    col.str.contains(
-                        busqueda_cartera,
-                        case=False,
-                        na=False,
-                        regex=False
-                    )
-                )
-                .any(axis=1)
-            )
-
-            df_filtrada = (
-                df_filtrada[mask]
-            )
-
-
-        # ----------------------------------------------------
-        # CONTADOR
-        # ----------------------------------------------------
-
-        render_html(
-            f"""
-<div style="
-    margin:8px 0 14px;
-    color:#94a3b8;
-    font-size:10px;
-    font-weight:700;
-">
-    MOSTRANDO {len(df_filtrada)} POSICIONES
-</div>
-""",
-            unsafe_allow_html=True,
-        )
-
-
-        # ----------------------------------------------------
-        # ASSET CARDS
-        # ----------------------------------------------------
-
-        for _, row in df_filtrada.iterrows():
-
-            icono = safe_text(
-                row.get("Icono"),
-                "📈"
-            )
-
-            empresa = safe_text(
-                row.get(
-                    "Empresa",
-                    row.get(
-                        "Ticker",
-                        "Activo"
-                    )
-                ),
-                "Activo"
-            )
-
-            ticker = safe_text(
-                row.get(
-                    "Ticker"
-                ),
-                ""
-            )
-
-            ticker_raw = str(
-                row.get(
-                    "Ticker",
-                    ""
-                )
-            ).strip()
-
-            sector = safe_text(
-                row.get(
-                    "Sector"
-                ),
-                "Mercado Continuo"
-            )
-
-
-            # ------------------------------------------------
-            # NUEVO
-            # ------------------------------------------------
-
-            es_nuevo = False
-
-            if (
-                "Fecha" in row
-                and pd.notna(row["Fecha"])
-            ):
-
-                try:
-
-                    fecha_alerta = (
-                        row["Fecha"]
-                        .to_pydatetime()
-                        .replace(
-                            tzinfo=None
-                        )
-                    )
-
-                    delta = (
-                        datetime.now()
-                        -
-                        fecha_alerta
-                    )
-
-                    if delta <= timedelta(
-                        hours=48
-                    ):
-
-                        es_nuevo = True
-
-                except Exception:
-                    pass
-
-
-            badge_nuevo = (
-                '<span class="new-badge">'
-                '✦ NUEVO'
-                '</span>'
-                if es_nuevo
-                else ""
-            )
-
-
-            # ------------------------------------------------
-            # PRECIOS
-            # ------------------------------------------------
-
-            precio_actual = (
-                precios_actuales.get(
-                    ticker_raw
-                )
-                if ticker_raw
-                else None
-            )
-
-
-            precio_entrada = safe_float(
-                row.get(
-                    "Precio_Alerta"
-                )
-            )
-
-            stop_loss = safe_float(
-                row.get(
-                    "Stop_Loss"
-                )
-            )
-
-            take_profit = safe_float(
-                row.get(
-                    "Take_Profit"
-                )
-            )
-
-            ratio_rr = safe_float(
-                row.get(
-                    "Ratio_RR"
-                )
-            )
-
-
-            # ------------------------------------------------
-            # P&L ACTUAL
-            # ------------------------------------------------
-
-            (
-                beneficio_posicion,
-                porcentaje_posicion
-            ) = calcular_pnl_posicion(
-                precio_actual,
-                precio_entrada,
-                CAPITAL_POR_ALERTA
-            )
-
-
-            # ------------------------------------------------
-            # PERFORMANCE
-            # ------------------------------------------------
-
-            if (
-                beneficio_posicion is None
-                or porcentaje_posicion is None
-            ):
-
-                performance_text = "—"
-
-                performance_class = (
-                    "performance-neutral"
-                )
-
-            else:
-
-                performance_text = (
-                    f"{formatear_numero(
-                        porcentaje_posicion,
-                        2,
-                        '%',
-                        True
-                    )}"
-                    f" · "
-                    f"{formatear_numero(
-                        beneficio_posicion,
-                        2,
-                        ' €',
-                        True
-                    )}"
-                )
-
-                performance_class = (
-                    "performance-positive"
-                    if beneficio_posicion >= 0
-                    else "performance-negative"
-                )
-
-
-            # ------------------------------------------------
-            # RISK / REWARD
-            # ------------------------------------------------
-
-            ratio_rr_text = (
-                formatear_numero(
-                    ratio_rr,
-                    1,
-                    "x"
-                )
-                if ratio_rr is not None
-                else "—"
-            )
-
-
-            # ------------------------------------------------
-            # PRECIOS DEL TRACKER
-            # ------------------------------------------------
-
-            stop_loss_text = (
-                formatear_numero(
-                    stop_loss,
-                    2
-                )
-                if stop_loss is not None
-                else "—"
-            )
-
-            entrada_text = (
-                formatear_numero(
-                    precio_entrada,
-                    2
-                )
-                if precio_entrada is not None
-                else "—"
-            )
-
-            actual_text = (
-                formatear_numero(
-                    precio_actual,
-                    2
-                )
-                if precio_actual is not None
-                else "—"
-            )
-
-            take_profit_text = (
-                formatear_numero(
-                    take_profit,
-                    2
-                )
-                if take_profit is not None
-                else "—"
-            )
-
-
-            # ------------------------------------------------
-            # POSITION TRACKER
-            # ------------------------------------------------
-
-            positions = (
-                calcular_position_percentages(
-                    stop_loss,
-                    precio_entrada,
-                    precio_actual,
-                    take_profit
-                )
-            )
-
-
-            if positions:
-
-                sl_pct = (
-                    positions["sl"]
-                    if positions["sl"]
-                    is not None
-                    else 0
-                )
-
-                entry_pct = (
-                    positions["entry"]
-                    if positions["entry"]
-                    is not None
-                    else 25
-                )
-
-                current_pct = (
-                    positions["current"]
-                    if positions["current"]
-                    is not None
-                    else entry_pct
-                )
-
-                tp_pct = (
-                    positions["tp"]
-                    if positions["tp"]
-                    is not None
-                    else 100
-                )
-
-
-                risk_left = (
-                    min(
-                        entry_pct,
-                        current_pct
-                    )
-                    -
-                    sl_pct
-                )
-
-                reward_left = (
-                    tp_pct
-                    -
-                    max(
-                        entry_pct,
-                        current_pct
-                    )
-                )
-
-                risk_width = max(
-                    0,
-                    risk_left
-                )
-
-                reward_width = max(
-                    0,
-                    reward_left
-                )
-
-
-                position_tracker = f"""
-<div class="position-wrapper">
-
-    <div class="position-labels">
-
-        <div class="position-label-item">
-
-            <span class="position-label">
-                Stop
-            </span>
-
-            <span class="position-price">
-                {stop_loss_text}
-            </span>
-
-        </div>
-
-
-        <div class="position-label-item">
-
-            <span class="position-label">
-                Entrada
-            </span>
-
-            <span class="position-price">
-                {entrada_text}
-            </span>
-
-        </div>
-
-
-        <div class="position-label-item">
-
-            <span class="position-label">
-                Actual
-            </span>
-
-            <span class="position-price">
-                {actual_text}
-            </span>
-
-        </div>
-
-
-        <div class="position-label-item">
-
-            <span class="position-label">
-                Take Profit
-            </span>
-
-            <span class="position-price">
-                {take_profit_text}
-            </span>
-
-        </div>
-
-    </div>
-
-
-    <div class="position-track">
-
-        <div
-            class="position-risk"
-            style="
-                left:{sl_pct:.2f}%;
-                width:{risk_width:.2f}%;
-            "
-        ></div>
-
-        <div
-            class="position-reward"
-            style="
-                left:{current_pct:.2f}%;
-                width:{reward_width:.2f}%;
-            "
-        ></div>
-
-
-        <div
-            class="position-marker marker-sl"
-            style="
-                left:{sl_pct:.2f}%;
-            "
-        ></div>
-
-        <div
-            class="position-marker marker-entry"
-            style="
-                left:{entry_pct:.2f}%;
-            "
-        ></div>
-
-        <div
-            class="position-marker marker-current"
-            style="
-                left:{current_pct:.2f}%;
-            "
-        ></div>
-
-        <div
-            class="position-marker marker-tp"
-            style="
-                left:{tp_pct:.2f}%;
-            "
-        ></div>
-
-    </div>
-
-</div>
-"""
-
-            else:
-
-                position_tracker = ""
-
-
-            # ------------------------------------------------
-            # PRECIO ACTUAL
-            # ------------------------------------------------
-
-            precio_actual_text = (
-                formatear_numero(
-                    precio_actual,
-                    2
-                )
-                if precio_actual is not None
-                else "—"
-            )
-
-
-            # ------------------------------------------------
-            # TESIS IA
-            # ------------------------------------------------
-
-            analisis_ia_raw = row.get("Analisis_IA_Actual", "")
-            if pd.isna(analisis_ia_raw) or not str(analisis_ia_raw).strip():
-                analisis_ia_raw = row.get("Analisis_IA_Entrada", "")
-            if pd.isna(analisis_ia_raw) or not str(analisis_ia_raw).strip():
-                analisis_ia_raw = row.get("Analisis_IA", "")
-
-            analisis_ia = formatear_tesis_ia(analisis_ia_raw)
-
-
-            # ------------------------------------------------
-            # CARD
-            # ------------------------------------------------
-
-            render_html(
-                f"""
-<div class="asset-card">
-
-    <div class="asset-header">
-
-        <!-- IZQUIERDA: NUEVO + IDENTIDAD -->
-
-        <div class="asset-left">
-
-            <div class="asset-new-row">
-
-                {badge_nuevo}
-
-            </div>
-
-
-            <div class="asset-identity">
-
-                <div class="asset-icon">
-                    {icono}
-                </div>
-
-                <div>
-
-                    <div class="asset-company">
-
-                        {empresa}
-
-                        <span class="asset-ticker">
-                            {ticker}
-                        </span>
-
-                    </div>
-
-                    <div class="asset-sector">
-                        {sector}
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-
-        <!-- DERECHA: PRECIO -->
-
-        <div class="asset-right">
-
-            <div class="current-price">
-                {precio_actual_text}
-            </div>
-
-            <div class="price-label">
-                Precio actual
-            </div>
-
-        </div>
-
-    </div>
-
-
-    <!-- ================================================
-         RISK / REWARD + RENDIMIENTO
-         ================================================ -->
-
-    <div class="performance-row">
-
-        <!-- IZQUIERDA: RISK / REWARD -->
-
-        <div class="performance-rr">
-
-            <div class="performance-rr-label">
-                Risk / Reward
-            </div>
-
-            <div class="performance-rr-value">
-                {ratio_rr_text}
-            </div>
-
-        </div>
-
-
-        <!-- DERECHA: RENDIMIENTO -->
-
-        <div class="performance-left">
-
-            <div class="performance-label">
-                Rendimiento desde entrada
-            </div>
-
-            <div class="performance-value {performance_class}">
-                {performance_text}
-            </div>
-
-        </div>
-
-    </div>
-
-
-    {position_tracker}
-
-
-    <div class="ai-box">
-
-        <div class="ai-header">
-            ✦ Tesis del analista
-        </div>
-
-        <div class="ai-text">
-            {analisis_ia}
-        </div>
-
-    </div>
-
-</div>
-""",
-                unsafe_allow_html=True,
-            )
-
-
-# ============================================================
-# 2. RESULTADOS
-# ============================================================
-
+        cols=[c for c in ['Ticker','Empresa','Sector','Precio_Alerta','Precio_Actual','Stop_Loss','Take_Profit','Score_Actual','P&L_Actual_Pct','Estado_Estrategia'] if c in df_activas_global.columns]
+        st.dataframe(df_activas_global[cols],use_container_width=True,hide_index=True)
+
+# ------------------------------------------------------------
+# 04. RESULTADOS
+# ------------------------------------------------------------
 with tab_resultados:
-
-    render_html(
-        """
-<div class="section-header">
-
-    <div>
-
-        <div class="section-title">
-            Rendimiento
-        </div>
-
-        <div class="section-subtitle">
-            Beneficio realizado + valoración actual de posiciones abiertas.
-        </div>
-
+    render_html(f"""
+    <div class='aq-dashboard-head'><div><h2>Performance</h2><p>Resultados históricos del sistema cuantitativo.</p></div></div>
+    <div class='aq-stats'>
+      <div class='aq-stat'><div class='aq-stat-value'>{formatear_numero(beneficio_acumulado,2,' €',True)}</div><div class='aq-stat-label'>beneficio total</div></div>
+      <div class='aq-stat'><div class='aq-stat-value'>{formatear_numero(rentabilidad_pct,2,'% ',True)}</div><div class='aq-stat-label'>rentabilidad</div></div>
+      <div class='aq-stat'><div class='aq-stat-value'>{formatear_numero(win_rate,1,'%')}</div><div class='aq-stat-label'>win rate</div></div>
+      <div class='aq-stat'><div class='aq-stat-value'>{total_alertas}</div><div class='aq-stat-label'>operaciones registradas</div></div>
     </div>
-
-</div>
-""",
-        unsafe_allow_html=True,
-    )
-
-
-    col_g1, col_g2 = st.columns(
-        [1.55, 0.75],
-        gap="large"
-    )
-
-
-    # --------------------------------------------------------
-    # CHART
-    # --------------------------------------------------------
-
-    with col_g1:
-
-        render_html(
-            f"""
-<div class="result-card">
-
-    <div class="result-header">
-
-        <div>
-
-            <div class="result-title">
-                Evolución de beneficios
-            </div>
-
-            <div class="result-subtitle">
-                Resultado simulado de la cartera
-            </div>
-
-        </div>
-
-
-        <div>
-
-            <div
-                class="result-number"
-                style="
-                    color:{color_resultado};
-                "
-            >
-                {formatear_numero(
-                    beneficio_acumulado,
-                    2,
-                    " €",
-                    True
-                )}
-            </div>
-
-            <div class="result-percent">
-
-                {formatear_numero(
-                    rentabilidad_pct,
-                    2,
-                    "%",
-                    True
-                )}
-                de retorno
-
-            </div>
-
-        </div>
-
-    </div>
-
-
-    <div style="
-        display:flex;
-        gap:16px;
-        font-size:10px;
-        color:#94a3b8;
-        font-weight:600;
-        margin-bottom:3px;
-        flex-wrap:wrap;
-    ">
-
-        <span>
-            ● Realizado:
-            {formatear_numero(
-                beneficio_realizado,
-                2,
-                " €",
-                True
-            )}
-        </span>
-
-        <span>
-            ● Abierto:
-            {formatear_numero(
-                beneficio_no_realizado,
-                2,
-                " €",
-                True
-            )}
-        </span>
-
-    </div>
-
-</div>
-""",
-            unsafe_allow_html=True,
-        )
-
-
-        if fechas_curva:
-
-            df_beneficio = pd.DataFrame(
-                {
-                    "Beneficio Neto (€)":
-                        beneficios_curva
-                },
-                index=fechas_curva
-            )
-
-            st.line_chart(
-                df_beneficio,
-                height=320
-            )
-
-        else:
-
-            render_html(
-                """
-<div class="empty-state">
-
-    <div class="empty-title">
-        Sin suficientes datos
-    </div>
-
-    <div class="empty-text">
-        Se requieren registros históricos para construir la curva.
-    </div>
-
-</div>
-""",
-                unsafe_allow_html=True,
-            )
-
-
-    # --------------------------------------------------------
-    # METRICS
-    # --------------------------------------------------------
-
-    with col_g2:
-
-        render_html(
-            f"""
-<div class="result-card">
-
-    <div class="result-title">
-        Métricas clave
-    </div>
-
-    <div class="result-subtitle">
-        Estado operativo del sistema
-    </div>
-
-
-    <div class="metric-list">
-
-
-        <div class="metric-row">
-
-            <span class="metric-name">
-                Señales activas
-            </span>
-
-            <span
-                class="metric-value"
-                style="
-                    color:#2563eb;
-                "
-            >
-                {activas}
-            </span>
-
-        </div>
-
-
-        <div class="metric-row">
-
-            <span class="metric-name">
-                Posiciones en beneficio
-            </span>
-
-            <span
-                class="metric-value"
-                style="
-                    color:#16a34a;
-                "
-            >
-                {posiciones_con_beneficio}
-            </span>
-
-        </div>
-
-
-        <div class="metric-row">
-
-            <span class="metric-name">
-                Take Profit alcanzado
-            </span>
-
-            <span
-                class="metric-value"
-                style="
-                    color:#16a34a;
-                "
-            >
-                {exitos}
-            </span>
-
-        </div>
-
-
-        <div class="metric-row">
-
-            <span class="metric-name">
-                Stop Loss saltado
-            </span>
-
-            <span
-                class="metric-value"
-                style="
-                    color:#dc2626;
-                "
-            >
-                {fallos}
-            </span>
-
-        </div>
-
-
-        <div class="metric-row">
-
-            <span class="metric-name">
-                Win Rate
-            </span>
-
-            <span class="metric-value">
-                {formatear_numero(
-                    win_rate,
-                    1,
-                    "%"
-                )}
-            </span>
-
-        </div>
-
-
-        <div class="metric-row">
-
-            <span class="metric-name">
-                Beneficio realizado
-            </span>
-
-            <span
-                class="metric-value"
-                style="
-                    color:{
-                        '#16a34a'
-                        if beneficio_realizado >= 0
-                        else '#dc2626'
-                    };
-                "
-            >
-                {formatear_numero(
-                    beneficio_realizado,
-                    2,
-                    " €",
-                    True
-                )}
-            </span>
-
-        </div>
-
-
-        <div class="metric-row">
-
-            <span class="metric-name">
-                P&L posiciones abiertas
-            </span>
-
-            <span
-                class="metric-value"
-                style="
-                    color:{
-                        '#16a34a'
-                        if beneficio_no_realizado >= 0
-                        else '#dc2626'
-                    };
-                "
-            >
-                {formatear_numero(
-                    beneficio_no_realizado,
-                    2,
-                    " €",
-                    True
-                )}
-            </span>
-
-        </div>
-
-
-        <div class="metric-row">
-
-            <span class="metric-name">
-                Beneficio total simulado
-            </span>
-
-            <span
-                class="metric-value"
-                style="
-                    color:{color_resultado};
-                "
-            >
-                {formatear_numero(
-                    beneficio_acumulado,
-                    2,
-                    " €",
-                    True
-                )}
-            </span>
-
-        </div>
-
-
-        <div class="metric-row">
-
-            <span class="metric-name">
-                Capital simulado
-            </span>
-
-            <span class="metric-value">
-                {formatear_numero(
-                    CAPITAL_INICIAL,
-                    0,
-                    " €"
-                )}
-            </span>
-
-        </div>
-
-    </div>
-
-</div>
-""",
-            unsafe_allow_html=True,
-        )
-
-
-# ============================================================
-# 3. HISTÓRICO
-# ============================================================
-
-with tab_historial:
-
-    render_html(
-        """
-<div class="history-header">
-
-    <div class="history-title">
-        Registro histórico
-    </div>
-
-    <div class="history-subtitle">
-        Auditoría completa de las señales generadas por Alura Quant.
-    </div>
-
-</div>
-""",
-        unsafe_allow_html=True,
-    )
-
-
-    df_cerradas = df_hist.copy()
-
-
-    if not df_cerradas.empty:
-
-        col_f1, col_f2 = st.columns(
-            [1, 1],
-            gap="small"
-        )
-
-
-        with col_f1:
-
-            if "Estado" in df_cerradas.columns:
-
-                estados_posibles = sorted(
-                    df_cerradas["Estado"]
-                    .astype(str)
-                    .unique()
-                    .tolist()
-                )
-
-            else:
-
-                estados_posibles = []
-
-
-            filtro_est = st.multiselect(
-                "Estado operativo",
-                estados_posibles,
-                default=estados_posibles,
-                label_visibility="collapsed"
-            )
-
-
-        with col_f2:
-
-            busq_hist = st.text_input(
-                "Buscar histórico",
-                placeholder="⌕  Buscar empresa, ticker o estado...",
-                label_visibility="collapsed"
-            )
-
-
-        df_view = (
-            df_cerradas.copy()
-        )
-
-
-        if (
-            filtro_est
-            and "Estado"
-            in df_view.columns
-        ):
-
-            df_view = df_view[
-                df_view["Estado"]
-                .astype(str)
-                .isin(
-                    filtro_est
-                )
-            ]
-
-
-        if busq_hist:
-
-            mask_h = (
-                df_view
-                .astype(str)
-                .apply(
-                    lambda col:
-                    col.str.contains(
-                        busq_hist,
-                        case=False,
-                        na=False,
-                        regex=False
-                    )
-                )
-                .any(axis=1)
-            )
-
-            df_view = (
-                df_view[mask_h]
-            )
-
-
-        render_html(
-            f"""
-<div style="
-    margin:8px 0 10px;
-    color:#94a3b8;
-    font-size:10px;
-    font-weight:700;
-">
-    {len(df_view)} REGISTROS
-</div>
-""",
-            unsafe_allow_html=True,
-        )
-
-
-        st.dataframe(
-            df_view,
-            use_container_width=True,
-            height=480,
-            hide_index=True
-        )
-
-
+    """)
+    if fechas_curva and beneficios_curva:
+        chart_df=pd.DataFrame({'Fecha':pd.to_datetime(fechas_curva),'Resultado':beneficios_curva}).set_index('Fecha')
+        st.line_chart(chart_df,use_container_width=True)
     else:
+        st.info("Todavía no hay suficientes datos para mostrar la curva de resultados.")
+    render_html("<div class='aq-note'>Los resultados históricos no garantizan resultados futuros. La información mostrada tiene carácter informativo y no constituye asesoramiento financiero.</div>")
 
-        render_html(
-            """
-<div class="empty-state">
+# ------------------------------------------------------------
+# 05. HISTÓRICO
+# ------------------------------------------------------------
+with tab_historial:
+    render_html("<div class='aq-dashboard-head'><div><h2>Histórico</h2><p>Registro completo de señales y operaciones procesadas.</p></div></div>")
+    if df_hist.empty:
+        st.info("Todavía no hay señales registradas.")
+    else:
+        cols=[c for c in ['Fecha','Ticker','Empresa','Score_Entrada','Precio_Alerta','Stop_Loss','Take_Profit','Estado','Resultado_R','Fecha_Salida'] if c in df_hist.columns]
+        st.dataframe(df_hist.sort_values('Fecha',ascending=False)[cols],use_container_width=True,hide_index=True)
 
-    <div class="empty-title">
-        No hay registros históricos
-    </div>
-
-    <div class="empty-text">
-        Las señales cerradas aparecerán aquí.
-    </div>
-
-</div>
-""",
-            unsafe_allow_html=True,
-        )
-
-
-# ============================================================
-# 4. PLANES Y SUSCRIPCIÓN
-# ============================================================
-
+# ------------------------------------------------------------
+# 06. PLANES Y SUSCRIPCIÓN
+# ------------------------------------------------------------
 with tab_planes:
-    render_html(
-        '''
-<div class="pricing-hero">
-    <div class="eyebrow">ALURA QUANT MEMBERSHIP</div>
-    <h2>Más señal. Menos ruido.</h2>
-    <p>Accede a la inteligencia cuantitativa de Alura Quant y recibe las oportunidades que cumplen nuestros criterios.</p>
-</div>
-<div class="pricing-grid">
-    <div class="pricing-card">
-        <div class="pricing-badge">FREE</div>
-        <h3>Explora Alura Quant</h3>
-        <div class="pricing-price">0 € <span>/ mes</span></div>
-        <p class="pricing-description">Para conocer el sistema y seguir una selección de señales.</p>
-        <ul>
-            <li>✓ Acceso al dashboard</li>
-            <li>✓ Resumen de mercado</li>
-            <li>✓ Señales seleccionadas</li>
-            <li>✓ Métricas cuantitativas básicas</li>
-        </ul>
+    render_html("""
+    <div class='aq-wrap' id='planes-top'>
+      <section class='aq-section center'>
+        <div class='aq-eyebrow'>ALURA QUANT MEMBERSHIP</div>
+        <h2>Elige cómo quieres utilizar Alura Quant.</h2>
+        <p class='aq-section-intro'>Empieza gratis para conocer el sistema o accede a las funciones Pro cuando quieras profundizar en las oportunidades y el análisis.</p>
+        <div class='aq-pricing-grid'>
+          <div class='aq-price'><div class='aq-price-badge'>FREE</div><h3>Explora Alura Quant</h3><div class='aq-price-num'>0 € <span>/ mes</span></div><p>Una forma sencilla de conocer la plataforma y seguir una selección del sistema.</p><ul><li>✓ Acceso al dashboard</li><li>✓ Resumen de mercado</li><li>✓ Señales seleccionadas</li><li>✓ Métricas cuantitativas básicas</li></ul></div>
+          <div class='aq-price pro'><div class='aq-price-badge'>PRO</div><h3>Alura Quant Pro</h3><div class='aq-price-num'>19 € <span>/ mes</span></div><p>Para acceder a las oportunidades de mayor convicción y al análisis completo.</p><ul><li>✓ Alertas con Score &gt; 80</li><li>✓ Envío prioritario</li><li>✓ Tesis cuantitativa + IA</li><li>✓ Histórico de tesis detalladas</li><li>✓ Informe semanal</li></ul></div>
+        </div>
+      </section>
     </div>
-    <div class="pricing-card pricing-card-pro">
-        <div class="pricing-badge pro">PRO</div>
-        <h3>Alura Quant Pro</h3>
-        <div class="pricing-price">19 € <span>/ mes</span></div>
-        <p class="pricing-description">Para recibir las señales de mayor convicción y el análisis completo.</p>
-        <ul>
-            <li>✓ Alertas con Score &gt; 80</li>
-            <li>✓ Envío prioritario</li>
-            <li>✓ Tesis cuantitativa + IA</li>
-            <li>✓ Histórico de tesis detalladas</li>
-            <li>✓ Informe semanal</li>
-        </ul>
-    </div>
-</div>
-''',
-        unsafe_allow_html=True,
-    )
-
-    col_free, col_vip = st.columns(2, gap="large")
-
+    """)
+    col_free,col_vip=st.columns(2,gap='large')
     with col_free:
-        st.markdown("### Crear acceso gratuito")
-        email_free = st.text_input(
-            "Email",
-            placeholder="tu@email.com",
-            key="input_free",
-            label_visibility="collapsed",
-        )
-        if st.button("Crear acceso Free", use_container_width=True, type="secondary"):
-            resultado = guardar_suscriptor_supabase(email_free, "free")
-            if resultado == "success":
-                st.success("Registro completado. Ya formas parte de Alura Quant Free.")
-            elif resultado == "exists":
-                st.info("Este email ya está registrado en el plan Free.")
-            elif resultado == "invalid":
-                st.error("Introduce un email válido.")
-            else:
-                st.error("No hemos podido completar el registro. Inténtalo de nuevo.")
-
+        st.markdown('### Crear acceso gratuito')
+        email_free=st.text_input('Email',placeholder='tu@email.com',key='landing_free_email',label_visibility='collapsed')
+        if st.button('Crear acceso Free',use_container_width=True,key='landing_free_button'):
+            resultado=guardar_suscriptor_supabase(email_free,'free')
+            if resultado=='success': st.success('Registro completado. Ya formas parte de Alura Quant Free.')
+            elif resultado=='exists': st.info('Este email ya está registrado en Free.')
+            elif resultado=='invalid': st.error('Introduce un email válido.')
+            else: st.error('No hemos podido completar el registro.')
     with col_vip:
-        st.markdown("### Activar Alura Quant Pro")
-        email_vip = st.text_input(
-            "Email Pro",
-            placeholder="El email que usarás para tu suscripción",
-            key="input_vip",
-            label_visibility="collapsed",
-        )
-        url_stripe = os.getenv("STRIPE_PAYMENT_LINK", "https://buy.stripe.com/tu_enlace_de_pago_real")
-        if st.button("Continuar con Pro · 19 €/mes", use_container_width=True, type="primary"):
-            resultado = guardar_suscriptor_supabase(email_vip, "vip")
-            if resultado in ("success", "exists"):
-                url_segura = html.escape(url_stripe, quote=True)
-                render_html(
-                    f'''<div class="stripe-cta"><a href="{url_segura}" target="_blank" rel="noopener noreferrer">Continuar al pago seguro →</a></div>''',
-                    unsafe_allow_html=True,
-                )
-                st.caption(
-                    "Tu email ha quedado registrado para Pro. Completa ahora el pago."
-                    if resultado == "success"
-                    else "Tu email ya estaba registrado. Puedes continuar al pago."
-                )
-            elif resultado == "invalid":
-                st.error("Introduce un email válido antes de continuar.")
-            else:
-                st.error("No hemos podido preparar tu suscripción. Inténtalo de nuevo.")
+        st.markdown('### Activar Alura Quant Pro')
+        email_vip=st.text_input('Email Pro',placeholder='El email que usarás para tu suscripción',key='landing_vip_email',label_visibility='collapsed')
+        url_stripe=os.getenv('STRIPE_PAYMENT_LINK','').strip()
+        if st.button('Continuar con Pro · 19 €/mes',use_container_width=True,type='primary',key='landing_vip_button'):
+            resultado=guardar_suscriptor_supabase(email_vip,'vip')
+            if resultado in ('success','exists'):
+                if url_stripe:
+                    url_segura=html.escape(url_stripe,quote=True)
+                    render_html(f"<div class='aq-actions' style='margin-top:12px;'><a class='aq-btn primary' href='{url_segura}' target='_blank' rel='noopener noreferrer'>Continuar al pago seguro →</a></div>")
+                st.success('Email preparado para Pro. Completa el pago en Stripe.' if resultado=='success' else 'Este email ya estaba preparado. Puedes continuar al pago.')
+            elif resultado=='invalid': st.error('Introduce un email válido.')
+            else: st.error('No hemos podido preparar tu suscripción.')
+    render_html("<div class='aq-note'><strong>Importante:</strong> el registro del email en <code>suscriptores_vip</code> no confirma por sí solo un pago. Para producción, el estado de Pro debería activarse mediante un webhook de Stripe que actualice Supabase tras confirmar el pago.</div>")
 
-    render_html(
-        '''<div class="subscription-note"><strong>Importante:</strong> el registro en Supabase identifica tu email. Para considerar una suscripción Pro como <strong>pagada y activa</strong>, conecta Stripe mediante un webhook que confirme el pago y gestione altas, renovaciones y cancelaciones.</div>''',
-        unsafe_allow_html=True,
-    )
-
-# ============================================================
+# ------------------------------------------------------------
 # FOOTER
-# ============================================================
-
-render_html(
-    f"""
-<div class="app-footer">
-
-    <span>
-        ALURA QUANT · INVESTMENT INTELLIGENCE
-    </span>
-
-    <span>
-        🔄 Última actualización: <strong>{fecha_actualizacion_sistema}</strong>
-    </span>
-
-</div>
-
-
-<a
-    href="#top"
-    class="scroll-top"
-    title="Volver arriba"
-    aria-label="Volver arriba"
->
-    ↑
-</a>
-""",
-    unsafe_allow_html=True,
-)
+# ------------------------------------------------------------
+render_html(f"""
+<div class='aq-wrap'><div class='aq-footer'><span>ALURA QUANT · INVESTMENT INTELLIGENCE</span><span>Última actualización: <strong>{html.escape(fecha_actualizacion_sistema)}</strong></span></div></div>
+""")
