@@ -179,9 +179,8 @@ def enviar_correo(html_content, destinatarios):
     print(f"Enviando newsletter a través de Resend a {len(destinatarios_limpios)} suscriptor(es)...")
     
     params = {
-        "from": "adelgadosanz@gmail.com", 
-        "to": "adelgadosanz@gmail.com",
-        "bcc": destinatarios_limpios,
+        "from": "Alura Quant <onboarding@resend.dev>",
+        "to": destinatarios_limpios,
         "subject": f"Alura Quant | Informe Semanal de Cartera — {datetime.now().strftime('%d/%m/%Y')}",
         "html": html_content,
     }
