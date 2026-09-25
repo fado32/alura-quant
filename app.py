@@ -3464,7 +3464,7 @@ render_html("""
     align-items:flex-end;
     justify-content:space-between;
     gap:20px;
-    margin-bottom:25px;
+    margin-bottom:10px;
 }
 .aq-section-head h2{margin:7px 0 0}
 .aq-section-head p{
@@ -4174,7 +4174,7 @@ with tab_inicio:
         </div>
       </section>
 
-      <section class="aq-section" id="oportunidad-demo" style="padding-top:42px;">
+      <section class="aq-section" id="oportunidad-demo" style="padding-top:20px;">
         <div class="aq-section-head">
           <div>
             <div class="aq-eyebrow">PRODUCTO</div>
@@ -4253,7 +4253,7 @@ with tab_inicio:
           <h2>El mercado no necesita más ruido.</h2>
           <p>Necesita mejores filtros. Explora el sistema y decide qué nivel de información quieres recibir.</p>
           <div class="aq-actions">
-            <a class="aq-btn primary" href="#planes-top" onclick="(function(){var b=[...document.querySelectorAll('button[data-baseweb=\"tab\"]')].find(function(x){return x.innerText.trim()==='Planes';});if(b)b.click();})();" style="background:#fff;color:#0b1220;border-color:#fff;">Ver planes y suscripción →</a>
+            <a class="aq-btn primary" href="#planes-top" onclick="event.preventDefault();setTimeout(function(){var tabs=document.querySelectorAll('[role=\"tab\"]');var b=Array.from(tabs).find(function(x){return x.innerText.trim().toLowerCase()==='planes';});if(b){b.scrollIntoView({behavior:'smooth',block:'center'});b.click();setTimeout(function(){var target=document.getElementById('planes-top');if(target)target.scrollIntoView({behavior:'smooth',block:'start'});},250);}},50);return false;" style="background:#fff;color:#0b1220;border-color:#fff;">Ver planes y suscripción →</a>
           </div>
         </div>
       </section>
