@@ -3979,7 +3979,8 @@ render_html("""
 div[class*="st-key-nav_"] button{min-height:42px!important;border-radius:10px 10px 0 0!important;border:0!important;border-bottom:2px solid transparent!important;background:transparent!important;color:#64748b!important;font-weight:700!important;box-shadow:none!important;padding-left:5px!important;padding-right:5px!important}
 div[class*="st-key-nav_"] button:hover{background:#f4f7fb!important;color:#2563eb!important}
 div[class*="st-key-nav_"] button[kind="primary"]{background:#fff!important;color:#2563eb!important;border-bottom-color:#2563eb!important}
-.st-key-home_plans_button button{background:#fff!important;color:#0b1220!important;border:1px solid #fff!important;border-radius:10px!important;font-weight:700!important}
+.st-key-home_plans_button button{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:max-content!important;min-height:44px!important;padding:0 18px!important;background:#fff!important;color:#0b1220!important;border:1px solid #fff!important;border-radius:10px!important;font-weight:700!important;white-space:nowrap!important;line-height:1!important}
+.st-key-home_plans_button button p{margin:0!important;color:#0b1220!important;white-space:nowrap!important;line-height:1!important}
 .st-key-home_plans_button button:hover{background:#eef3fb!important;color:#0b1220!important;border-color:#eef3fb!important}
 @media(max-width:650px){
   div[data-testid="stHorizontalBlock"]:has(.st-key-nav_0){
@@ -3989,9 +3990,12 @@ div[class*="st-key-nav_"] button[kind="primary"]{background:#fff!important;color
   }
   div[data-testid="stHorizontalBlock"]:has(.st-key-nav_0)::-webkit-scrollbar{display:none}
   div[data-testid="stHorizontalBlock"]:has(.st-key-nav_0)>div[data-testid="column"]{
-    flex:0 0 118px!important;width:118px!important;min-width:118px!important;
+    flex:0 0 max-content!important;width:max-content!important;min-width:max-content!important;
   }
-  div[class*="st-key-nav_"] button{font-size:11px!important;padding:0 5px!important;white-space:nowrap!important}
+  div[data-testid="stHorizontalBlock"]:has(.st-key-nav_0) div[class*="st-key-nav_"] button{
+    width:max-content!important;min-width:max-content!important;font-size:11px!important;
+    padding:0 12px!important;white-space:nowrap!important;
+  }
 }
 .st-key-home_final_cta{
   margin:0 auto 34px!important;padding:44px 28px!important;border-radius:27px!important;
@@ -4002,7 +4006,8 @@ div[class*="st-key-nav_"] button[kind="primary"]{background:#fff!important;color
 .st-key-home_final_cta h2{color:#fff;margin:10px 0 13px;font-family:'Plus Jakarta Sans',sans-serif;font-size:clamp(32px,4vw,49px);letter-spacing:-.05em}
 .st-key-home_final_cta p{max-width:620px;margin:0 auto 20px;color:#c5d0e0;line-height:1.75;font-size:14px}
 .st-key-home_plans_button{display:flex;justify-content:center;margin:0 auto 4px!important}
-.st-key-home_plans_button button{background:#fff!important;color:#0b1220!important;border:1px solid #fff!important;border-radius:10px!important;font-weight:700!important}
+.st-key-home_plans_button button{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:max-content!important;min-height:44px!important;padding:0 18px!important;background:#fff!important;color:#0b1220!important;border:1px solid #fff!important;border-radius:10px!important;font-weight:700!important;white-space:nowrap!important;line-height:1!important}
+.st-key-home_plans_button button p{margin:0!important;color:#0b1220!important;white-space:nowrap!important;line-height:1!important}
 .st-key-home_plans_button button:hover{background:#eef3fb!important;color:#0b1220!important;border-color:#eef3fb!important}
 .st-key-performance_chart_native{margin-top:12px!important;background:#fff!important;border:1px solid var(--aq-border)!important;border-radius:22px!important;box-shadow:var(--aq-shadow-soft)!important;overflow:hidden!important;padding:0!important}
 .st-key-performance_chart_native .performance-chart-head{padding:24px 25px 12px}
@@ -4351,7 +4356,7 @@ if active_page == "Inicio":
           *{{box-sizing:border-box}}body{{margin:0;font-family:Arial,sans-serif;color:#172033}}
           .card{{height:106px;background:#fff;border:1px solid #e8edf4;border-radius:16px;padding:20px 18px;box-shadow:0 8px 24px rgba(15,23,42,.04)}}
           .label{{color:#7b8798;font-size:10px;font-weight:800;letter-spacing:.11em;text-transform:uppercase}}
-          .value{{margin-top:9px;font-size:25px;line-height:1;font-weight:800;letter-spacing:-.04em;color:{color_resultado}}}
+          .value{{margin-top:9px;font-family:'Plus Jakarta Sans',sans-serif;font-size:28px;line-height:1;font-weight:800;letter-spacing:-.045em;color:{color_resultado}}}
           .detail{{margin-top:8px;color:#98a2b3;font-size:11px}}
         
 </style></head><body><div class="card">
@@ -4647,13 +4652,17 @@ if active_page == "Planes":
         (function(){
           function irArriba(){
             try {
-              var p=window.parent;
-              p.scrollTo({top:0,left:0,behavior:"auto"});
-              var c=p.document.querySelector("[data-testid='stAppViewContainer']");
-              if(c)c.scrollTo({top:0,left:0,behavior:"auto"});
+              var p=window.parent, d=p.document;
+              var top=d.getElementById("planes-top");
+              if(top) top.scrollIntoView({block:"start",behavior:"auto"});
+              var c=d.querySelector("[data-testid='stAppViewContainer']");
+              var b=d.querySelector("[data-testid='stAppViewBlockContainer']");
+              if(c)c.scrollTop=0;
+              if(b)b.scrollTop=0;
+              p.scrollTo(0,0);
             } catch(e) { try { window.parent.scrollTo(0,0); } catch(_) {} }
           }
-          setTimeout(irArriba,120);setTimeout(irArriba,450);setTimeout(irArriba,900);
+          setTimeout(irArriba,100);setTimeout(irArriba,350);setTimeout(irArriba,750);
         })();
         </script>
         """, height=1, scrolling=False)
