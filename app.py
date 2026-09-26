@@ -3899,6 +3899,14 @@ render_html("""
     .asset-header{gap:10px}
     .asset-card{padding:19px !important}
 }
+/* Ajustes de espacios en la portada */
+#oportunidad-demo.aq-section{padding:42px 0 28px}
+#oportunidad-demo .aq-section-head{margin-bottom:12px}
+#por-que-existe.aq-section{padding-top:28px}
+@media(max-width:650px){
+    #oportunidad-demo.aq-section{padding:32px 0 22px}
+    #por-que-existe.aq-section{padding-top:22px}
+}
 </style>
 """)
 
@@ -3911,8 +3919,8 @@ render_html(f"""
 </div>
 """)
 
-tab_inicio, tab_oportunidades, tab_cartera, tab_resultados, tab_historial, tab_planes = st.tabs([
-    "Inicio", "Oportunidades", "Cartera", "Performance", "Histórico", "Planes"
+tab_inicio, tab_oportunidades, tab_planes, tab_cartera, tab_resultados, tab_historial = st.tabs([
+    "Inicio", "Oportunidades", "Planes", "Cartera", "Performance", "Histórico"
 ])
 
 # ============================================================
@@ -4253,7 +4261,7 @@ with tab_inicio:
           <h2>El mercado no necesita más ruido.</h2>
           <p>Necesita mejores filtros. Explora el sistema y decide qué nivel de información quieres recibir.</p>
           <div class="aq-actions">
-            <a class="aq-btn primary" href="#planes-top" onclick="(function(){var b=[...document.querySelectorAll('button[data-baseweb=\"tab\"]')].find(function(x){return x.innerText.trim()==='Planes';});if(b)b.click();})();" style="background:#fff;color:#0b1220;border-color:#fff;">Ver planes y suscripción →</a>
+            <a class="aq-btn primary" href="#planes-top" onclick="document.querySelectorAll('button[role=tab]').forEach(function(tab){if(tab.innerText.trim()==='Planes')tab.click();});" style="background:#fff;color:#0b1220;border-color:#fff;">Ver planes y suscripción →</a>
           </div>
         </div>
       </section>
