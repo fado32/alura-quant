@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import gspread
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 import yfinance as yf
 from google.oauth2.service_account import Credentials
 from supabase import create_client
@@ -232,7 +233,7 @@ def formatear_tesis_ia(texto):
     return html.escape(texto).replace("\n", "<br>")
 
 
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=600)
 def cargar_universo_supabase():
     try:
         response = supabase.table("universo_activos").select("ticker, empresa, sector, icono, activo").eq("activo", True).execute()
@@ -254,7 +255,7 @@ TOTAL_ACTIVOS_UNIVERSO = obtener_total_activos()
 # CARGA DE DATOS
 # ============================================================
 
-@st.cache_data(ttl=30)
+@st.cache_data(ttl=600)
 def cargar_datos():
     try:
         registros = []
@@ -279,6 +280,51 @@ def cargar_datos():
         st.error(f"Error cargando historial desde Supabase: {e}")
         return pd.DataFrame(columns=CAMPOS_HISTORIAL)
 
+
+@st.cache_data(ttl=600)
+def cargar_backtesting_diario():
+    """Carga las capturas diarias usadas para la curva de resultados."""
+    try:
+        registros = []
+        inicio = 0
+        tamano = 1000
+        while True:
+            respuesta = (supabase.table("backtesting_diario_alertas")
+                .select("fecha_snapshot,alerta_id,ticker,estado,precio_alerta,precio_actual,pnl_actual_pct")
+                .order("fecha_snapshot")
+                .order("alerta_id")
+                .range(inicio, inicio + tamano - 1)
+                .execute())
+            lote = respuesta.data or []
+            registros.extend(lote)
+            if len(lote) < tamano:
+                break
+            inicio += tamano
+        return pd.DataFrame(registros), None
+    except Exception as e:
+        print(f"Error cargando backtesting diario desde Supabase: {e}")
+        return pd.DataFrame(columns=["fecha_snapshot", "alerta_id", "ticker", "estado", "precio_alerta", "precio_actual", "pnl_actual_pct"]), str(e)
+
+
+def calcular_resultado_diario(df_backtesting):
+    """Suma el P&L en euros de las alertas capturadas cada día."""
+    if df_backtesting is None or df_backtesting.empty:
+        return [], []
+    df = df_backtesting.copy()
+    df["fecha_snapshot"] = pd.to_datetime(df["fecha_snapshot"], errors="coerce")
+    df["pnl_actual_pct"] = pd.to_numeric(df["pnl_actual_pct"], errors="coerce")
+    if "precio_alerta" in df.columns and "precio_actual" in df.columns:
+        entrada = pd.to_numeric(df["precio_alerta"], errors="coerce")
+        actual = pd.to_numeric(df["precio_actual"], errors="coerce")
+        pct_calculado = (actual - entrada) / entrada.where(entrada > 0) * 100
+        df["pnl_actual_pct"] = df["pnl_actual_pct"].fillna(pct_calculado)
+    df = df.dropna(subset=["fecha_snapshot", "pnl_actual_pct"])
+    df = df[df["pnl_actual_pct"].map(lambda value: pd.notna(value) and abs(float(value)) != float("inf"))]
+    if df.empty:
+        return [], []
+    df["resultado_eur"] = df["pnl_actual_pct"] * CAPITAL_POR_ALERTA / 100
+    diario = df.groupby(df["fecha_snapshot"].dt.strftime("%Y-%m-%d"))["resultado_eur"].sum().sort_index()
+    return diario.index.tolist(), diario.tolist()
 
 @st.cache_data(ttl=300)
 def obtener_precio_actual(ticker):
@@ -3099,9 +3145,10 @@ else:
 # PRECIOS ACTUALES
 # ============================================================
 
-precios_actuales = obtener_precios_activos(
-    df_activas_global
-)
+if st.session_state.get("active_page", "Inicio") in ("Inicio", "Performance"):
+    precios_actuales = obtener_precios_activos(df_activas_global)
+else:
+    precios_actuales = {}
 
 
 # ============================================================
@@ -3223,7 +3270,10 @@ if not df_hist.empty and "Estado" in df_hist.columns:
 else:
     df_activas_global = pd.DataFrame()
 
-precios_actuales = obtener_precios_activos(df_activas_global)
+if st.session_state.get("active_page", "Inicio") in ("Inicio", "Performance"):
+    precios_actuales = obtener_precios_activos(df_activas_global)
+else:
+    precios_actuales = {}
 beneficio_realizado = calcular_beneficio_realizado(df_hist)
 beneficio_no_realizado, posiciones_con_beneficio, posiciones_con_perdida = calcular_beneficio_no_realizado(
     df_activas_global, precios_actuales
@@ -3234,6 +3284,20 @@ rentabilidad_pct = (beneficio_acumulado / capital_inicial * 100) if capital_inic
 beneficio_realizado_curva, fechas_curva, beneficios_curva = calcular_resultados(
     df_hist, beneficio_no_realizado
 )
+if st.session_state.get("active_page", "Inicio") == "Performance":
+    df_backtesting, error_backtesting = cargar_backtesting_diario()
+else:
+    df_backtesting = pd.DataFrame()
+    error_backtesting = None
+fechas_backtesting, resultados_diarios = calcular_resultado_diario(df_backtesting)
+if fechas_backtesting:
+    fechas_curva = fechas_backtesting
+    beneficios_curva = resultados_diarios
+    titulo_curva = 'Resultado diario'
+    leyenda_curva = 'Resultado diario'
+else:
+    titulo_curva = 'Resultado histórico'
+    leyenda_curva = 'Resultado histórico'
 
 
 def obtener_fecha_ultima_actualizacion(df):
@@ -3907,6 +3971,15 @@ render_html("""
     #oportunidad-demo.aq-section{padding:32px 0 22px}
     #por-que-existe.aq-section{padding-top:22px}
 }
+.stRadio [role=radiogroup]{gap:6px;border-bottom:1px solid #e5eaf1;padding-bottom:0}
+.stRadio [role=radiogroup] label > div:first-child{display:none!important}
+.stRadio [role=radiogroup] label{display:inline-flex;cursor:pointer;background:#f4f6fa;border:1px solid transparent;border-radius:10px 10px 0 0;padding:10px 16px;margin:0;color:#526176;font-weight:700}
+.stRadio [role=radiogroup] label:has(input:checked){background:#fff;border-color:#e5eaf1;border-bottom-color:#fff;color:#2563eb}
+.stRadio [role=radiogroup] label p{font-size:13px;margin:0}
+.st-key-home_plans_button{margin-top:-18px;margin-bottom:28px}
+.st-key-home_plans_button button{background:#fff!important;color:#0b1220!important;border:1px solid #fff!important;border-radius:10px!important;font-weight:700!important}
+.st-key-home_plans_button button:hover{background:#eef3fb!important;color:#0b1220!important;border-color:#eef3fb!important}
+@media(max-width:650px){.stRadio [role=radiogroup]{flex-wrap:wrap}.stRadio [role=radiogroup] label{padding:8px 10px;font-size:11px}}
 </style>
 """)
 
@@ -3919,9 +3992,15 @@ render_html(f"""
 </div>
 """)
 
-tab_inicio, tab_oportunidades, tab_planes, tab_cartera, tab_resultados, tab_historial = st.tabs([
-    "Inicio", "Oportunidades", "Planes", "Cartera", "Performance", "Histórico"
-])
+PAGINAS = ["Inicio", "Oportunidades", "Planes", "Cartera", "Performance", "Histórico"]
+def _ir_a_planes():
+    st.session_state["active_page"] = "Planes"
+
+
+active_page = st.radio(
+    "Navegación principal", PAGINAS, horizontal=True,
+    label_visibility="collapsed", key="active_page"
+)
 
 # ============================================================
 # SHARED UI — OPPORTUNITY CARD
@@ -4078,10 +4157,73 @@ def render_opportunity_card(row, compact=False, ribbon=False):
     """)
 
 
+
+def render_cartera_table(df):
+    """Renderiza la cartera en una tabla compacta con etiquetas y métricas legibles."""
+    df = df.copy()
+    if "P&L_Actual_Pct" in df.columns:
+        df["P&L_Actual_Pct"] = pd.to_numeric(df["P&L_Actual_Pct"], errors="coerce")
+        df = df.sort_values("P&L_Actual_Pct", ascending=False, na_position="last")
+    filas = []
+    for _, row in df.iterrows():
+        empresa_raw = row.get("Empresa")
+        if empresa_raw is None or pd.isna(empresa_raw) or not str(empresa_raw).strip():
+            empresa_raw = row.get("Ticker") or "Activo"
+        empresa = safe_text(empresa_raw)
+        sector = safe_text(row.get("Sector"), "Sin sector")
+        entrada = formatear_numero(safe_float(row.get("Precio_Alerta")), 2, " €")
+        actual = formatear_numero(safe_float(row.get("Precio_Actual")), 2, " €")
+        stop = formatear_numero(safe_float(row.get("Stop_Loss")), 2, " €")
+        objetivo = formatear_numero(safe_float(row.get("Take_Profit")), 2, " €")
+        score = safe_float(row.get("Score_Actual"))
+        score_text = formatear_numero(score, 0) if score is not None else "—"
+        score_width = max(0, min(100, score or 0))
+        rendimiento = safe_float(row.get("P&L_Actual_Pct"))
+        rendimiento_text = formatear_numero(rendimiento, 2, "%", True) if rendimiento is not None else "—"
+        rendimiento_clase = "positive" if rendimiento is not None and rendimiento >= 0 else "negative" if rendimiento is not None else "neutral"
+        estado_raw = row.get("Estado_Estrategia")
+        if estado_raw is None or pd.isna(estado_raw) or not str(estado_raw).strip():
+            estado_raw = row.get("Estado") or "Activa"
+        estado = str(estado_raw).replace("_", " ").title()
+        estado = html.escape(estado)
+        filas.append(f"""
+          <tr>
+            <td><div class="portfolio-company">{empresa}</div><div class="portfolio-sector">{sector}</div></td>
+            <td>{entrada}</td><td class="portfolio-current">{actual}</td><td>{stop}</td><td>{objetivo}</td>
+            <td><div class="portfolio-score"><strong>{score_text}</strong><span><i style="width:{score_width:.1f}%"></i></span></div></td>
+            <td><span class="portfolio-return {rendimiento_clase}">{rendimiento_text}</span></td>
+            <td><span class="portfolio-state">{estado}</span></td>
+          </tr>
+        """)
+    render_html(f"""
+    <style>
+      .portfolio-shell{{max-width:1180px;margin:18px auto 38px;background:#fff;border:1px solid #e6ebf2;border-radius:20px;box-shadow:0 16px 40px rgba(15,23,42,.06);overflow:hidden}}
+      .portfolio-heading{{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:22px 24px;border-bottom:1px solid #edf1f6}}
+      .portfolio-heading strong{{display:block;color:#172033;font-family:'Plus Jakarta Sans',sans-serif;font-size:16px}}
+      .portfolio-heading span{{display:block;margin-top:4px;color:#8a96a8;font-size:11px}}
+      .portfolio-count{{display:inline-flex;align-items:center;padding:7px 11px;border-radius:999px;background:#eff6ff;color:#2563eb;font-size:10px;font-weight:800;letter-spacing:.06em;white-space:nowrap}}
+      .portfolio-scroll{{overflow-x:auto}}.portfolio-table{{width:100%;min-width:840px;border-collapse:collapse;text-align:left}}
+      .portfolio-table th{{padding:12px 15px;background:#f8fafd;color:#8491a3;font-size:9px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;white-space:nowrap}}
+      .portfolio-table td{{padding:15px;border-top:1px solid #eef2f6;color:#344155;font-size:12px;white-space:nowrap}}
+      .portfolio-table tbody tr{{transition:background .16s ease}}.portfolio-table tbody tr:hover{{background:#f8fbff}}
+      .portfolio-company{{color:#172033;font-weight:750;font-size:12px}}.portfolio-sector{{margin-top:4px;color:#96a0af;font-size:10px}}
+      .portfolio-current{{font-weight:750;color:#1d4ed8!important}}.portfolio-score{{display:flex;align-items:center;gap:8px}}
+      .portfolio-score strong{{width:24px;color:#344155;font-size:11px}}.portfolio-score span{{width:48px;height:4px;background:#e9eef5;border-radius:99px;overflow:hidden}}
+      .portfolio-score i{{display:block;height:100%;background:linear-gradient(90deg,#60a5fa,#2563eb);border-radius:99px}}
+      .portfolio-return{{display:inline-flex;padding:6px 9px;border-radius:8px;font-weight:750;font-size:11px}}
+      .portfolio-return.positive{{background:#ecfdf3;color:#13834c}}.portfolio-return.negative{{background:#fff1f2;color:#c53044}}.portfolio-return.neutral{{background:#f3f5f8;color:#768397}}
+      .portfolio-state{{display:inline-flex;padding:6px 9px;border:1px solid #dfe8f5;border-radius:999px;background:#f7faff;color:#48658c;font-size:10px;font-weight:700}}
+      @media(max-width:650px){{.portfolio-heading{{padding:17px}}.portfolio-table{{min-width:790px}}}}
+    </style>
+    <div class="portfolio-shell"><div class="portfolio-heading"><div><strong>Posiciones monitorizadas</strong><span>Precios, niveles de gestión y rendimiento de la cartera</span></div><div class="portfolio-count">{len(df)} POSICIONES</div></div>
+      <div class="portfolio-scroll"><table class="portfolio-table"><thead><tr><th>Activo</th><th>Entrada</th><th>Precio actual</th><th>Stop loss</th><th>Objetivo</th><th>Score</th><th>Rendimiento</th><th>Estado</th></tr></thead><tbody>{''.join(filas)}</tbody></table></div>
+    </div>
+    """)
+
 def render_equity_chart_svg(fechas, valores):
     """Gráfico de equity ligero y visual, sin depender de una librería adicional."""
-    if not fechas or not valores or len(valores) < 2:
-        return '<div class="equity-empty">Se requieren más operaciones para construir la curva.</div>'
+    if not fechas or not valores:
+        return '<div class="equity-empty">Todavía no hay suficientes datos para mostrar la curva.</div>'
 
     vals = [safe_float(v, 0) or 0 for v in valores]
     width, height = 1000, 330
@@ -4147,7 +4289,7 @@ def render_equity_chart_svg(fechas, valores):
 # 01. INICIO
 # ============================================================
 
-with tab_inicio:
+if active_page == "Inicio":
     render_html(f"""
     <div class="aq-wrap">
       <section class="aq-hero">
@@ -4159,29 +4301,40 @@ with tab_inicio:
         </div>
       </section>
 
-      <section class="aq-kpis">
-        <div class="aq-kpi">
-          <div class="aq-kpi-label">Beneficio total</div>
-          <div class="aq-kpi-value" style="color:{color_resultado};">{formatear_numero(beneficio_acumulado,2," €",True)}</div>
-          <div class="aq-kpi-detail">Realizado + posiciones abiertas</div>
-        </div>
-        <div class="aq-kpi">
-          <div class="aq-kpi-label">Rentabilidad</div>
-          <div class="aq-kpi-value" style="color:{color_resultado};">{formatear_numero(rentabilidad_pct,2,"%",True)}</div>
-          <div class="aq-kpi-detail">Sobre {formatear_numero(CAPITAL_INICIAL,0," €")}</div>
-        </div>
-        <div class="aq-kpi">
-          <div class="aq-kpi-label">Posiciones activas</div>
-          <div class="aq-kpi-value">{activas}</div>
-          <div class="aq-kpi-detail">{TOTAL_ACTIVOS_UNIVERSO} activos monitorizados</div>
-        </div>
-        <div class="aq-kpi">
-          <div class="aq-kpi-label">Win Rate</div>
-          <div class="aq-kpi-value">{formatear_numero(win_rate,1,"%")}</div>
-          <div class="aq-kpi-detail">{exitos} TP · {fallos} SL</div>
-        </div>
-      </section>
+    </div>
+    """)
 
+    kpi_cols = st.columns(4, gap="small")
+    with kpi_cols[0]:
+        components.html(f"""
+        <html><head><style>
+          *{{box-sizing:border-box}}body{{margin:0;font-family:Arial,sans-serif;color:#172033}}
+          .card{{height:106px;background:#fff;border:1px solid #e8edf4;border-radius:16px;padding:20px 18px;box-shadow:0 8px 24px rgba(15,23,42,.04)}}
+          .label{{color:#7b8798;font-size:10px;font-weight:800;letter-spacing:.11em;text-transform:uppercase}}
+          .value{{margin-top:9px;font-size:25px;line-height:1;font-weight:800;letter-spacing:-.04em;color:{color_resultado}}}
+          .detail{{margin-top:8px;color:#98a2b3;font-size:11px}}
+        
+</style></head><body><div class="card">
+          <div class="label">Beneficio total</div><div class="value" id="benefit">0,00 €</div>
+          <div class="detail">Realizado + posiciones abiertas</div>
+        </div><script>
+          (function(){{var el=document.getElementById('benefit'),target={float(beneficio_acumulado):.8f},started=false;
+          function run(){{if(started)return;started=true;var start=null,duration=1300,fmt=new Intl.NumberFormat('es-ES',{{minimumFractionDigits:2,maximumFractionDigits:2}});
+          function frame(now){{if(start===null)start=now;var p=Math.min((now-start)/duration,1),ease=1-Math.pow(1-p,3),v=target*ease;
+          el.textContent=(v>0?'+':'')+fmt.format(v)+' €';if(p<1)requestAnimationFrame(frame);}}
+          requestAnimationFrame(frame);}}
+          var observer=new IntersectionObserver(function(entries){{if(entries.some(function(e){{return e.isIntersecting;}})){{run();observer.disconnect();}}}});
+          observer.observe(el);}})();
+        </script></body></html>
+        """, height=112, scrolling=False)
+    with kpi_cols[1]:
+        render_html(f"<div class='aq-kpi'><div class='aq-kpi-label'>Rentabilidad</div><div class='aq-kpi-value' style='color:{color_resultado};'>{formatear_numero(rentabilidad_pct,2,'%',True)}</div><div class='aq-kpi-detail'>Sobre {formatear_numero(CAPITAL_INICIAL,0,' €')}</div></div>")
+    with kpi_cols[2]:
+        render_html(f"<div class='aq-kpi'><div class='aq-kpi-label'>Posiciones activas</div><div class='aq-kpi-value'>{activas}</div><div class='aq-kpi-detail'>{TOTAL_ACTIVOS_UNIVERSO} activos monitorizados</div></div>")
+    with kpi_cols[3]:
+        render_html(f"<div class='aq-kpi'><div class='aq-kpi-label'>Win Rate</div><div class='aq-kpi-value'>{formatear_numero(win_rate,1,'%')}</div><div class='aq-kpi-detail'>{exitos} TP · {fallos} SL</div></div>")
+
+    render_html("""
       <section class="aq-section" id="oportunidad-demo">
         <div class="aq-section-head">
           <div>
@@ -4260,19 +4413,18 @@ with tab_inicio:
           <div class="aq-eyebrow">ALURA QUANT</div>
           <h2>El mercado no necesita más ruido.</h2>
           <p>Necesita mejores filtros. Explora el sistema y decide qué nivel de información quieres recibir.</p>
-          <div class="aq-actions">
-            <a class="aq-btn primary" href="#planes-top" onclick="document.querySelectorAll('button[role=tab]').forEach(function(tab){if(tab.innerText.trim()==='Planes')tab.click();});" style="background:#fff;color:#0b1220;border-color:#fff;">Ver planes y suscripción →</a>
-          </div>
+          
         </div>
       </section>
     </div>
     """)
 
+    st.button("Ver planes y suscripción →", key="home_plans_button", type="primary", on_click=_ir_a_planes, use_container_width=False)
 # ============================================================
 # 02. OPORTUNIDADES
 # ============================================================
 
-with tab_oportunidades:
+if active_page == "Oportunidades":
     render_html("""
     <div class="aq-wrap">
       <div class="aq-list-head">
@@ -4321,7 +4473,7 @@ with tab_oportunidades:
 # 03. CARTERA
 # ============================================================
 
-with tab_cartera:
+if active_page == "Cartera":
     render_html("""
     <div class="aq-wrap">
       <div class="aq-list-head">
@@ -4336,16 +4488,14 @@ with tab_cartera:
     if df_activas_global.empty:
         render_html("<div class='aq-wrap'><div class='empty-state'><div class='empty-title'>No hay posiciones activas</div><div class='empty-text'>Las nuevas señales aparecerán automáticamente.</div></div></div>")
     else:
-        cols = [c for c in ['Ticker','Empresa','Sector','Precio_Alerta','Precio_Actual','Stop_Loss','Take_Profit','Score_Actual','P&L_Actual_Pct','Estado_Estrategia'] if c in df_activas_global.columns]
-        render_html("<div class='aq-wrap'><div class='aq-panel'><div class='aq-panel-title'>Posiciones monitorizadas</div><div class='aq-panel-sub'>Vista resumida de las operaciones abiertas.</div></div></div>")
-        st.dataframe(df_activas_global[cols], use_container_width=True, hide_index=True)
+        render_cartera_table(df_activas_global)
 
 
 # ============================================================
 # 04. PERFORMANCE
 # ============================================================
 
-with tab_resultados:
+if active_page == "Performance":
     render_html(f"""
     <div class="aq-wrap">
       <div class="performance-page-head">
@@ -4382,13 +4532,16 @@ with tab_resultados:
         </div>
       </div>
 
+      <div class="aq-wrap">
+        {f"<div class='performance-disclaimer'>No se pudo cargar backtesting: {html.escape(error_backtesting)}</div>" if error_backtesting else ("<div class='performance-disclaimer'>No hay capturas diarias de backtesting; se muestra el histórico disponible.</div>" if df_backtesting.empty else "")}
+      </div>
       <div class="performance-chart-card">
         <div class="performance-chart-head">
           <div>
-            <div class="performance-chart-title">Curva acumulada</div>
-            <div class="performance-chart-subtitle">Evolución del resultado registrado por el sistema</div>
+            <div class="performance-chart-title">{titulo_curva}</div>
+            <div class="performance-chart-subtitle">P&L conjunto de las alertas en cada captura diaria</div>
           </div>
-          <div class="chart-legend"><i></i> Resultado acumulado</div>
+          <div class="chart-legend"><i></i> {leyenda_curva}</div>
         </div>
         {render_equity_chart_svg(fechas_curva, beneficios_curva)}
         <div class="performance-chart-footer">
@@ -4409,7 +4562,7 @@ with tab_resultados:
 # 05. HISTÓRICO
 # ============================================================
 
-with tab_historial:
+if active_page == "Histórico":
     render_html("""
     <div class="aq-wrap">
       <div class="aq-list-head">
@@ -4432,7 +4585,7 @@ with tab_historial:
 # 06. PLANES
 # ============================================================
 
-with tab_planes:
+if active_page == "Planes":
     render_html("""
     <div class="aq-wrap" id="planes-top">
       <section class="aq-section center" style="padding-bottom:25px;">
