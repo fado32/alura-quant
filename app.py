@@ -3982,22 +3982,24 @@ div[class*="st-key-nav_"] button[kind="primary"]{background:#fff!important;color
 .st-key-home_plans_button button{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:max-content!important;min-height:44px!important;padding:0 18px!important;background:#fff!important;color:#0b1220!important;border:1px solid #fff!important;border-radius:10px!important;font-weight:700!important;white-space:nowrap!important;line-height:1!important}
 .st-key-home_plans_button button p{margin:0!important;color:#0b1220!important;white-space:nowrap!important;line-height:1!important}
 .st-key-home_plans_button button:hover{background:#eef3fb!important;color:#0b1220!important;border-color:#eef3fb!important}
-/* Nav en l?nea: evita que la cuadr?cula de columnas reserve ancho vac?o entre botones. */
-.st-key-nav_scroll [data-testid="stVerticalBlock"]{
-  display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;
-  justify-content:flex-start!important;align-items:stretch!important;gap:6px!important;
-  overflow-x:auto!important;overflow-y:hidden!important;scrollbar-width:none!important;
-  -webkit-overflow-scrolling:touch;padding-bottom:4px!important;
+/* En m?vil, las columnas usan tracks ajustados al texto y se desplazan como una fila. */
+@media(max-width:650px){
+  div[data-testid="stHorizontalBlock"]:has(.st-key-nav_0){
+    display:grid!important;grid-template-columns:repeat(5,max-content)!important;
+    grid-auto-flow:column!important;grid-auto-columns:max-content!important;
+    justify-content:start!important;align-items:start!important;column-gap:6px!important;
+    overflow-x:auto!important;overflow-y:hidden!important;scrollbar-width:none!important;
+    -webkit-overflow-scrolling:touch;padding-bottom:4px!important;
+  }
+  div[data-testid="stHorizontalBlock"]:has(.st-key-nav_0)::-webkit-scrollbar{display:none!important}
+  div[data-testid="stHorizontalBlock"]:has(.st-key-nav_0)>div[data-testid="column"]{
+    width:max-content!important;min-width:max-content!important;flex:none!important;
+  }
+  div[data-testid="stHorizontalBlock"]:has(.st-key-nav_0) div[class*="st-key-nav_"] button{
+    width:max-content!important;min-width:max-content!important;font-size:11px!important;
+    padding:0 12px!important;white-space:nowrap!important;
+  }
 }
-.st-key-nav_scroll [data-testid="stVerticalBlock"]::-webkit-scrollbar{display:none!important}
-.st-key-nav_scroll [data-testid="stElementContainer"]{
-  flex:0 0 auto!important;width:max-content!important;min-width:max-content!important;
-}
-.st-key-nav_scroll div[class*="st-key-nav_"] button{
-  width:max-content!important;min-width:max-content!important;font-size:11px!important;
-  padding:0 12px!important;white-space:nowrap!important;
-}
-
 .st-key-home_final_cta{
   margin:0 auto 34px!important;padding:44px 28px!important;border-radius:27px!important;
   background:linear-gradient(135deg,#0b1220 0%,#142d65 100%)!important;
@@ -4036,8 +4038,9 @@ def _cambiar_pagina(pagina):
 
 
 active_page = st.session_state.get("active_page", "Inicio")
-with st.container(key="nav_scroll"):
-    for _idx, _pagina in enumerate(PAGINAS):
+_nav_cols = st.columns(len(PAGINAS), gap="small")
+for _idx, _pagina in enumerate(PAGINAS):
+    with _nav_cols[_idx]:
         st.button(
             _pagina,
             key=f"nav_{_idx}",
