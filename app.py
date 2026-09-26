@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 import gspread
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 import yfinance as yf
 from google.oauth2.service_account import Credentials
 from supabase import create_client
@@ -279,6 +280,49 @@ def cargar_datos():
         st.error(f"Error cargando historial desde Supabase: {e}")
         return pd.DataFrame(columns=CAMPOS_HISTORIAL)
 
+
+@st.cache_data(ttl=60)
+def cargar_backtesting_diario():
+    """Carga las capturas diarias usadas para la curva de resultados."""
+    try:
+        registros = []
+        inicio = 0
+        tamano = 1000
+        while True:
+            respuesta = (supabase.table("backtesting_diario_alertas")
+                .select("fecha_snapshot,alerta_id,ticker,estado,precio_alerta,precio_actual,pnl_actual_pct")
+                .order("fecha_snapshot")
+                .range(inicio, inicio + tamano - 1)
+                .execute())
+            lote = respuesta.data or []
+            registros.extend(lote)
+            if len(lote) < tamano:
+                break
+            inicio += tamano
+        return pd.DataFrame(registros)
+    except Exception as e:
+        print(f"Error cargando backtesting diario desde Supabase: {e}")
+        return pd.DataFrame(columns=["fecha_snapshot", "alerta_id", "ticker", "estado", "precio_alerta", "precio_actual", "pnl_actual_pct"])
+
+
+def calcular_resultado_diario(df_backtesting):
+    """Suma el P&L en euros de las alertas capturadas cada día."""
+    if df_backtesting is None or df_backtesting.empty:
+        return [], []
+    df = df_backtesting.copy()
+    df["fecha_snapshot"] = pd.to_datetime(df["fecha_snapshot"], errors="coerce")
+    df["pnl_actual_pct"] = pd.to_numeric(df["pnl_actual_pct"], errors="coerce")
+    if "precio_alerta" in df.columns and "precio_actual" in df.columns:
+        entrada = pd.to_numeric(df["precio_alerta"], errors="coerce")
+        actual = pd.to_numeric(df["precio_actual"], errors="coerce")
+        pct_calculado = (actual - entrada) / entrada * 100
+        df["pnl_actual_pct"] = df["pnl_actual_pct"].fillna(pct_calculado)
+    df = df.dropna(subset=["fecha_snapshot", "pnl_actual_pct"])
+    if df.empty:
+        return [], []
+    df["resultado_eur"] = df["pnl_actual_pct"] * CAPITAL_POR_ALERTA / 100
+    diario = df.groupby(df["fecha_snapshot"].dt.strftime("%Y-%m-%d"))["resultado_eur"].sum().sort_index()
+    return diario.index.tolist(), diario.tolist()
 
 @st.cache_data(ttl=300)
 def obtener_precio_actual(ticker):
@@ -3234,6 +3278,16 @@ rentabilidad_pct = (beneficio_acumulado / capital_inicial * 100) if capital_inic
 beneficio_realizado_curva, fechas_curva, beneficios_curva = calcular_resultados(
     df_hist, beneficio_no_realizado
 )
+df_backtesting = cargar_backtesting_diario()
+fechas_backtesting, resultados_diarios = calcular_resultado_diario(df_backtesting)
+if fechas_backtesting:
+    fechas_curva = fechas_backtesting
+    beneficios_curva = resultados_diarios
+    titulo_curva = 'Resultado diario'
+    leyenda_curva = 'Resultado diario'
+else:
+    titulo_curva = 'Resultado histórico'
+    leyenda_curva = 'Resultado histórico'
 
 
 def obtener_fecha_ultima_actualizacion(df):
@@ -3907,6 +3961,10 @@ render_html("""
     #oportunidad-demo.aq-section{padding:32px 0 22px}
     #por-que-existe.aq-section{padding-top:22px}
 }
+.stRadio [role=radiogroup]{gap:6px;border-bottom:1px solid #e5eaf1;padding-bottom:0}
+.stRadio [role=radiogroup] label{background:#f4f6fa;border:1px solid transparent;border-radius:10px 10px 0 0;padding:10px 16px;margin:0;color:#526176;font-weight:700}
+.stRadio [role=radiogroup] label:has(input:checked){background:#fff;border-color:#e5eaf1;border-bottom-color:#fff;color:#2563eb}
+.stRadio [role=radiogroup] label p{font-size:13px}
 </style>
 """)
 
@@ -3919,9 +3977,15 @@ render_html(f"""
 </div>
 """)
 
-tab_inicio, tab_oportunidades, tab_planes, tab_cartera, tab_resultados, tab_historial = st.tabs([
-    "Inicio", "Oportunidades", "Planes", "Cartera", "Performance", "Histórico"
-])
+PAGINAS = ["Inicio", "Oportunidades", "Planes", "Cartera", "Performance", "Histórico"]
+_pagina_url = st.query_params.get("page", "")
+if _pagina_url in PAGINAS:
+    st.session_state["active_page"] = _pagina_url
+    del st.query_params["page"]
+active_page = st.radio(
+    "Navegación principal", PAGINAS, horizontal=True,
+    label_visibility="collapsed", key="active_page"
+)
 
 # ============================================================
 # SHARED UI — OPPORTUNITY CARD
@@ -4080,8 +4144,8 @@ def render_opportunity_card(row, compact=False, ribbon=False):
 
 def render_equity_chart_svg(fechas, valores):
     """Gráfico de equity ligero y visual, sin depender de una librería adicional."""
-    if not fechas or not valores or len(valores) < 2:
-        return '<div class="equity-empty">Se requieren más operaciones para construir la curva.</div>'
+    if not fechas or not valores:
+        return '<div class="equity-empty">Todavía no hay suficientes datos para mostrar la curva.</div>'
 
     vals = [safe_float(v, 0) or 0 for v in valores]
     width, height = 1000, 330
@@ -4147,7 +4211,7 @@ def render_equity_chart_svg(fechas, valores):
 # 01. INICIO
 # ============================================================
 
-with tab_inicio:
+if active_page == "Inicio":
     render_html(f"""
     <div class="aq-wrap">
       <section class="aq-hero">
@@ -4159,29 +4223,39 @@ with tab_inicio:
         </div>
       </section>
 
-      <section class="aq-kpis">
-        <div class="aq-kpi">
-          <div class="aq-kpi-label">Beneficio total</div>
-          <div class="aq-kpi-value" style="color:{color_resultado};">{formatear_numero(beneficio_acumulado,2," €",True)}</div>
-          <div class="aq-kpi-detail">Realizado + posiciones abiertas</div>
-        </div>
-        <div class="aq-kpi">
-          <div class="aq-kpi-label">Rentabilidad</div>
-          <div class="aq-kpi-value" style="color:{color_resultado};">{formatear_numero(rentabilidad_pct,2,"%",True)}</div>
-          <div class="aq-kpi-detail">Sobre {formatear_numero(CAPITAL_INICIAL,0," €")}</div>
-        </div>
-        <div class="aq-kpi">
-          <div class="aq-kpi-label">Posiciones activas</div>
-          <div class="aq-kpi-value">{activas}</div>
-          <div class="aq-kpi-detail">{TOTAL_ACTIVOS_UNIVERSO} activos monitorizados</div>
-        </div>
-        <div class="aq-kpi">
-          <div class="aq-kpi-label">Win Rate</div>
-          <div class="aq-kpi-value">{formatear_numero(win_rate,1,"%")}</div>
-          <div class="aq-kpi-detail">{exitos} TP · {fallos} SL</div>
-        </div>
-      </section>
+    </div>
+    """)
 
+    kpi_cols = st.columns(4, gap="small")
+    with kpi_cols[0]:
+        components.html(f"""
+        <html><head><style>
+          *{{box-sizing:border-box}}body{{margin:0;font-family:Arial,sans-serif;color:#172033}}
+          .card{{height:106px;background:#fff;border:1px solid #e8edf4;border-radius:16px;padding:20px 18px;box-shadow:0 8px 24px rgba(15,23,42,.04)}}
+          .label{{color:#7b8798;font-size:10px;font-weight:800;letter-spacing:.11em;text-transform:uppercase}}
+          .value{{margin-top:9px;font-size:25px;line-height:1;font-weight:800;letter-spacing:-.04em;color:{color_resultado}}}
+          .detail{{margin-top:8px;color:#98a2b3;font-size:11px}}
+        </style></head><body><div class="card">
+          <div class="label">Beneficio total</div><div class="value" id="benefit">0,00 €</div>
+          <div class="detail">Realizado + posiciones abiertas</div>
+        </div><script>
+          (function(){{var el=document.getElementById('benefit'),target={float(beneficio_acumulado):.8f},started=false;
+          function run(){{if(started)return;started=true;var start=null,duration=1300,fmt=new Intl.NumberFormat('es-ES',{{minimumFractionDigits:2,maximumFractionDigits:2}});
+          function frame(now){{if(start===null)start=now;var p=Math.min((now-start)/duration,1),ease=1-Math.pow(1-p,3),v=target*ease;
+          el.textContent=(v>0?'+':'')+fmt.format(v)+' €';if(p<1)requestAnimationFrame(frame);}}
+          requestAnimationFrame(frame);}}
+          var observer=new IntersectionObserver(function(entries){{if(entries.some(function(e){{return e.isIntersecting;}})){{run();observer.disconnect();}}}});
+          observer.observe(el);}})();
+        </script></body></html>
+        """, height=112, scrolling=False)
+    with kpi_cols[1]:
+        render_html(f"<div class='aq-kpi'><div class='aq-kpi-label'>Rentabilidad</div><div class='aq-kpi-value' style='color:{color_resultado};'>{formatear_numero(rentabilidad_pct,2,'%',True)}</div><div class='aq-kpi-detail'>Sobre {formatear_numero(CAPITAL_INICIAL,0,' €')}</div></div>")
+    with kpi_cols[2]:
+        render_html(f"<div class='aq-kpi'><div class='aq-kpi-label'>Posiciones activas</div><div class='aq-kpi-value'>{activas}</div><div class='aq-kpi-detail'>{TOTAL_ACTIVOS_UNIVERSO} activos monitorizados</div></div>")
+    with kpi_cols[3]:
+        render_html(f"<div class='aq-kpi'><div class='aq-kpi-label'>Win Rate</div><div class='aq-kpi-value'>{formatear_numero(win_rate,1,'%')}</div><div class='aq-kpi-detail'>{exitos} TP · {fallos} SL</div></div>")
+
+    render_html("""
       <section class="aq-section" id="oportunidad-demo">
         <div class="aq-section-head">
           <div>
@@ -4261,7 +4335,7 @@ with tab_inicio:
           <h2>El mercado no necesita más ruido.</h2>
           <p>Necesita mejores filtros. Explora el sistema y decide qué nivel de información quieres recibir.</p>
           <div class="aq-actions">
-            <a class="aq-btn primary" href="#planes-top" onclick="document.querySelectorAll('button[role=tab]').forEach(function(tab){if(tab.innerText.trim()==='Planes')tab.click();});" style="background:#fff;color:#0b1220;border-color:#fff;">Ver planes y suscripción →</a>
+            <a class="aq-btn primary" href="?page=Planes" style="background:#fff;color:#0b1220;border-color:#fff;">Ver planes y suscripción →</a>
           </div>
         </div>
       </section>
@@ -4272,7 +4346,7 @@ with tab_inicio:
 # 02. OPORTUNIDADES
 # ============================================================
 
-with tab_oportunidades:
+if active_page == "Oportunidades":
     render_html("""
     <div class="aq-wrap">
       <div class="aq-list-head">
@@ -4321,7 +4395,7 @@ with tab_oportunidades:
 # 03. CARTERA
 # ============================================================
 
-with tab_cartera:
+if active_page == "Cartera":
     render_html("""
     <div class="aq-wrap">
       <div class="aq-list-head">
@@ -4336,16 +4410,37 @@ with tab_cartera:
     if df_activas_global.empty:
         render_html("<div class='aq-wrap'><div class='empty-state'><div class='empty-title'>No hay posiciones activas</div><div class='empty-text'>Las nuevas señales aparecerán automáticamente.</div></div></div>")
     else:
-        cols = [c for c in ['Ticker','Empresa','Sector','Precio_Alerta','Precio_Actual','Stop_Loss','Take_Profit','Score_Actual','P&L_Actual_Pct','Estado_Estrategia'] if c in df_activas_global.columns]
-        render_html("<div class='aq-wrap'><div class='aq-panel'><div class='aq-panel-title'>Posiciones monitorizadas</div><div class='aq-panel-sub'>Vista resumida de las operaciones abiertas.</div></div></div>")
-        st.dataframe(df_activas_global[cols], use_container_width=True, hide_index=True)
+        columnas_cartera = {
+            "Empresa": "Empresa", "Sector": "Sector", "Precio_Alerta": "Entrada",
+            "Precio_Actual": "Precio actual", "Stop_Loss": "Stop loss",
+            "Take_Profit": "Take profit", "Score_Actual": "Puntuación",
+            "P&L_Actual_Pct": "Rendimiento", "Estado_Estrategia": "Estado"
+        }
+        cols = [c for c in columnas_cartera if c in df_activas_global.columns]
+        cartera = df_activas_global[cols].rename(columns=columnas_cartera).copy()
+        if "Estado" in cartera.columns:
+            cartera["Estado"] = cartera["Estado"].fillna("-").astype(str).str.replace("_", " ").str.title()
+        formatos = {
+            "Entrada": "{:.2f} €", "Precio actual": "{:.2f} €",
+            "Stop loss": "{:.2f} €", "Take profit": "{:.2f} €",
+            "Puntuación": "{:.0f}", "Rendimiento": "{:+.2f}%"
+        }
+        formatos = {col: fmt for col, fmt in formatos.items() if col in cartera.columns}
+        tabla_estilizada = (cartera.style.format(formatos, na_rep="—")
+            .set_table_styles([
+                {"selector": "th", "props": [("background-color", "#f5f7fb"), ("color", "#526176"), ("font-weight", "700"), ("border-bottom", "1px solid #e5eaf1"), ("padding", "12px 14px")]},
+                {"selector": "td", "props": [("padding", "13px 14px"), ("border-bottom", "1px solid #edf1f6"), ("color", "#253247")]},
+                {"selector": "tbody tr:hover", "props": [("background-color", "#f8faff")]}
+            ]))
+        render_html("<div class='aq-wrap'><div class='aq-panel'><div class='aq-panel-title'>Posiciones monitorizadas</div><div class='aq-panel-sub'>Seguimiento de entradas, objetivos y rendimiento actual.</div></div></div>")
+        st.dataframe(tabla_estilizada, use_container_width=True, hide_index=True)
 
 
 # ============================================================
 # 04. PERFORMANCE
 # ============================================================
 
-with tab_resultados:
+if active_page == "Performance":
     render_html(f"""
     <div class="aq-wrap">
       <div class="performance-page-head">
@@ -4385,10 +4480,10 @@ with tab_resultados:
       <div class="performance-chart-card">
         <div class="performance-chart-head">
           <div>
-            <div class="performance-chart-title">Curva acumulada</div>
-            <div class="performance-chart-subtitle">Evolución del resultado registrado por el sistema</div>
+            <div class="performance-chart-title">{titulo_curva}</div>
+            <div class="performance-chart-subtitle">P&L conjunto de las alertas en cada captura diaria</div>
           </div>
-          <div class="chart-legend"><i></i> Resultado acumulado</div>
+          <div class="chart-legend"><i></i> {leyenda_curva}</div>
         </div>
         {render_equity_chart_svg(fechas_curva, beneficios_curva)}
         <div class="performance-chart-footer">
@@ -4409,7 +4504,7 @@ with tab_resultados:
 # 05. HISTÓRICO
 # ============================================================
 
-with tab_historial:
+if active_page == "Histórico":
     render_html("""
     <div class="aq-wrap">
       <div class="aq-list-head">
@@ -4432,7 +4527,7 @@ with tab_historial:
 # 06. PLANES
 # ============================================================
 
-with tab_planes:
+if active_page == "Planes":
     render_html("""
     <div class="aq-wrap" id="planes-top">
       <section class="aq-section center" style="padding-bottom:25px;">
