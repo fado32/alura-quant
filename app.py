@@ -281,7 +281,7 @@ def cargar_datos():
         return pd.DataFrame(columns=CAMPOS_HISTORIAL)
 
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=60)
 def cargar_backtesting_diario():
     """Carga las capturas diarias usadas para la curva de resultados."""
     try:
@@ -3298,6 +3298,11 @@ if fechas_backtesting:
 else:
     titulo_curva = 'Resultado histórico'
     leyenda_curva = 'Resultado histórico'
+if not fechas_curva or not beneficios_curva:
+    fechas_curva = [datetime.now().strftime("%Y-%m-%d")]
+    beneficios_curva = [beneficio_acumulado]
+    titulo_curva = "Resultado actual"
+    leyenda_curva = "Resultado actual"
 
 
 def obtener_fecha_ultima_actualizacion(df):
@@ -3971,15 +3976,13 @@ render_html("""
     #oportunidad-demo.aq-section{padding:32px 0 22px}
     #por-que-existe.aq-section{padding-top:22px}
 }
-.stRadio [role=radiogroup]{gap:6px;border-bottom:1px solid #e5eaf1;padding-bottom:0}
-.stRadio [role=radiogroup] label > div:first-child{display:none!important}
-.stRadio [role=radiogroup] label{display:inline-flex;cursor:pointer;background:#f4f6fa;border:1px solid transparent;border-radius:10px 10px 0 0;padding:10px 16px;margin:0;color:#526176;font-weight:700}
-.stRadio [role=radiogroup] label:has(input:checked){background:#fff;border-color:#e5eaf1;border-bottom-color:#fff;color:#2563eb}
-.stRadio [role=radiogroup] label p{font-size:13px;margin:0}
-.st-key-home_plans_button{margin-top:-18px;margin-bottom:28px}
+div[class*="st-key-nav_"] button{min-height:42px!important;border-radius:10px 10px 0 0!important;border:0!important;border-bottom:2px solid transparent!important;background:transparent!important;color:#64748b!important;font-weight:700!important;box-shadow:none!important;padding-left:5px!important;padding-right:5px!important}
+div[class*="st-key-nav_"] button:hover{background:#f4f7fb!important;color:#2563eb!important}
+div[class*="st-key-nav_"] button[kind="primary"]{background:#fff!important;color:#2563eb!important;border-bottom-color:#2563eb!important}
+.st-key-home_plans_button{position:relative;z-index:3;display:flex;justify-content:center;margin-top:-78px;margin-bottom:34px}
 .st-key-home_plans_button button{background:#fff!important;color:#0b1220!important;border:1px solid #fff!important;border-radius:10px!important;font-weight:700!important}
 .st-key-home_plans_button button:hover{background:#eef3fb!important;color:#0b1220!important;border-color:#eef3fb!important}
-@media(max-width:650px){.stRadio [role=radiogroup]{flex-wrap:wrap}.stRadio [role=radiogroup] label{padding:8px 10px;font-size:11px}}
+@media(max-width:650px){div[class*="st-key-nav_"] button{font-size:10px!important;padding-left:2px!important;padding-right:2px!important}}
 </style>
 """)
 
@@ -3993,14 +3996,25 @@ render_html(f"""
 """)
 
 PAGINAS = ["Inicio", "Oportunidades", "Planes", "Cartera", "Performance", "Histórico"]
-def _ir_a_planes():
-    st.session_state["active_page"] = "Planes"
+
+def _cambiar_pagina(pagina):
+    st.session_state["active_page"] = pagina
+    if pagina == "Planes":
+        st.session_state["scroll_planes_top"] = True
 
 
-active_page = st.radio(
-    "Navegación principal", PAGINAS, horizontal=True,
-    label_visibility="collapsed", key="active_page"
-)
+active_page = st.session_state.get("active_page", "Inicio")
+_nav_cols = st.columns(len(PAGINAS), gap="small")
+for _idx, _pagina in enumerate(PAGINAS):
+    with _nav_cols[_idx]:
+        st.button(
+            _pagina,
+            key=f"nav_{_idx}",
+            type="primary" if _pagina == active_page else "secondary",
+            on_click=_cambiar_pagina,
+            args=(_pagina,),
+            use_container_width=True,
+        )
 
 # ============================================================
 # SHARED UI — OPPORTUNITY CARD
@@ -4419,7 +4433,7 @@ if active_page == "Inicio":
     </div>
     """)
 
-    st.button("Ver planes y suscripción →", key="home_plans_button", type="primary", on_click=_ir_a_planes, use_container_width=False)
+    st.button("Ver planes y suscripción →", key="home_plans_button", type="primary", on_click=_cambiar_pagina, args=("Planes",), use_container_width=False)
 # ============================================================
 # 02. OPORTUNIDADES
 # ============================================================
@@ -4586,6 +4600,22 @@ if active_page == "Histórico":
 # ============================================================
 
 if active_page == "Planes":
+    if st.session_state.pop("scroll_planes_top", False):
+        components.html("""
+        <script>
+        (function(){
+          function irArriba(){
+            try {
+              var p=window.parent;
+              p.scrollTo({top:0,left:0,behavior:"auto"});
+              var c=p.document.querySelector("[data-testid='stAppViewContainer']");
+              if(c)c.scrollTo({top:0,left:0,behavior:"auto"});
+            } catch(e) { try { window.parent.scrollTo(0,0); } catch(_) {} }
+          }
+          setTimeout(irArriba,120);setTimeout(irArriba,450);setTimeout(irArriba,900);
+        })();
+        </script>
+        """, height=1, scrolling=False)
     render_html("""
     <div class="aq-wrap" id="planes-top">
       <section class="aq-section center" style="padding-bottom:25px;">
@@ -4593,7 +4623,7 @@ if active_page == "Planes":
         <h2>Elige cómo quieres utilizar Alura Quant.</h2>
         <p class="aq-section-intro">Empieza gratis para conocer la plataforma o accede a Pro cuando quieras profundizar en las oportunidades y el análisis.</p>
 
-        <div class="aq-pricing-grid" id="planes-top">
+        <div class="aq-pricing-grid">
           <div class="aq-price">
             <div class="aq-price-badge">FREE</div>
             <h3>Explora Alura Quant</h3>
