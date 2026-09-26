@@ -1205,9 +1205,10 @@ def generar_html_newsletter(
 <tr>
 <td style="padding:20px 32px;background:#1e293b;color:#cbd5e1;font-size:11px;line-height:1.55;">
     <strong style="color:#ffffff;">Alura Quant</strong><br>
-    Informe generado automáticamente a partir de snapshots históricos
-    de <em>backtesting_diario_alertas</em> y datos de mercado de referencia.
-    Este informe es informativo y no constituye asesoramiento financiero.
+    Informe generado automáticamente. Alura Quant es una herramienta tecnológica de análisis cuantitativo y educación financiera. 
+    Los datos, scores, niveles técnicos y análisis generados por algoritmos o inteligencia artificial no constituyen, ni deben interpretarse como,
+    un servicio de asesoramiento en inversión, recomendación de compra/venta o análisis financiero personalizado según la Ley del Mercado de Valores.
+    La renta variable conlleva riesgos de pérdida de capital. Cada usuario es responsable exclusivo de sus decisiones de inversión.
 </td>
 </tr>
 
