@@ -89,8 +89,8 @@ def semana_referencia(hoy: Optional[date] = None) -> Tuple[date, date]:
     lunes = hoy - timedelta(days=hoy.weekday())
 
     if hoy.weekday() >= 5:
-        fin = lunes - timedelta(days=1)
-        inicio = fin - timedelta(days=4)
+        inicio = lunes 
+        fin = lunes + timedelta(days=4)
     else:
         inicio = lunes
         fin = hoy
