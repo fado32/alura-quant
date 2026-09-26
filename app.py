@@ -3283,11 +3283,6 @@ fechas_backtesting, resultados_diarios = calcular_resultado_diario(df_backtestin
 if fechas_backtesting:
     fechas_curva = fechas_backtesting
     beneficios_curva = resultados_diarios
-    titulo_curva = 'Resultado diario'
-    leyenda_curva = 'Resultado diario'
-else:
-    titulo_curva = 'Resultado histórico'
-    leyenda_curva = 'Resultado histórico'
 
 
 def obtener_fecha_ultima_actualizacion(df):
@@ -3981,7 +3976,6 @@ PAGINAS = ["Inicio", "Oportunidades", "Planes", "Cartera", "Performance", "Hist�
 _pagina_url = st.query_params.get("page", "")
 if _pagina_url in PAGINAS:
     st.session_state["active_page"] = _pagina_url
-    del st.query_params["page"]
 active_page = st.radio(
     "Navegación principal", PAGINAS, horizontal=True,
     label_visibility="collapsed", key="active_page"
@@ -4145,7 +4139,7 @@ def render_opportunity_card(row, compact=False, ribbon=False):
 def render_equity_chart_svg(fechas, valores):
     """Gráfico de equity ligero y visual, sin depender de una librería adicional."""
     if not fechas or not valores:
-        return '<div class="equity-empty">Todavía no hay suficientes datos para mostrar la curva.</div>'
+        return '<div class="equity-empty">Se requieren más operaciones para construir la curva.</div>'
 
     vals = [safe_float(v, 0) or 0 for v in valores]
     width, height = 1000, 330
@@ -4249,7 +4243,7 @@ if active_page == "Inicio":
         </script></body></html>
         """, height=112, scrolling=False)
     with kpi_cols[1]:
-        render_html(f"<div class='aq-kpi'><div class='aq-kpi-label'>Rentabilidad</div><div class='aq-kpi-value' style='color:{color_resultado};'>{formatear_numero(rentabilidad_pct,2,'%',True)}</div><div class='aq-kpi-detail'>Sobre {formatear_numero(CAPITAL_INICIAL,0,' €')}</div></div>")
+        render_html(f"<div class='aq-kpi'><div class='aq-kpi-label'>Rentabilidad</div><div class='aq-kpi-value' style='color:{color_resultado};'>{formatear_numero(rentabilidad_pct,2,'% ',True)}</div><div class='aq-kpi-detail'>Sobre {formatear_numero(CAPITAL_INICIAL,0,' €')}</div></div>")
     with kpi_cols[2]:
         render_html(f"<div class='aq-kpi'><div class='aq-kpi-label'>Posiciones activas</div><div class='aq-kpi-value'>{activas}</div><div class='aq-kpi-detail'>{TOTAL_ACTIVOS_UNIVERSO} activos monitorizados</div></div>")
     with kpi_cols[3]:
@@ -4480,10 +4474,10 @@ if active_page == "Performance":
       <div class="performance-chart-card">
         <div class="performance-chart-head">
           <div>
-            <div class="performance-chart-title">{titulo_curva}</div>
+            <div class="performance-chart-title">Resultado diario</div>
             <div class="performance-chart-subtitle">P&L conjunto de las alertas en cada captura diaria</div>
           </div>
-          <div class="chart-legend"><i></i> {leyenda_curva}</div>
+          <div class="chart-legend"><i></i> Resultado diario</div>
         </div>
         {render_equity_chart_svg(fechas_curva, beneficios_curva)}
         <div class="performance-chart-footer">
