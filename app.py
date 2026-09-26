@@ -3984,13 +3984,14 @@ div[class*="st-key-nav_"] button[kind="primary"]{background:#fff!important;color
 .st-key-home_plans_button button:hover{background:#eef3fb!important;color:#0b1220!important;border-color:#eef3fb!important}
 @media(max-width:650px){
   div[data-testid="stHorizontalBlock"]:has(.st-key-nav_0){
-    flex-direction:row!important;flex-wrap:nowrap!important;overflow-x:auto!important;
-    overflow-y:hidden!important;gap:6px!important;scrollbar-width:none;
+    flex-direction:row!important;flex-wrap:nowrap!important;justify-content:flex-start!important;
+    align-items:flex-start!important;overflow-x:auto!important;
+    overflow-y:hidden!important;gap:6px!important;column-gap:6px!important;scrollbar-width:none;
     -webkit-overflow-scrolling:touch; padding-bottom:4px;
   }
   div[data-testid="stHorizontalBlock"]:has(.st-key-nav_0)::-webkit-scrollbar{display:none}
   div[data-testid="stHorizontalBlock"]:has(.st-key-nav_0)>div[data-testid="column"]{
-    flex:0 0 max-content!important;width:max-content!important;min-width:max-content!important;
+    flex:0 0 max-content!important;flex-grow:0!important;width:max-content!important;min-width:max-content!important;margin:0!important;
   }
   div[data-testid="stHorizontalBlock"]:has(.st-key-nav_0) div[class*="st-key-nav_"] button{
     width:max-content!important;min-width:max-content!important;font-size:11px!important;
