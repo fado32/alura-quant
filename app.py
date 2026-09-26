@@ -3979,10 +3979,36 @@ render_html("""
 div[class*="st-key-nav_"] button{min-height:42px!important;border-radius:10px 10px 0 0!important;border:0!important;border-bottom:2px solid transparent!important;background:transparent!important;color:#64748b!important;font-weight:700!important;box-shadow:none!important;padding-left:5px!important;padding-right:5px!important}
 div[class*="st-key-nav_"] button:hover{background:#f4f7fb!important;color:#2563eb!important}
 div[class*="st-key-nav_"] button[kind="primary"]{background:#fff!important;color:#2563eb!important;border-bottom-color:#2563eb!important}
-.st-key-home_plans_button{position:relative;z-index:3;display:flex;justify-content:center;margin-top:-78px;margin-bottom:34px}
 .st-key-home_plans_button button{background:#fff!important;color:#0b1220!important;border:1px solid #fff!important;border-radius:10px!important;font-weight:700!important}
 .st-key-home_plans_button button:hover{background:#eef3fb!important;color:#0b1220!important;border-color:#eef3fb!important}
-@media(max-width:650px){div[class*="st-key-nav_"] button{font-size:10px!important;padding-left:2px!important;padding-right:2px!important}}
+@media(max-width:650px){
+  div[data-testid="stHorizontalBlock"]:has(.st-key-nav_0){
+    flex-direction:row!important;flex-wrap:nowrap!important;overflow-x:auto!important;
+    overflow-y:hidden!important;gap:6px!important;scrollbar-width:none;
+    -webkit-overflow-scrolling:touch; padding-bottom:4px;
+  }
+  div[data-testid="stHorizontalBlock"]:has(.st-key-nav_0)::-webkit-scrollbar{display:none}
+  div[data-testid="stHorizontalBlock"]:has(.st-key-nav_0)>div[data-testid="column"]{
+    flex:0 0 118px!important;width:118px!important;min-width:118px!important;
+  }
+  div[class*="st-key-nav_"] button{font-size:11px!important;padding:0 5px!important;white-space:nowrap!important}
+}
+.st-key-home_final_cta{
+  margin:0 auto 34px!important;padding:44px 28px!important;border-radius:27px!important;
+  background:linear-gradient(135deg,#0b1220 0%,#142d65 100%)!important;
+  text-align:center!important;color:#fff!important;box-shadow:0 20px 60px rgba(15,23,42,.13)!important;
+}
+.st-key-home_final_cta .aq-eyebrow{color:#8db6ff}
+.st-key-home_final_cta h2{color:#fff;margin:10px 0 13px;font-family:'Plus Jakarta Sans',sans-serif;font-size:clamp(32px,4vw,49px);letter-spacing:-.05em}
+.st-key-home_final_cta p{max-width:620px;margin:0 auto 20px;color:#c5d0e0;line-height:1.75;font-size:14px}
+.st-key-home_plans_button{display:flex;justify-content:center;margin:0 auto 4px!important}
+.st-key-home_plans_button button{background:#fff!important;color:#0b1220!important;border:1px solid #fff!important;border-radius:10px!important;font-weight:700!important}
+.st-key-home_plans_button button:hover{background:#eef3fb!important;color:#0b1220!important;border-color:#eef3fb!important}
+.st-key-performance_chart_native{margin-top:12px!important;background:#fff!important;border:1px solid var(--aq-border)!important;border-radius:22px!important;box-shadow:var(--aq-shadow-soft)!important;overflow:hidden!important;padding:0!important}
+.st-key-performance_chart_native .performance-chart-head{padding:24px 25px 12px}
+.st-key-performance_chart_native [data-testid="stVegaLiteChart"]{padding:0 15px}
+.st-key-performance_chart_native .performance-chart-footer{margin-top:8px}
+@media(max-width:650px){.st-key-home_final_cta{padding:38px 20px!important}}
 </style>
 """)
 
@@ -3995,7 +4021,7 @@ render_html(f"""
 </div>
 """)
 
-PAGINAS = ["Inicio", "Oportunidades", "Planes", "Cartera", "Performance", "Histórico"]
+PAGINAS = ["Inicio", "Oportunidades", "Planes", "Cartera", "Performance"]
 
 def _cambiar_pagina(pagina):
     st.session_state["active_page"] = pagina
@@ -4422,18 +4448,16 @@ if active_page == "Inicio":
         </div>
       </section>
 
-      <section class="aq-section" style="padding-top:0;">
-        <div class="aq-final-cta">
-          <div class="aq-eyebrow">ALURA QUANT</div>
-          <h2>El mercado no necesita más ruido.</h2>
-          <p>Necesita mejores filtros. Explora el sistema y decide qué nivel de información quieres recibir.</p>
-          
-        </div>
-      </section>
-    </div>
+      </div>
     """)
 
-    st.button("Ver planes y suscripción →", key="home_plans_button", type="primary", on_click=_cambiar_pagina, args=("Planes",), use_container_width=False)
+    with st.container(key="home_final_cta"):
+        render_html("""
+        <div class="aq-eyebrow">ALURA QUANT</div>
+        <h2>El mercado no necesita más ruido.</h2>
+        <p>Necesita mejores filtros. Explora el sistema y decide qué nivel de información quieres recibir.</p>
+        """)
+        st.button("Ver planes y suscripción →", key="home_plans_button", type="primary", on_click=_cambiar_pagina, args=("Planes",), use_container_width=False)
 # ============================================================
 # 02. OPORTUNIDADES
 # ============================================================
@@ -4549,22 +4573,39 @@ if active_page == "Performance":
       <div class="aq-wrap">
         {f"<div class='performance-disclaimer'>No se pudo cargar backtesting: {html.escape(error_backtesting)}</div>" if error_backtesting else ("<div class='performance-disclaimer'>No hay capturas diarias de backtesting; se muestra el histórico disponible.</div>" if df_backtesting.empty else "")}
       </div>
-      <div class="performance-chart-card">
+    </div>
+    """)
+
+    with st.container(key="performance_chart_native", border=True):
+        render_html(f"""
         <div class="performance-chart-head">
           <div>
             <div class="performance-chart-title">{titulo_curva}</div>
-            <div class="performance-chart-subtitle">P&L conjunto de las alertas en cada captura diaria</div>
+            <div class="performance-chart-subtitle">P&L de la cartera por fecha de captura</div>
           </div>
           <div class="chart-legend"><i></i> {leyenda_curva}</div>
         </div>
-        {render_equity_chart_svg(fechas_curva, beneficios_curva)}
+        """)
+        df_grafico = pd.DataFrame({
+            "Fecha": pd.to_datetime(fechas_curva, errors="coerce"),
+            "Resultado (€)": [safe_float(v, 0) or 0 for v in beneficios_curva],
+        }).dropna(subset=["Fecha"]).sort_values("Fecha").set_index("Fecha")
+        if len(df_grafico) == 1:
+            st.scatter_chart(df_grafico.reset_index(), x="Fecha", y="Resultado (€)", height=340, use_container_width=True)
+        elif not df_grafico.empty:
+            st.line_chart(df_grafico, height=340, use_container_width=True)
+        else:
+            st.info("Todavía no hay resultados diarios disponibles para mostrar.")
+        render_html(f"""
         <div class="performance-chart-footer">
           <span>Realizado: <strong>{formatear_numero(beneficio_realizado,2," €",True)}</strong></span>
           <span>Abierto: <strong>{formatear_numero(beneficio_no_realizado,2," €",True)}</strong></span>
           <span>Capital de referencia: <strong>{formatear_numero(CAPITAL_INICIAL,0," €")}</strong></span>
         </div>
-      </div>
+        """)
 
+    render_html("""
+    <div class="aq-wrap">
       <div class="performance-disclaimer">
         Resultados históricos calculados a partir de las operaciones registradas. No constituyen una garantía de resultados futuros ni asesoramiento financiero.
       </div>
