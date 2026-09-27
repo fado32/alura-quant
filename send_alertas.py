@@ -1,4 +1,4 @@
-import os, re, json, html, time, logging, io, base64
+import os, re, json, html, time, logging
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote_plus
 from urllib.request import Request, urlopen
@@ -8,12 +8,10 @@ from supabase import create_client, Client
 from openai import OpenAI
 import resend
 
-from PIL import Image, ImageDraw, ImageFont
-
 # ============================================================
 # ALURA QUANT — ALERTAS PREMIUM
-# Detecta nuevas alertas ACTIVA con Score >= 80 y envía una
-# ficha cuantitativa visual + contexto de empresa/sector/noticias.
+# Detecta nuevas alertas ACTIVAS con Score >= 80 y envía una
+# ficha cuantitativa integrada en HTML nativo + contexto IA.
 # ============================================================
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 log = logging.getLogger("alura-alertas")
@@ -170,60 +168,18 @@ No inventes cifras. No inventes hechos. No cambies Score, RSI, RVOL, ROC20 ni ni
 
 
 # ============================================================
-# RENDERIZADO DE LA FICHA EN IMAGEN PNG (Pillow)
+# COMPONENTES HTML INTEGRADOS (Sin adjuntos / Sin imágenes)
 # ============================================================
-def get_font(size=14, bold=False):
-    try:
-        font_name = "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"
-        return ImageFont.truetype(font_name, size)
-    except Exception:
-        return ImageFont.load_default()
-
-def generate_opportunity_card_image(a):
+def build_html_opportunity_card(a):
     """
-    Genera en imagen exactamente la Ficha de Oportunidades de Alura Quant
-    con el diseño pixel-perfect de la plataforma.
+    Construye la ficha de oportunidad mediante tablas HTML nativas
+    e inline CSS compatible con todos los clientes de email.
     """
-    w, h = 680, 480
-    bg_color = (255, 255, 255)
-    img = Image.new("RGB", (w, h), bg_color)
-    draw = ImageDraw.Draw(img)
+    empresa = esc(a.get("empresa"))
+    ticker = esc(a.get("ticker"))
+    sector = esc(a.get("sector"))
+    score = num(a.get("score_entrada"), 0)
 
-    # Colores
-    c_border = (231, 235, 242)
-    c_text_main = (17, 24, 39)
-    c_text_sub = (100, 116, 139)
-    c_text_muted = (148, 163, 184)
-    c_blue = (37, 99, 235)
-    c_red = (220, 38, 38)
-    c_green = (22, 163, 74)
-    c_card_bg = (248, 250, 252)
-
-    # Borde exterior de la tarjeta
-    draw.rounded_rectangle([1, 1, w - 2, h - 2], radius=16, outline=c_border, width=2)
-
-    # --- Header Ficha ---
-    empresa = safe(a.get("empresa"), "Empresa")
-    ticker = safe(a.get("ticker"), "TICKER")
-    sector = safe(a.get("sector"), "Sector")
-    score = safe(num(a.get("score_entrada"), 0))
-
-    # Título empresa y meta
-    f_title = get_font(18, bold=True)
-    f_sub = get_font(12, bold=False)
-    draw.text((24, 20), f"{empresa} ({ticker})", fill=c_text_main, font=f_title)
-    draw.text((24, 46), f"Sector: {sector}", fill=c_text_sub, font=f_sub)
-
-    # Score Box Right
-    f_score_lbl = get_font(9, bold=True)
-    f_score_val = get_font(20, bold=True)
-    draw.text((w - 110, 20), "SCORE", fill=c_text_muted, font=f_score_lbl)
-    draw.text((w - 110, 34), f"{score}/100", fill=c_blue, font=f_score_val)
-
-    # Linea divisoria
-    draw.line([(24, 76), (w - 24, 76)], fill=c_border, width=1)
-
-    # --- Position Tracker ---
     try: sl = float(a.get("stop_loss"))
     except: sl = 0.0
     try: entry = float(a.get("precio_alerta"))
@@ -233,101 +189,139 @@ def generate_opportunity_card_image(a):
     try: tp = float(a.get("take_profit"))
     except: tp = 0.0
 
+    # Cálculo dinámico de proporciones para la barra visual en HTML
     vals = [v for v in [sl, entry, current, tp] if v > 0]
     lo, hi = (min(vals), max(vals)) if len(vals) >= 2 else (0, 1)
     span = max(0.001, hi - lo)
-    lo_margin = lo - span * 0.08
-    hi_margin = hi + span * 0.08
-    full_span = hi_margin - lo_margin
+    
+    pct_sl = max(0, min(100, int(((sl - lo) / span) * 100)))
+    pct_entry = max(0, min(100, int(((entry - lo) / span) * 100)))
+    pct_tp = max(0, min(100, int(((tp - lo) / span) * 100)))
 
-    def get_x(v):
-        pct_v = (v - lo_margin) / full_span
-        return int(24 + max(0, min(1, pct_v)) * (w - 48))
-
-    x_sl = get_x(sl)
-    x_entry = get_x(entry)
-    x_curr = get_x(current)
-    x_tp = get_x(tp)
-
-    # Etiquetas de la barra
-    f_lbl = get_font(9, bold=True)
-    f_val = get_font(11, bold=True)
-
-    draw.text((24, 90), "STOP", fill=c_text_muted, font=f_lbl)
-    draw.text((24, 104), eur(sl), fill=c_red, font=f_val)
-
-    draw.text((170, 90), "ENTRADA", fill=c_text_muted, font=f_lbl)
-    draw.text((170, 104), eur(entry), fill=c_blue, font=f_val)
-
-    draw.text((320, 90), "ACTUAL", fill=c_text_muted, font=f_lbl)
-    draw.text((320, 104), eur(current), fill=c_text_main, font=f_val)
-
-    draw.text((w - 120, 90), "TAKE PROFIT", fill=c_text_muted, font=f_lbl)
-    draw.text((w - 120, 104), eur(tp), fill=c_green, font=f_val)
-
-    # Pista de la barra
-    track_y = 138
-    draw.rounded_rectangle([24, track_y, w - 24, track_y + 6], radius=3, fill=(238, 242, 247))
-    draw.rounded_rectangle([x_sl, track_y, x_entry, track_y + 6], radius=3, fill=(254, 226, 226))
-    draw.rounded_rectangle([x_curr, track_y, x_tp, track_y + 6], radius=3, fill=(220, 252, 231))
-
-    # Puntos de nivel
-    for x_p, col in [(x_sl, c_red), (x_entry, c_blue), (x_tp, c_green)]:
-        draw.ellipse([x_p - 4, track_y + 3 - 4, x_p + 4, track_y + 3 + 4], fill=(255, 255, 255), outline=col, width=2)
-    # Marcador Actual
-    draw.ellipse([x_curr - 6, track_y + 3 - 6, x_curr + 6, track_y + 3 + 6], fill=c_blue, outline=(255, 255, 255), width=2)
-
-    # --- Bloques de Métricas Técnico-Cuantitativas ---
-    box_w = (w - 48 - 24) // 4
-    box_h = 58
-    y_m1 = 165
-
-    metrics1 = [
-        ("PRECIO", eur(a.get("precio_alerta")), c_text_main),
-        ("RVOL", f"{num(a.get('rvol_entrada'))}x", c_text_main),
-        ("RSI", safe(num(a.get('rsi_entrada'))), c_text_main),
-        ("ROC20", safe(pct(a.get('roc20_entrada'))), c_text_main)
-    ]
-
-    for i, (m_lbl, m_val, m_col) in enumerate(metrics1):
-        bx = 24 + i * (box_w + 8)
-        draw.rounded_rectangle([bx, y_m1, bx + box_w, y_m1 + box_h], radius=8, fill=c_card_bg, outline=c_border, width=1)
-        draw.text((bx + 10, y_m1 + 8), m_lbl, fill=c_text_muted, font=get_font(8, bold=True))
-        draw.text((bx + 10, y_m1 + 26), m_val, fill=m_col, font=get_font(12, bold=True))
-
-    y_m2 = y_m1 + box_h + 10
-    metrics2 = [
-        ("STOP LOSS", eur(a.get("stop_loss")), c_red),
-        ("TAKE PROFIT", eur(a.get("take_profit")), c_green),
-        ("RATIO R:R", safe(num(a.get("ratio_rr"))), c_blue),
-        ("ACTUAL", eur(current), c_text_main)
-    ]
-
-    for i, (m_lbl, m_val, m_col) in enumerate(metrics2):
-        bx = 24 + i * (box_w + 8)
-        draw.rounded_rectangle([bx, y_m2, bx + box_w, y_m2 + box_h], radius=8, fill=c_card_bg, outline=c_border, width=1)
-        draw.text((bx + 10, y_m2 + 8), m_lbl, fill=c_text_muted, font=get_font(8, bold=True))
-        draw.text((bx + 10, y_m2 + 26), m_val, fill=m_col, font=get_font(12, bold=True))
-
-    # --- Razones / Pills ---
-    y_pills = y_m2 + box_h + 14
+    # Razones / Pills
     razones = [x.strip() for x in str(a.get("razones_entrada") or "").split(";") if x.strip()]
-    curr_x = 24
-    f_pill = get_font(9, bold=False)
+    pills_html = "".join([
+        f'<span style="display:inline-block;background-color:#f1f5f9;border:1px solid #e2e8f0;border-radius:12px;padding:4px 10px;font-size:11px;color:#475569;margin-right:6px;margin-bottom:6px;">✓ {esc(r)}</span>'
+        for r in razones[:3]
+    ])
 
-    for r in razones[:3]:
-        p_text = f"✓ {r}"
-        bbox = draw.textbbox((0, 0), p_text, font=f_pill)
-        pw = bbox[2] - bbox[0] + 16
-        if curr_x + pw < w - 24:
-            draw.rounded_rectangle([curr_x, y_pills, curr_x + pw, y_pills + 24], radius=12, fill=c_card_bg, outline=c_border)
-            draw.text((curr_x + 8, y_pills + 5), p_text, fill=c_text_sub, font=f_pill)
-            curr_x += pw + 8
+    return f'''
+    <!-- FICHA OPORTUNIDAD CONTENEDOR PRINCIPAL -->
+    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:20px;margin-bottom:20px;box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+      
+      <!-- Cabecera Tarjeta: Nombre + Score -->
+      <tr>
+        <td>
+          <table width="100%" border="0" cellspacing="0" cellpadding="0">
+            <tr>
+              <td valign="top">
+                <div style="font-size:18px;font-weight:700;color:#0f172a;line-height:1.2;">{empresa} ({ticker})</div>
+                <div style="font-size:12px;color:#64748b;margin-top:4px;">Sector: {sector}</div>
+              </td>
+              <td align="right" valign="top">
+                <div style="background-color:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:6px 12px;text-align:center;display:inline-block;">
+                  <div style="font-size:9px;font-weight:800;color:#2563eb;letter-spacing:0.05em;">SCORE</div>
+                  <div style="font-size:18px;font-weight:800;color:#1e40af;">{score}/100</div>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
 
-    # Exportar a Bytes
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    return buf.getvalue()
+      <!-- Separador -->
+      <tr><td style="padding-top:14px;border-bottom:1px solid #f1f5f9;"></td></tr>
+
+      <!-- Seccion Tracker Visual -->
+      <tr>
+        <td style="padding-top:16px;">
+          <!-- Valores del Tracker -->
+          <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom:8px;">
+            <tr>
+              <td width="25%" align="left">
+                <div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;">STOP</div>
+                <div style="font-size:12px;font-weight:700;color:#dc2626;">{eur(sl)}</div>
+              </td>
+              <td width="25%" align="center">
+                <div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;">ENTRADA</div>
+                <div style="font-size:12px;font-weight:700;color:#2563eb;">{eur(entry)}</div>
+              </td>
+              <td width="25%" align="center">
+                <div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;">ACTUAL</div>
+                <div style="font-size:12px;font-weight:700;color:#0f172a;">{eur(current)}</div>
+              </td>
+              <td width="25%" align="right">
+                <div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;">TAKE PROFIT</div>
+                <div style="font-size:12px;font-weight:700;color:#16a34a;">{eur(tp)}</div>
+              </td>
+            </tr>
+          </table>
+
+          <!-- Barra Visual Rango (Nativa HTML/CSS) -->
+          <div style="background-color:#e2e8f0;height:8px;border-radius:4px;position:relative;width:100%;margin-bottom:18px;">
+            <div style="background-color:#16a34a;height:8px;border-radius:4px;width:{pct_tp}%;max-width:100%;"></div>
+          </div>
+        </td>
+      </tr>
+
+      <!-- Grilla de Métricas Técnico-Cuantitativas -->
+      <tr>
+        <td>
+          <table width="100%" border="0" cellspacing="0" cellpadding="0">
+            <tr>
+              <!-- Fila 1 de Métricas -->
+              <td width="23%" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;">
+                <div style="font-size:8px;font-weight:700;color:#94a3b8;">PRECIO</div>
+                <div style="font-size:12px;font-weight:700;color:#0f172a;margin-top:2px;">{eur(a.get("precio_alerta"))}</div>
+              </td>
+              <td width="2%"></td>
+              <td width="23%" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;">
+                <div style="font-size:8px;font-weight:700;color:#94a3b8;">RVOL</div>
+                <div style="font-size:12px;font-weight:700;color:#0f172a;margin-top:2px;">{num(a.get("rvol_entrada"))}x</div>
+              </td>
+              <td width="2%"></td>
+              <td width="23%" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;">
+                <div style="font-size:8px;font-weight:700;color:#94a3b8;">RSI</div>
+                <div style="font-size:12px;font-weight:700;color:#0f172a;margin-top:2px;">{safe(num(a.get("rsi_entrada")))}</div>
+              </td>
+              <td width="2%"></td>
+              <td width="23%" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;">
+                <div style="font-size:8px;font-weight:700;color:#94a3b8;">ROC20</div>
+                <div style="font-size:12px;font-weight:700;color:#0f172a;margin-top:2px;">{safe(pct(a.get("roc20_entrada")))}</div>
+              </td>
+            </tr>
+            <tr><td height="8"></td></tr>
+            <tr>
+              <!-- Fila 2 de Métricas -->
+              <td width="23%" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;">
+                <div style="font-size:8px;font-weight:700;color:#94a3b8;">STOP LOSS</div>
+                <div style="font-size:12px;font-weight:700;color:#dc2626;margin-top:2px;">{eur(sl)}</div>
+              </td>
+              <td width="2%"></td>
+              <td width="23%" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;">
+                <div style="font-size:8px;font-weight:700;color:#94a3b8;">TAKE PROFIT</div>
+                <div style="font-size:12px;font-weight:700;color:#16a34a;margin-top:2px;">{eur(tp)}</div>
+              </td>
+              <td width="2%"></td>
+              <td width="23%" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;">
+                <div style="font-size:8px;font-weight:700;color:#94a3b8;">RATIO R:R</div>
+                <div style="font-size:12px;font-weight:700;color:#2563eb;margin-top:2px;">{safe(num(a.get("ratio_rr")))}</div>
+              </td>
+              <td width="2%"></td>
+              <td width="23%" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;">
+                <div style="font-size:8px;font-weight:700;color:#94a3b8;">ACTUAL</div>
+                <div style="font-size:12px;font-weight:700;color:#0f172a;margin-top:2px;">{eur(current)}</div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      <!-- Pills de Razones -->
+      {f'<tr><td style="padding-top:14px;">{pills_html}</td></tr>' if pills_html else ''}
+
+    </table>
+    '''
 
 
 def news_html(news):
@@ -343,10 +337,10 @@ def news_html(news):
     return "".join(out)
 
 
-def html_email(a, ctx, news, cid_card_img="cid:ficha_oportunidad"):
+def html_email(a, ctx, news):
     ticker = safe(a.get("ticker"))
-    company = safe(a.get("empresa"))
     title = ctx.get("titular_contexto", f"Nueva señal cuantitativa en {ticker}")
+    card_html = build_html_opportunity_card(a)
 
     return f'''<!doctype html>
 <html lang="es">
@@ -359,7 +353,7 @@ def html_email(a, ctx, news, cid_card_img="cid:ficha_oportunidad"):
   <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#f5f7fb;padding:20px 10px;">
     <tr>
       <td align="center">
-        <table width="100%" max-width="660" border="0" cellspacing="0" cellpadding="0" style="max-width:660px;background:#ffffff;border:1px solid #e6ebf2;border-radius:16px;overflow:hidden;box-shadow:0 8px 30px rgba(15,23,42,.07);">
+        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width:640px;background:#ffffff;border:1px solid #e6ebf2;border-radius:16px;overflow:hidden;box-shadow:0 8px 30px rgba(15,23,42,.07);">
           
           <!-- Header -->
           <tr>
@@ -375,16 +369,16 @@ def html_email(a, ctx, news, cid_card_img="cid:ficha_oportunidad"):
 
           <!-- Título principal -->
           <tr>
-            <td style="padding:24px 28px 12px;">
+            <td style="padding:24px 28px 16px;">
               <div style="font-size:9px;color:#2563eb;text-transform:uppercase;letter-spacing:.1em;font-weight:800;margin-bottom:4px;">OPORTUNIDAD SELECCIONADA</div>
               <h1 style="font-size:18px;margin:0;color:#0f172a;line-height:1.3;">{esc(title)}</h1>
             </td>
           </tr>
 
-          <!-- Imagen Ficha Oportunidad (Reconstruida dinámicamente) -->
+          <!-- Ficha Integrada Nativa (HTML/CSS) -->
           <tr>
-            <td style="padding:10px 28px 20px;" align="center">
-              <img src="{cid_card_img}" alt="Ficha de Oportunidad {esc(ticker)}" style="width:100%;max-width:600px;height:auto;display:block;border-radius:12px;border:1px solid #e2e8f0;" />
+            <td style="padding:0 28px 10px;">
+              {card_html}
             </td>
           </tr>
 
@@ -442,33 +436,22 @@ def html_email(a, ctx, news, cid_card_img="cid:ficha_oportunidad"):
 </html>'''
 
 
-def send(a, content, card_img_bytes, recipients):
+def send(a, content, recipients):
     ticker = safe(a.get("ticker"))
     score = num(a.get("score_entrada"), 0)
     subject = f"Alura Quant | Nueva alerta: {ticker} · Score {score}/100"
 
     if DRY_RUN:
         fn_html = f"preview_alerta_{ticker.replace('.', '_')}.html"
-        fn_img = f"ficha_{ticker.replace('.', '_')}.png"
         open(fn_html, "w", encoding="utf-8").write(content)
-        open(fn_img, "wb").write(card_img_bytes)
-        log.info("DRY_RUN: generados %s y %s", fn_html, fn_img)
+        log.info("DRY_RUN: archivo preview generado en %s", fn_html)
         return
 
-    # Envío mediante Resend adjuntando la imagen embebida/adjunta
-    b64_img = base64.b64encode(card_img_bytes).decode("utf-8")
-    
     payload = {
         "from": FROM_EMAIL,
         "to": recipients,
         "subject": subject,
-        "html": content.replace("cid:ficha_oportunidad", f"data:image/png;base64,{b64_img}"),
-        "attachments": [
-            {
-                "filename": f"ficha_{ticker}.png",
-                "content": b64_img,
-            }
-        ]
+        "html": content,
     }
     
     resend.Emails.send(payload)
@@ -490,9 +473,8 @@ def main():
         try:
             news = get_news(ticker, safe(a.get("empresa"), ""))
             ctx = ai_context(a, news)
-            card_img_bytes = generate_opportunity_card_image(a)
             content = html_email(a, ctx, news)
-            send(a, content, card_img_bytes, recipients)
+            send(a, content, recipients)
         except Exception as e:
             log.exception("Error procesando %s: %s", ticker, e)
 
