@@ -1,4 +1,4 @@
-name: Enviar Newsletter Semanal Alura Quant
+name: Enviar Alertas Quant
 
 on:
   schedule:
