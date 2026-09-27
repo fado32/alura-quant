@@ -152,4 +152,318 @@ No inventes cifras. No inventes hechos. No cambies Score, RSI, RVOL, ROC20 ni ni
             messages=[{"role":"system","content":"Analista financiero. Devuelve JSON puro."},{"role":"user","content":prompt}],
             temperature=0.25)
         time.sleep(IA_DELAY)
-        raw = re.sub(r"```(?:json)?|
+        raw = re.sub(r"```(?:json)?|```", "", r.choices[0].message.content or "", flags=re.IGNORECASE).strip()
+        try: return json.loads(raw)
+        except json.JSONDecodeError:
+            m = re.search(r"\{.*\}", raw, re.S)
+            return json.loads(m.group(0)) if m else {}
+    except Exception as e:
+        log.warning("IA %s: %s", safe(a.get("ticker")), e)
+        return {"empresa_contexto": f"{safe(a.get('empresa'))} pertenece al sector {safe(a.get('sector'))}.",
+                "sector_contexto": "El contexto sectorial debe analizarse junto con la evolución del mercado.",
+                "noticias_contexto": "No se pudo generar un resumen de noticias verificadas.",
+                "comentario_contexto": "La tesis principal de esta alerta procede del modelo cuantitativo.",
+                "riesgos_contexto": "Conviene vigilar la evolución del precio, volumen y niveles de gestión de riesgo.",
+                "titular_contexto": f"Nueva alerta cuantitativa en {safe(a.get('ticker'))}"}
+
+
+# ============================================================
+# COMPONENTES HTML INTEGRADOS (Ficha Robusta y Responsive)
+# ============================================================
+def build_html_opportunity_card(a):
+    empresa = esc(a.get("empresa"))
+    ticker = esc(a.get("ticker"))
+    sector = esc(a.get("sector"))
+    score = num(a.get("score_entrada"), 0)
+    rr = safe(num(a.get("ratio_rr")))
+
+    try: sl = float(a.get("stop_loss"))
+    except: sl = 0.0
+    try: entry = float(a.get("precio_alerta"))
+    except: entry = 0.0
+    try: current = float(a.get("precio_actual")) if a.get("precio_actual") else entry
+    except: current = entry
+    try: tp = float(a.get("take_profit"))
+    except: tp = 0.0
+
+    # Rendimiento desde la entrada
+    if entry > 0 and current > 0:
+        perf_pct = ((current - entry) / entry) * 100
+        perf_eur = current - entry
+        perf_str = f"{perf_pct:+.2f}% · {perf_eur:+.2f} €"
+        perf_color = "#16a34a" if perf_pct >= 0 else "#dc2626"
+    else:
+        perf_str = "0,00% · 0,00 €"
+        perf_color = "#16a34a"
+
+    return f'''
+    <!-- FICHA ESTILO DASHBOARD RESPONSIVE -->
+    <table width="100%" border="0" cellspacing="0" cellpadding="0" class="mobile-card" style="background-color:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;margin-bottom:24px;box-shadow:0 2px 6px rgba(0,0,0,0.03);">
+      
+      <!-- Cabecera: Score + Empresa + Precio -->
+      <tr>
+        <td valign="top" width="20%">
+          <div style="font-size:28px;font-weight:900;color:#2563eb;line-height:1;" class="mobile-score">{score}</div>
+          <div style="font-size:9px;font-weight:800;color:#94a3b8;letter-spacing:0.05em;margin-top:4px;">QUANT SCORE</div>
+        </td>
+        <td valign="top" align="left" width="50%">
+          <div style="font-size:18px;font-weight:800;color:#0f172a;line-height:1.2;" class="mobile-title">{empresa} <span style="font-size:12px;color:#94a3b8;font-weight:600;">{ticker}</span></div>
+          <div style="font-size:12px;color:#64748b;margin-top:2px;">{sector}</div>
+        </td>
+        <td valign="top" align="right" width="30%">
+          <div style="font-size:24px;font-weight:900;color:#0f172a;line-height:1;" class="mobile-price">{num(current)}</div>
+          <div style="font-size:9px;font-weight:800;color:#94a3b8;letter-spacing:0.05em;margin-top:4px;">PRECIO ACTUAL</div>
+        </td>
+      </tr>
+
+      <!-- Banner Risk / Reward -->
+      <tr>
+        <td colspan="3" style="padding-top:20px;">
+          <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#f8fafc;border:1px solid #f1f5f9;border-radius:12px;padding:12px 16px;">
+            <tr>
+              <td>
+                <div style="font-size:8px;font-weight:800;color:#94a3b8;letter-spacing:0.05em;">RISK / REWARD</div>
+                <div style="font-size:15px;font-weight:800;color:#2563eb;margin-top:2px;">{rr}x</div>
+              </td>
+              <td align="right">
+                <div style="font-size:8px;font-weight:800;color:#94a3b8;letter-spacing:0.05em;">Rendimiento desde entrada</div>
+                <div style="font-size:15px;font-weight:800;color:{perf_color};margin-top:2px;">{perf_str}</div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      <!-- Gráfico de Rango de Precio Integrado mediante Tabla Nativa HTML -->
+      <tr>
+        <td colspan="3" style="padding-top:24px;">
+          
+          <!-- Etiquetas superiores de precios -->
+          <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom:8px;">
+            <tr>
+              <td width="25%" align="left">
+                <div style="font-size:9px;font-weight:800;color:#94a3b8;">STOP</div>
+                <div style="font-size:12px;font-weight:800;color:#0f172a;margin-top:2px;">{num(sl)}</div>
+              </td>
+              <td width="25%" align="center">
+                <div style="font-size:9px;font-weight:800;color:#94a3b8;">ENTRADA</div>
+                <div style="font-size:12px;font-weight:800;color:#0f172a;margin-top:2px;">{num(entry)}</div>
+              </td>
+              <td width="25%" align="center">
+                <div style="font-size:9px;font-weight:800;color:#94a3b8;">ACTUAL</div>
+                <div style="font-size:12px;font-weight:800;color:#0f172a;margin-top:2px;">{num(current)}</div>
+              </td>
+              <td width="25%" align="right">
+                <div style="font-size:9px;font-weight:800;color:#94a3b8;">TAKE PROFIT</div>
+                <div style="font-size:12px;font-weight:800;color:#0f172a;margin-top:2px;">{num(tp)}</div>
+              </td>
+            </tr>
+          </table>
+
+          <!-- Componente Visual del Rango (Tabla 100% compatible sin absolute CSS) -->
+          <table width="100%" border="0" cellspacing="0" cellpadding="0" style="table-layout:fixed;">
+            <tr>
+              <!-- Punto Stop -->
+              <td width="12" align="center" valign="middle">
+                <div style="width:12px;height:12px;border:3px solid #dc2626;background:#ffffff;border-radius:50%;box-sizing:border-box;"></div>
+              </td>
+              
+              <!-- Tramo Stop -> Entrada (Rojo) -->
+              <td border="0" style="border-bottom:3px solid #fca5a5;font-size:1px;line-height:1px;">&nbsp;</td>
+              
+              <!-- Punto Entrada -->
+              <td width="12" align="center" valign="middle">
+                <div style="width:12px;height:12px;border:3px solid #2563eb;background:#ffffff;border-radius:50%;box-sizing:border-box;"></div>
+              </td>
+              
+              <!-- Tramo Entrada -> Actual (Gris Neutro) -->
+              <td border="0" style="border-bottom:3px solid #e2e8f0;font-size:1px;line-height:1px;">&nbsp;</td>
+              
+              <!-- Punto Actual -->
+              <td width="14" align="center" valign="middle">
+                <div style="width:14px;height:14px;border:3px solid #2563eb;background:#ffffff;border-radius:50%;box-sizing:border-box;"></div>
+              </td>
+              
+              <!-- Tramo Actual -> Take Profit (Verde) -->
+              <td border="0" style="border-bottom:3px solid #86efac;font-size:1px;line-height:1px;">&nbsp;</td>
+              
+              <!-- Punto Take Profit -->
+              <td width="12" align="center" valign="middle">
+                <div style="width:12px;height:12px;border:3px solid #16a34a;background:#ffffff;border-radius:50%;box-sizing:border-box;"></div>
+              </td>
+            </tr>
+          </table>
+
+        </td>
+      </tr>
+
+      <!-- Tesis del Analista -->
+      <tr>
+        <td colspan="3" style="padding-top:20px;">
+          <div style="background-color:#f8fafc;border:1px solid #f1f5f9;border-radius:12px;padding:16px;">
+            <div style="font-size:10px;font-weight:800;color:#2563eb;letter-spacing:0.05em;margin-bottom:6px;">✦ TESIS DEL ANALISTA</div>
+            <div style="font-size:12px;color:#334155;line-height:1.6;">{esc(a.get('analisis_ia_entrada') or 'Sin tesis adicional disponible.')}</div>
+          </div>
+        </td>
+      </tr>
+
+    </table>
+    '''
+
+
+def news_html(news):
+    if not news: return '<div style="color:#94a3b8;font-size:11px;">No se han encontrado noticias recientes relevantes.</div>'
+    out = []
+    for n in news:
+        link = n.get("link", "")
+        href = esc(link) if str(link).startswith(("http://", "https://")) else "#"
+        out.append(f'''<div style="padding:8px 0;border-bottom:1px solid #edf1f5;">
+            <a href="{href}" style="text-decoration:none;color:#0f172a;font-weight:700;font-size:12px;" target="_blank">{esc(n.get("title"))}</a>
+            <div style="color:#94a3b8;font-size:10px;margin-top:2px;">{esc(n.get("source"))} · {esc(n.get("date"))}</div>
+        </div>''')
+    return "".join(out)
+
+
+def html_email(a, ctx, news):
+    ticker = safe(a.get("ticker"))
+    title = ctx.get("titular_contexto", f"Nueva señal cuantitativa en {ticker}")
+    card_html = build_html_opportunity_card(a)
+
+    return f'''<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Alura Quant · {esc(ticker)}</title>
+  <style type="text/css">
+    @media screen and (max-width: 600px) {{
+      .email-container {{ width: 100% !important; padding: 10px !important; }}
+      .mobile-card {{ padding: 14px !important; }}
+      .mobile-score {{ font-size: 22px !important; }}
+      .mobile-title {{ font-size: 15px !important; }}
+      .mobile-price {{ font-size: 18px !important; }}
+      .mobile-padding {{ padding-left: 14px !important; padding-right: 14px !important; }}
+    }}
+  </style>
+</head>
+<body style="margin:0;padding:0;background-color:#f5f7fb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#172033;">
+  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#f5f7fb;padding:20px 0;">
+    <tr>
+      <td align="center">
+        <table width="100%" border="0" cellspacing="0" cellpadding="0" class="email-container" style="max-width:640px;background:#ffffff;border:1px solid #e6ebf2;border-radius:16px;overflow:hidden;box-shadow:0 8px 30px rgba(15,23,42,.07);">
+          
+          <!-- Header -->
+          <tr>
+            <td class="mobile-padding" style="padding:20px 28px;border-bottom:1px solid #edf1f5;background:#ffffff;">
+              <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td style="font-size:16px;font-weight:800;color:#0f172a;">Alura <span style="color:#2563eb;">Quant</span></td>
+                  <td align="right" style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">Nueva Alerta Cuantitativa</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Título principal -->
+          <tr>
+            <td class="mobile-padding" style="padding:24px 28px 16px;">
+              <div style="font-size:9px;color:#2563eb;text-transform:uppercase;letter-spacing:.1em;font-weight:800;margin-bottom:4px;">OPORTUNIDAD SELECCIONADA</div>
+              <h1 style="font-size:18px;margin:0;color:#0f172a;line-height:1.3;">{esc(title)}</h1>
+            </td>
+          </tr>
+
+          <!-- Ficha Integrada -->
+          <tr>
+            <td class="mobile-padding" style="padding:0 28px 10px;">
+              {card_html}
+            </td>
+          </tr>
+
+          <!-- Contexto Empresa / Sector / Riesgos -->
+          <tr>
+            <td class="mobile-padding" style="padding:0 28px 20px;">
+              <div style="background:#f8fafc;border:1px solid #e3eaf4;border-radius:12px;padding:18px;">
+                <div style="font-size:9px;color:#2563eb;text-transform:uppercase;letter-spacing:.08em;font-weight:800;margin-bottom:4px;">EMPRESA</div>
+                <p style="font-size:12px;line-height:1.6;color:#475569;margin:0 0 12px;">{esc(ctx.get('empresa_contexto'))}</p>
+                
+                <div style="font-size:9px;color:#2563eb;text-transform:uppercase;letter-spacing:.08em;font-weight:800;margin-bottom:4px;">SECTOR</div>
+                <p style="font-size:12px;line-height:1.6;color:#475569;margin:0 0 12px;">{esc(ctx.get('sector_contexto'))}</p>
+                
+                <div style="font-size:9px;color:#2563eb;text-transform:uppercase;letter-spacing:.08em;font-weight:800;margin-bottom:4px;">LECTURA CONTEXTUAL</div>
+                <p style="font-size:12px;line-height:1.6;color:#475569;margin:0 0 12px;">{esc(ctx.get('comentario_contexto'))}</p>
+                
+                <div style="font-size:9px;color:#dc2626;text-transform:uppercase;letter-spacing:.08em;font-weight:800;margin-bottom:4px;">RIESGOS A VIGILAR</div>
+                <p style="font-size:12px;line-height:1.6;color:#475569;margin:0;">{esc(ctx.get('riesgos_contexto'))}</p>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Noticias / Actualidad -->
+          <tr>
+            <td class="mobile-padding" style="padding:0 28px 20px;">
+              <div style="font-size:9px;color:#2563eb;text-transform:uppercase;letter-spacing:.1em;font-weight:800;margin-bottom:6px;">ACTUALIDAD</div>
+              <h2 style="font-size:14px;margin:0 0 10px;color:#0f172a;">Noticias recientes</h2>
+              {news_html(news)}
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td class="mobile-padding" style="border-top:1px solid #edf1f5;background:#fafbfc;padding:20px 28px;color:#94a3b8;font-size:10px;line-height:1.6;">
+              <b>Alura Quant</b> · Alertas cuantitativas generadas de forma automática.<br>
+              Esta comunicación es de carácter exclusivamente informativo y no representa asesoramiento financiero personalizado.
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>'''
+
+
+def send(a, content, recipients):
+    ticker = safe(a.get("ticker"))
+    score = num(a.get("score_entrada"), 0)
+    subject = f"Alura Quant | Nueva alerta: {ticker} · Score {score}/100"
+
+    if DRY_RUN:
+        fn_html = f"preview_alerta_{ticker.replace('.', '_')}.html"
+        open(fn_html, "w", encoding="utf-8").write(content)
+        log.info("DRY_RUN: archivo preview generado en %s", fn_html)
+        return
+
+    payload = {
+        "from": FROM_EMAIL,
+        "to": recipients,
+        "subject": subject,
+        "html": content,
+    }
+    
+    resend.Emails.send(payload)
+    log.info("Email enviado exitosamente: %s", subject)
+
+
+def main():
+    log.info("ALURA QUANT — ALERTAS PREMIUM | score >= %.0f | ventana=%sh", SCORE_MIN, LOOKBACK_HOURS)
+    recipients = get_subscribers()
+    if not recipients:
+        log.info("No hay suscriptores.")
+        return
+    alerts = get_new_alerts()
+    if not alerts:
+        log.info("No hay alertas nuevas que cumplan el filtro.")
+        return
+    for a in alerts:
+        ticker = safe(a.get("ticker"))
+        try:
+            news = get_news(ticker, safe(a.get("empresa"), ""))
+            ctx = ai_context(a, news)
+            content = html_email(a, ctx, news)
+            send(a, content, recipients)
+        except Exception as e:
+            log.exception("Error procesando %s: %s", ticker, e)
+
+if __name__ == "__main__":
+    main()
