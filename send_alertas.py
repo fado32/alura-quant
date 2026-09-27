@@ -234,7 +234,7 @@ def build_html_opportunity_card(a):
         </td>
       </tr>
 
-      <!-- Gráfico de Rango de Precio Integrado mediante Tabla Nativa HTML -->
+      <!-- Gráfico de Rango de Precio Integrado (Alineación Perfecta de Bolitas) -->
       <tr>
         <td colspan="3" style="padding-top:24px;">
           
@@ -260,36 +260,42 @@ def build_html_opportunity_card(a):
             </tr>
           </table>
 
-          <!-- Componente Visual del Rango (Tabla 100% compatible sin absolute CSS) -->
+          <!-- Componente Visual del Rango: Con Alineación Exacta al Medio -->
           <table width="100%" border="0" cellspacing="0" cellpadding="0" style="table-layout:fixed;">
-            <tr>
+            <tr height="16" style="height:16px;line-height:0px;font-size:0px;">
               <!-- Punto Stop -->
-              <td width="12" align="center" valign="middle">
-                <div style="width:12px;height:12px;border:3px solid #dc2626;background:#ffffff;border-radius:50%;box-sizing:border-box;"></div>
+              <td width="14" align="center" valign="middle" style="height:16px;vertical-align:middle;padding:0;">
+                <div style="width:12px;height:12px;border:3px solid #dc2626;background:#ffffff;border-radius:50%;box-sizing:border-box;margin:0 auto;"></div>
               </td>
               
               <!-- Tramo Stop -> Entrada (Rojo) -->
-              <td border="0" style="border-bottom:3px solid #fca5a5;font-size:1px;line-height:1px;">&nbsp;</td>
+              <td border="0" valign="middle" style="height:16px;vertical-align:middle;padding:0;">
+                <div style="height:3px;background-color:#fca5a5;font-size:1px;line-height:1px;">&nbsp;</div>
+              </td>
               
               <!-- Punto Entrada -->
-              <td width="12" align="center" valign="middle">
-                <div style="width:12px;height:12px;border:3px solid #2563eb;background:#ffffff;border-radius:50%;box-sizing:border-box;"></div>
+              <td width="14" align="center" valign="middle" style="height:16px;vertical-align:middle;padding:0;">
+                <div style="width:12px;height:12px;border:3px solid #2563eb;background:#ffffff;border-radius:50%;box-sizing:border-box;margin:0 auto;"></div>
               </td>
               
               <!-- Tramo Entrada -> Actual (Gris Neutro) -->
-              <td border="0" style="border-bottom:3px solid #e2e8f0;font-size:1px;line-height:1px;">&nbsp;</td>
+              <td border="0" valign="middle" style="height:16px;vertical-align:middle;padding:0;">
+                <div style="height:3px;background-color:#e2e8f0;font-size:1px;line-height:1px;">&nbsp;</div>
+              </td>
               
               <!-- Punto Actual -->
-              <td width="14" align="center" valign="middle">
-                <div style="width:14px;height:14px;border:3px solid #2563eb;background:#ffffff;border-radius:50%;box-sizing:border-box;"></div>
+              <td width="16" align="center" valign="middle" style="height:16px;vertical-align:middle;padding:0;">
+                <div style="width:14px;height:14px;border:3px solid #2563eb;background:#ffffff;border-radius:50%;box-sizing:border-box;margin:0 auto;"></div>
               </td>
               
               <!-- Tramo Actual -> Take Profit (Verde) -->
-              <td border="0" style="border-bottom:3px solid #86efac;font-size:1px;line-height:1px;">&nbsp;</td>
+              <td border="0" valign="middle" style="height:16px;vertical-align:middle;padding:0;">
+                <div style="height:3px;background-color:#86efac;font-size:1px;line-height:1px;">&nbsp;</div>
+              </td>
               
               <!-- Punto Take Profit -->
-              <td width="12" align="center" valign="middle">
-                <div style="width:12px;height:12px;border:3px solid #16a34a;background:#ffffff;border-radius:50%;box-sizing:border-box;"></div>
+              <td width="14" align="center" valign="middle" style="height:16px;vertical-align:middle;padding:0;">
+                <div style="width:12px;height:12px;border:3px solid #16a34a;background:#ffffff;border-radius:50%;box-sizing:border-box;margin:0 auto;"></div>
               </td>
             </tr>
           </table>
@@ -410,12 +416,8 @@ def html_email(a, ctx, news):
           <!-- Footer -->
           <tr>
             <td class="mobile-padding" style="border-top:1px solid #edf1f5;background:#fafbfc;padding:20px 28px;color:#94a3b8;font-size:10px;line-height:1.6;">
-              <b>Alura Quant</b> · Aviso legal y descargo de responsabilidad:<br>
-              Alura Quant es una herramienta tecnológica de análisis cuantitativo y educación financiera. 
-              Los datos, scores, niveles técnicos y análisis generados por algoritmos o inteligencia artificial 
-              no constituyen, ni deben interpretarse como, un servicio de asesoramiento en inversión, recomendación 
-              de compra/venta o análisis financiero personalizado según la Ley del Mercado de Valores. La renta variable
-              conlleva riesgos de pérdida de capital. Cada usuario es responsable exclusivo de sus decisiones de inversión.
+              <b>Alura Quant</b> · Alertas cuantitativas generadas de forma automática.<br>
+              Esta comunicación es de carácter exclusivamente informativo y no representa asesoramiento financiero personalizado.
             </td>
           </tr>
 
