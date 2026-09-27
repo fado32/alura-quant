@@ -1,4 +1,4 @@
-import os, re, json, html, time, logging
+import os, re, json, html, time, logging, io, base64
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote_plus
 from urllib.request import Request, urlopen
@@ -8,10 +8,12 @@ from supabase import create_client, Client
 from openai import OpenAI
 import resend
 
+from PIL import Image, ImageDraw, ImageFont
+
 # ============================================================
 # ALURA QUANT — ALERTAS PREMIUM
 # Detecta nuevas alertas ACTIVA con Score >= 80 y envía una
-# ficha cuantitativa + contexto de empresa/sector/noticias.
+# ficha cuantitativa visual + contexto de empresa/sector/noticias.
 # ============================================================
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
 log = logging.getLogger("alura-alertas")
@@ -86,7 +88,7 @@ def get_new_alerts():
     cols = ("id,fecha,ticker,empresa,sector,icono,modo,precio_alerta,score_entrada,rvol_entrada,"
             "rsi_entrada,roc20_entrada,atr_entrada,ema50_entrada,ema200_entrada,razones_entrada,"
             "soporte_entrada,resistencia_entrada,analisis_ia_entrada,stop_loss,take_profit,ratio_rr,"
-            "riesgo_euros,acciones,nominal,estado_estrategia,fecha_mercado_actual,estado")
+            "riesgo_euros,acciones,nominal,estado_estrategia,fecha_mercado_actual,estado,precio_actual")
     r = (supabase.table("historial_alertas").select(cols).eq("estado", "ACTIVA")
          .gte("fecha", since.isoformat()).gte("score_entrada", SCORE_MIN)
          .order("fecha", desc=True).execute())
@@ -96,7 +98,6 @@ def get_new_alerts():
     df["score_n"] = pd.to_numeric(df["score_entrada"], errors="coerce")
     df = df[(df["fecha_dt"] >= pd.Timestamp(since)) & (df["score_n"] >= SCORE_MIN)
             & (df["estado"].astype(str).str.upper() == "ACTIVA")]
-    # Una alerta nueva por ticker dentro de la ventana.
     return df.sort_values("fecha_dt", ascending=False).drop_duplicates("ticker").to_dict("records")
 
 
@@ -168,115 +169,332 @@ No inventes cifras. No inventes hechos. No cambies Score, RSI, RVOL, ROC20 ni ni
                 "titular_contexto": f"Nueva alerta cuantitativa en {safe(a.get('ticker'))}"}
 
 
-def reasons(v):
-    items = [x.strip() for x in str(v or "").split(";") if x.strip()]
-    return "".join(f'<span class="pill">✓ {esc(x)}</span>' for x in items) or '<span class="muted">Sin detalle.</span>'
+# ============================================================
+# RENDERIZADO DE LA FICHA EN IMAGEN PNG (Pillow)
+# ============================================================
+def get_font(size=14, bold=False):
+    try:
+        font_name = "DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf"
+        return ImageFont.truetype(font_name, size)
+    except Exception:
+        return ImageFont.load_default()
+
+def generate_opportunity_card_image(a):
+    """
+    Genera en imagen exactamente la Ficha de Oportunidades de Alura Quant
+    con el diseño pixel-perfect de la plataforma.
+    """
+    w, h = 680, 480
+    bg_color = (255, 255, 255)
+    img = Image.new("RGB", (w, h), bg_color)
+    draw = ImageDraw.Draw(img)
+
+    # Colores
+    c_border = (231, 235, 242)
+    c_text_main = (17, 24, 39)
+    c_text_sub = (100, 116, 139)
+    c_text_muted = (148, 163, 184)
+    c_blue = (37, 99, 235)
+    c_red = (220, 38, 38)
+    c_green = (22, 163, 74)
+    c_card_bg = (248, 250, 252)
+
+    # Borde exterior de la tarjeta
+    draw.rounded_rectangle([1, 1, w - 2, h - 2], radius=16, outline=c_border, width=2)
+
+    # --- Header Ficha ---
+    empresa = safe(a.get("empresa"), "Empresa")
+    ticker = safe(a.get("ticker"), "TICKER")
+    sector = safe(a.get("sector"), "Sector")
+    score = safe(num(a.get("score_entrada"), 0))
+
+    # Título empresa y meta
+    f_title = get_font(18, bold=True)
+    f_sub = get_font(12, bold=False)
+    draw.text((24, 20), f"{empresa} ({ticker})", fill=c_text_main, font=f_title)
+    draw.text((24, 46), f"Sector: {sector}", fill=c_text_sub, font=f_sub)
+
+    # Score Box Right
+    f_score_lbl = get_font(9, bold=True)
+    f_score_val = get_font(20, bold=True)
+    draw.text((w - 110, 20), "SCORE", fill=c_text_muted, font=f_score_lbl)
+    draw.text((w - 110, 34), f"{score}/100", fill=c_blue, font=f_score_val)
+
+    # Linea divisoria
+    draw.line([(24, 76), (w - 24, 76)], fill=c_border, width=1)
+
+    # --- Position Tracker ---
+    try: sl = float(a.get("stop_loss"))
+    except: sl = 0.0
+    try: entry = float(a.get("precio_alerta"))
+    except: entry = 0.0
+    try: current = float(a.get("precio_actual")) if a.get("precio_actual") else entry
+    except: current = entry
+    try: tp = float(a.get("take_profit"))
+    except: tp = 0.0
+
+    vals = [v for v in [sl, entry, current, tp] if v > 0]
+    lo, hi = (min(vals), max(vals)) if len(vals) >= 2 else (0, 1)
+    span = max(0.001, hi - lo)
+    lo_margin = lo - span * 0.08
+    hi_margin = hi + span * 0.08
+    full_span = hi_margin - lo_margin
+
+    def get_x(v):
+        pct_v = (v - lo_margin) / full_span
+        return int(24 + max(0, min(1, pct_v)) * (w - 48))
+
+    x_sl = get_x(sl)
+    x_entry = get_x(entry)
+    x_curr = get_x(current)
+    x_tp = get_x(tp)
+
+    # Etiquetas de la barra
+    f_lbl = get_font(9, bold=True)
+    f_val = get_font(11, bold=True)
+
+    draw.text((24, 90), "STOP", fill=c_text_muted, font=f_lbl)
+    draw.text((24, 104), eur(sl), fill=c_red, font=f_val)
+
+    draw.text((170, 90), "ENTRADA", fill=c_text_muted, font=f_lbl)
+    draw.text((170, 104), eur(entry), fill=c_blue, font=f_val)
+
+    draw.text((320, 90), "ACTUAL", fill=c_text_muted, font=f_lbl)
+    draw.text((320, 104), eur(current), fill=c_text_main, font=f_val)
+
+    draw.text((w - 120, 90), "TAKE PROFIT", fill=c_text_muted, font=f_lbl)
+    draw.text((w - 120, 104), eur(tp), fill=c_green, font=f_val)
+
+    # Pista de la barra
+    track_y = 138
+    draw.rounded_rectangle([24, track_y, w - 24, track_y + 6], radius=3, fill=(238, 242, 247))
+    draw.rounded_rectangle([x_sl, track_y, x_entry, track_y + 6], radius=3, fill=(254, 226, 226))
+    draw.rounded_rectangle([x_curr, track_y, x_tp, track_y + 6], radius=3, fill=(220, 252, 231))
+
+    # Puntos de nivel
+    for x_p, col in [(x_sl, c_red), (x_entry, c_blue), (x_tp, c_green)]:
+        draw.ellipse([x_p - 4, track_y + 3 - 4, x_p + 4, track_y + 3 + 4], fill=(255, 255, 255), outline=col, width=2)
+    # Marcador Actual
+    draw.ellipse([x_curr - 6, track_y + 3 - 6, x_curr + 6, track_y + 3 + 6], fill=c_blue, outline=(255, 255, 255), width=2)
+
+    # --- Bloques de Métricas Técnico-Cuantitativas ---
+    box_w = (w - 48 - 24) // 4
+    box_h = 58
+    y_m1 = 165
+
+    metrics1 = [
+        ("PRECIO", eur(a.get("precio_alerta")), c_text_main),
+        ("RVOL", f"{num(a.get('rvol_entrada'))}x", c_text_main),
+        ("RSI", safe(num(a.get('rsi_entrada'))), c_text_main),
+        ("ROC20", safe(pct(a.get('roc20_entrada'))), c_text_main)
+    ]
+
+    for i, (m_lbl, m_val, m_col) in enumerate(metrics1):
+        bx = 24 + i * (box_w + 8)
+        draw.rounded_rectangle([bx, y_m1, bx + box_w, y_m1 + box_h], radius=8, fill=c_card_bg, outline=c_border, width=1)
+        draw.text((bx + 10, y_m1 + 8), m_lbl, fill=c_text_muted, font=get_font(8, bold=True))
+        draw.text((bx + 10, y_m1 + 26), m_val, fill=m_col, font=get_font(12, bold=True))
+
+    y_m2 = y_m1 + box_h + 10
+    metrics2 = [
+        ("STOP LOSS", eur(a.get("stop_loss")), c_red),
+        ("TAKE PROFIT", eur(a.get("take_profit")), c_green),
+        ("RATIO R:R", safe(num(a.get("ratio_rr"))), c_blue),
+        ("ACTUAL", eur(current), c_text_main)
+    ]
+
+    for i, (m_lbl, m_val, m_col) in enumerate(metrics2):
+        bx = 24 + i * (box_w + 8)
+        draw.rounded_rectangle([bx, y_m2, bx + box_w, y_m2 + box_h], radius=8, fill=c_card_bg, outline=c_border, width=1)
+        draw.text((bx + 10, y_m2 + 8), m_lbl, fill=c_text_muted, font=get_font(8, bold=True))
+        draw.text((bx + 10, y_m2 + 26), m_val, fill=m_col, font=get_font(12, bold=True))
+
+    # --- Razones / Pills ---
+    y_pills = y_m2 + box_h + 14
+    razones = [x.strip() for x in str(a.get("razones_entrada") or "").split(";") if x.strip()]
+    curr_x = 24
+    f_pill = get_font(9, bold=False)
+
+    for r in razones[:3]:
+        p_text = f"✓ {r}"
+        bbox = draw.textbbox((0, 0), p_text, font=f_pill)
+        pw = bbox[2] - bbox[0] + 16
+        if curr_x + pw < w - 24:
+            draw.rounded_rectangle([curr_x, y_pills, curr_x + pw, y_pills + 24], radius=12, fill=c_card_bg, outline=c_border)
+            draw.text((curr_x + 8, y_pills + 5), p_text, fill=c_text_sub, font=f_pill)
+            curr_x += pw + 8
+
+    # Exportar a Bytes
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
 
 
 def news_html(news):
-    if not news: return '<div class="muted">No se han encontrado noticias recientes relevantes.</div>'
-    out=[]
+    if not news: return '<div style="color:#94a3b8;font-size:11px;">No se han encontrado noticias recientes relevantes.</div>'
+    out = []
     for n in news:
-        link=n.get("link", "")
-        href=esc(link) if str(link).startswith(("http://","https://")) else "#"
-        out.append(f'<a class="news" href="{href}"><b>{esc(n.get("title"))}</b><small>{esc(n.get("source"))} · {esc(n.get("date"))}</small></a>')
+        link = n.get("link", "")
+        href = esc(link) if str(link).startswith(("http://", "https://")) else "#"
+        out.append(f'''<div style="padding:8px 0;border-bottom:1px solid #edf1f5;">
+            <a href="{href}" style="text-decoration:none;color:#0f172a;font-weight:700;font-size:12px;" target="_blank">{esc(n.get("title"))}</a>
+            <div style="color:#94a3b8;font-size:10px;margin-top:2px;">{esc(n.get("source"))} · {esc(n.get("date"))}</div>
+        </div>''')
     return "".join(out)
 
 
-def position_pct(sl, entry, current, tp):
-    vals=[v for v in (sl,entry,current,tp) if v is not None]
-    if len(vals)<2: return None
-    lo,hi=min(vals),max(vals)
-    if hi<=lo: return None
-    margin=(hi-lo)*0.08; lo-=margin; hi+=margin; span=hi-lo
-    def pos(v):
-        return None if v is None else max(3,min(97,(v-lo)/span*100))
-    return {"sl":pos(sl),"entry":pos(entry),"current":pos(current),"tp":pos(tp)}
+def html_email(a, ctx, news, cid_card_img="cid:ficha_oportunidad"):
+    ticker = safe(a.get("ticker"))
+    company = safe(a.get("empresa"))
+    title = ctx.get("titular_contexto", f"Nueva señal cuantitativa en {ticker}")
+
+    return f'''<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Alura Quant · {esc(ticker)}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f5f7fb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#172033;">
+  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#f5f7fb;padding:20px 10px;">
+    <tr>
+      <td align="center">
+        <table width="100%" max-width="660" border="0" cellspacing="0" cellpadding="0" style="max-width:660px;background:#ffffff;border:1px solid #e6ebf2;border-radius:16px;overflow:hidden;box-shadow:0 8px 30px rgba(15,23,42,.07);">
+          
+          <!-- Header -->
+          <tr>
+            <td style="padding:20px 28px;border-bottom:1px solid #edf1f5;background:#ffffff;">
+              <table width="100%" border="0" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td style="font-size:16px;font-weight:800;color:#0f172a;">Alura <span style="color:#2563eb;">Quant</span></td>
+                  <td align="right" style="font-size:10px;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">Nueva Alerta Cuantitativa</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Título principal -->
+          <tr>
+            <td style="padding:24px 28px 12px;">
+              <div style="font-size:9px;color:#2563eb;text-transform:uppercase;letter-spacing:.1em;font-weight:800;margin-bottom:4px;">OPORTUNIDAD SELECCIONADA</div>
+              <h1 style="font-size:18px;margin:0;color:#0f172a;line-height:1.3;">{esc(title)}</h1>
+            </td>
+          </tr>
+
+          <!-- Imagen Ficha Oportunidad (Reconstruida dinámicamente) -->
+          <tr>
+            <td style="padding:10px 28px 20px;" align="center">
+              <img src="{cid_card_img}" alt="Ficha de Oportunidad {esc(ticker)}" style="width:100%;max-width:600px;height:auto;display:block;border-radius:12px;border:1px solid #e2e8f0;" />
+            </td>
+          </tr>
+
+          <!-- Contexto Empresa / Sector -->
+          <tr>
+            <td style="padding:0 28px 20px;">
+              <div style="background:#f8fafc;border:1px solid #e3eaf4;border-radius:12px;padding:18px;">
+                <div style="font-size:9px;color:#2563eb;text-transform:uppercase;letter-spacing:.08em;font-weight:800;margin-bottom:4px;">EMPRESA</div>
+                <p style="font-size:12px;line-height:1.6;color:#475569;margin:0 0 12px;">{esc(ctx.get('empresa_contexto'))}</p>
+                
+                <div style="font-size:9px;color:#2563eb;text-transform:uppercase;letter-spacing:.08em;font-weight:800;margin-bottom:4px;">SECTOR</div>
+                <p style="font-size:12px;line-height:1.6;color:#475569;margin:0 0 12px;">{esc(ctx.get('sector_contexto'))}</p>
+                
+                <div style="font-size:9px;color:#2563eb;text-transform:uppercase;letter-spacing:.08em;font-weight:800;margin-bottom:4px;">LECTURA CONTEXTUAL</div>
+                <p style="font-size:12px;line-height:1.6;color:#475569;margin:0 0 12px;">{esc(ctx.get('comentario_contexto'))}</p>
+                
+                <div style="font-size:9px;color:#dc2626;text-transform:uppercase;letter-spacing:.08em;font-weight:800;margin-bottom:4px;">RIESGOS A VIGILAR</div>
+                <p style="font-size:12px;line-height:1.6;color:#475569;margin:0;">{esc(ctx.get('riesgos_contexto'))}</p>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Noticias -->
+          <tr>
+            <td style="padding:0 28px 20px;">
+              <div style="font-size:9px;color:#2563eb;text-transform:uppercase;letter-spacing:.1em;font-weight:800;margin-bottom:6px;">ACTUALIDAD</div>
+              <h2 style="font-size:14px;margin:0 0 10px;color:#0f172a;">Noticias recientes</h2>
+              {news_html(news)}
+            </td>
+          </tr>
+
+          <!-- Tesis de Entrada -->
+          <tr>
+            <td style="padding:0 28px 24px;">
+              <div style="background:#f4f7ff;border:1px solid #dbe7ff;border-radius:12px;padding:16px;">
+                <div style="font-size:9px;color:#2563eb;text-transform:uppercase;letter-spacing:.08em;font-weight:800;margin-bottom:4px;">TESIS SISTEMÁTICA ENTRADA</div>
+                <p style="font-size:12px;line-height:1.6;color:#334155;margin:0;">{esc(a.get('analisis_ia_entrada') or 'Sin análisis adicional disponible.')}</p>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="border-top:1px solid #edf1f5;background:#fafbfc;padding:20px 28px;color:#94a3b8;font-size:10px;line-height:1.6;">
+              <b>Alura Quant</b> · Alertas cuantitativas generadas de forma automática.<br>
+              Esta comunicación es de carácter exclusivamente informativo y no representa asesoramiento financiero personalizado.
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>'''
 
 
-def opportunity_chart(a):
-    def f(k):
-        try: return float(a[k]) if a.get(k) is not None else None
-        except: return None
-    sl,entry,current,tp=f("stop_loss"),f("precio_alerta"),f("precio_actual"),f("take_profit")
-    if current is None: current=entry
-    pos=position_pct(sl,entry,current,tp)
-    if not pos: return ""
-    risk=max(0,(pos["entry"] or 25)-(pos["sl"] or 3))
-    reward=max(0,(pos["tp"] or 97)-max(pos["entry"] or 25,pos["current"] or 25))
-    return f'''<div class="tracker">
-      <div class="tracker-labels">
-        <div><span>STOP</span><b>{esc(eur(sl))}</b></div>
-        <div><span>ENTRADA</span><b>{esc(eur(entry))}</b></div>
-        <div class="cur"><span>ACTUAL</span><b>{esc(eur(current))}</b></div>
-        <div><span>TAKE PROFIT</span><b>{esc(eur(tp))}</b></div>
-      </div>
-      <div class="trackline">
-        <i class="riskbar" style="left:{pos['sl']:.2f}%;width:{risk:.2f}%"></i>
-        <i class="rewardbar" style="left:{pos['current']:.2f}%;width:{reward:.2f}%"></i>
-        <i class="mark sl" style="left:{pos['sl']:.2f}%"></i>
-        <i class="mark entry" style="left:{pos['entry']:.2f}%"></i>
-        <i class="mark current" style="left:{pos['current']:.2f}%"></i>
-        <i class="mark tp" style="left:{pos['tp']:.2f}%"></i>
-      </div>
-    </div>'''
+def send(a, content, card_img_bytes, recipients):
+    ticker = safe(a.get("ticker"))
+    score = num(a.get("score_entrada"), 0)
+    subject = f"Alura Quant | Nueva alerta: {ticker} · Score {score}/100"
 
-
-def html_email(a, ctx, news):
-    score=float(a.get("score_entrada") or 0)
-    ticker=safe(a.get("ticker")); company=safe(a.get("empresa")); sector=safe(a.get("sector")); icon=safe(a.get("icono"),"📈")
-    price=eur(a.get("precio_alerta")); current=eur(a.get("precio_actual")); stop=eur(a.get("stop_loss")); tp=eur(a.get("take_profit")); rr=num(a.get("ratio_rr"))
-    dist_sl=pct((float(a["precio_alerta"])-float(a["stop_loss"]))/float(a["precio_alerta"])*100) if a.get("precio_alerta") and a.get("stop_loss") else "—"
-    dist_tp=pct((float(a["take_profit"])-float(a["precio_alerta"]))/float(a["precio_alerta"])*100) if a.get("precio_alerta") and a.get("take_profit") else "—"
-    title=ctx.get("titular_contexto",f"Nueva señal cuantitativa en {ticker}")
-    return f'''<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Alura Quant · {esc(ticker)}</title><style>
-body{{margin:0;background:#f5f7fb;color:#172033;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}}.wrap{{padding:22px 12px}}.mail{{max-width:700px;margin:auto;background:#fff;border:1px solid #e6ebf2;border-radius:18px;overflow:hidden;box-shadow:0 8px 30px rgba(15,23,42,.07)}}
-.top{{padding:19px 28px;border-bottom:1px solid #edf1f5;display:flex;justify-content:space-between;align-items:center}}.brand{{font-size:14px;font-weight:800;color:#0f172a}}.brand em{{color:#2563eb;font-style:normal}}.top small{{font-size:9px;color:#94a3b8;font-weight:700}}
-.asset{{padding:24px 28px 16px;display:flex;justify-content:space-between;align-items:center;gap:15px}}.identity{{display:flex;align-items:center;gap:11px}}.icon{{width:42px;height:42px;border-radius:12px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:18px}}.company{{font-size:18px;font-weight:800;color:#0f172a}}.meta{{font-size:10px;color:#64748b;margin-top:4px}}.scorebox{{text-align:right}}.scorelabel{{font-size:8px;color:#94a3b8;letter-spacing:.08em;font-weight:800}}.score{{font-size:22px;color:#2563eb;font-weight:850;margin-top:2px}}.scoretrack{{width:90px;height:4px;background:#e8eef7;border-radius:99px;margin-top:5px;overflow:hidden}}.scorefill{{height:100%;width:{min(100,max(0,score)):.0f}%;background:#2563eb}}
-.section{{padding:0 28px 22px}}.kicker{{font-size:9px;color:#2563eb;text-transform:uppercase;letter-spacing:.1em;font-weight:850;margin-bottom:5px}}h2{{font-size:15px;margin:0 0 10px;color:#0f172a}}.card{{border:1px solid #e4e9f0;border-radius:15px;padding:16px}}.tracker-labels{{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:11px}}.tracker-labels div:nth-child(2),.tracker-labels div:nth-child(3){{text-align:center}}.tracker-labels div:last-child{{text-align:right}}.tracker-labels span{{display:block;font-size:7px;color:#94a3b8;letter-spacing:.07em;font-weight:850}}.tracker-labels b{{display:block;font-size:10px;color:#334155;margin-top:3px;white-space:nowrap}}.tracker-labels .cur b{{color:#2563eb}}.trackline{{position:relative;height:7px;background:#eef2f7;border-radius:99px;margin:0 7px}}.riskbar,.rewardbar{{position:absolute;top:1px;height:5px;border-radius:99px}}.riskbar{{background:#fee2e2}}.rewardbar{{background:#dcfce7}}.mark{{position:absolute;top:50%;transform:translate(-50%,-50%);width:8px;height:8px;background:#fff;border:2px solid;border-radius:50%;box-sizing:border-box}}.mark.sl{{border-color:#dc2626}}.mark.entry{{border-color:#2563eb}}.mark.tp{{border-color:#16a34a}}.mark.current{{width:12px;height:12px;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 2px #2563eb}}.metrics,.levels{{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:11px}}.metric,.level{{background:#f8fafc;border:1px solid #e7ebf1;border-radius:11px;padding:10px}}.label{{font-size:8px;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;font-weight:850}}.value{{font-size:13px;color:#0f172a;font-weight:850;margin-top:4px}}.stop{{color:#dc2626}}.target{{color:#16a34a}}.pills{{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}}.pill{{background:#f8fafc;border:1px solid #e2e8f0;border-radius:999px;padding:5px 8px;font-size:9px;color:#475569;font-weight:700}}.note{{font-size:9px;color:#94a3b8;line-height:1.5;margin-top:10px}}
-.context,.analysis{{background:linear-gradient(135deg,#f8fafc,#f7faff);border:1px solid #e3eaf4;border-radius:14px;padding:15px}}.ctxlabel,.ailabel{{font-size:8px;color:#2563eb;text-transform:uppercase;letter-spacing:.08em;font-weight:850;margin-bottom:5px}}p{{font-size:12px;line-height:1.65;color:#475569;margin:0 0 11px}}p:last-child{{margin-bottom:0}}.news{{border:1px solid #e4e9f0;border-radius:14px;padding:3px 15px}}.news a{{display:block;text-decoration:none;color:#172033;padding:12px 0;border-bottom:1px solid #edf1f5}}.news a:last-child{{border:0}}.news b{{font-size:11px;line-height:1.45}}.news small{{display:block;color:#94a3b8;font-size:9px;margin-top:4px}}.footer{{border-top:1px solid #edf1f5;background:#fafbfc;padding:18px 28px;color:#94a3b8;font-size:9px;line-height:1.6}}@media(max-width:600px){{.top,.asset,.section,.footer{{padding-left:18px;padding-right:18px}}.metrics,.levels{{grid-template-columns:repeat(2,1fr)}}.company{{font-size:16px}}}}
-</style></head><body><div class="wrap"><div class="mail">
-<div class="top"><div class="brand">Alura <em>Quant</em></div><small>Nueva señal cuantitativa</small></div>
-<div class="asset"><div class="identity"><div class="icon">{esc(icon)}</div><div><div class="company">{esc(company)}</div><div class="meta">{esc(ticker)} · {esc(sector)}</div></div></div><div class="scorebox"><div class="scorelabel">SCORE</div><div class="score">{score:.0f}/100</div><div class="scoretrack"><div class="scorefill"></div></div></div></div>
-<div class="section"><div class="kicker">Oportunidad</div><h2>{esc(title)}</h2><div class="card">{opportunity_chart(a)}<div class="metrics"><div class="metric"><div class="label">Precio</div><div class="value">{esc(price)}</div></div><div class="metric"><div class="label">RVOL</div><div class="value">{esc(num(a.get('rvol_entrada')))}x</div></div><div class="metric"><div class="label">RSI</div><div class="value">{esc(num(a.get('rsi_entrada')))}</div></div><div class="metric"><div class="label">ROC20</div><div class="value">{esc(pct(a.get('roc20_entrada')))}</div></div></div><div class="levels"><div class="level"><div class="label">Stop Loss</div><div class="value stop">{esc(stop)}</div></div><div class="level"><div class="label">Take Profit</div><div class="value target">{esc(tp)}</div></div><div class="level"><div class="label">Ratio R:R</div><div class="value">{esc(rr)}</div></div><div class="level"><div class="label">Actual</div><div class="value">{esc(current)}</div></div></div><div class="pills">{reasons(a.get('razones_entrada'))}</div><div class="note">Visual de niveles basado en la ficha de oportunidades de Alura Quant: Stop, Entrada, Actual y Take Profit.</div></div></div>
-<div class="section"><div class="kicker">Contexto</div><h2>Más allá del gráfico</h2><div class="context"><div class="ctxlabel">Empresa</div><p>{esc(ctx.get('empresa_contexto'))}</p><div class="ctxlabel">Sector</div><p>{esc(ctx.get('sector_contexto'))}</p><div class="ctxlabel">Lectura contextual</div><p>{esc(ctx.get('comentario_contexto'))}</p><div class="ctxlabel">Riesgos a vigilar</div><p>{esc(ctx.get('riesgos_contexto'))}</p></div></div>
-<div class="section"><div class="kicker">Actualidad</div><h2>Noticias recientes</h2><div class="news">{news_html(news)}</div></div>
-<div class="section"><div class="kicker">Tesis del modelo</div><h2>Análisis cuantitativo de entrada</h2><div class="analysis"><div class="ailabel">IA · Tesis de entrada</div><p>{esc(a.get('analisis_ia_entrada') or 'Sin análisis IA de entrada disponible.')}</p></div></div>
-<div class="footer"><b>Alura Quant</b> · Señales cuantitativas generadas mediante reglas sistemáticas e inteligencia artificial.<br>Esta comunicación es informativa y no constituye asesoramiento financiero personalizado. Los niveles corresponden a la señal registrada al generarse.</div>
-</div></div></body></html>'''
-
-
-def send(a, content, recipients):
-    ticker=safe(a.get("ticker")); score=num(a.get("score_entrada"),0)
-    subject=f"Alura Quant | Nueva alerta: {ticker} · Score {score}/100"
     if DRY_RUN:
-        fn=f"preview_alerta_{ticker.replace('.', '_')}.html"
-        open(fn,"w",encoding="utf-8").write(content)
-        log.info("DRY_RUN: generado %s", fn)
+        fn_html = f"preview_alerta_{ticker.replace('.', '_')}.html"
+        fn_img = f"ficha_{ticker.replace('.', '_')}.png"
+        open(fn_html, "w", encoding="utf-8").write(content)
+        open(fn_img, "wb").write(card_img_bytes)
+        log.info("DRY_RUN: generados %s y %s", fn_html, fn_img)
         return
-    resend.Emails.send({"from":FROM_EMAIL,"to":recipients,"subject":subject,"html":content})
-    log.info("Email enviado: %s", subject)
+
+    # Envío mediante Resend adjuntando la imagen embebida/adjunta
+    b64_img = base64.b64encode(card_img_bytes).decode("utf-8")
+    
+    payload = {
+        "from": FROM_EMAIL,
+        "to": recipients,
+        "subject": subject,
+        "html": content.replace("cid:ficha_oportunidad", f"data:image/png;base64,{b64_img}"),
+        "attachments": [
+            {
+                "filename": f"ficha_{ticker}.png",
+                "content": b64_img,
+            }
+        ]
+    }
+    
+    resend.Emails.send(payload)
+    log.info("Email enviado exitosamente: %s", subject)
 
 
 def main():
     log.info("ALURA QUANT — ALERTAS PREMIUM | score >= %.0f | ventana=%sh", SCORE_MIN, LOOKBACK_HOURS)
-    recipients=get_subscribers()
+    recipients = get_subscribers()
     if not recipients:
         log.info("No hay suscriptores.")
         return
-    alerts=get_new_alerts()
+    alerts = get_new_alerts()
     if not alerts:
         log.info("No hay alertas nuevas que cumplan el filtro.")
         return
     for a in alerts:
-        ticker=safe(a.get("ticker"))
+        ticker = safe(a.get("ticker"))
         try:
-            news=get_news(ticker, safe(a.get("empresa"),""))
-            ctx=ai_context(a, news)
-            content=html_email(a,ctx,news)
-            send(a,content,recipients)
+            news = get_news(ticker, safe(a.get("empresa"), ""))
+            ctx = ai_context(a, news)
+            card_img_bytes = generate_opportunity_card_image(a)
+            content = html_email(a, ctx, news)
+            send(a, content, card_img_bytes, recipients)
         except Exception as e:
-            log.exception("Error procesando %s: %s",ticker,e)
+            log.exception("Error procesando %s: %s", ticker, e)
 
 if __name__ == "__main__":
     main()
