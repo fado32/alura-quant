@@ -410,8 +410,12 @@ def html_email(a, ctx, news):
           <!-- Footer -->
           <tr>
             <td class="mobile-padding" style="border-top:1px solid #edf1f5;background:#fafbfc;padding:20px 28px;color:#94a3b8;font-size:10px;line-height:1.6;">
-              <b>Alura Quant</b> · Alertas cuantitativas generadas de forma automática.<br>
-              Esta comunicación es de carácter exclusivamente informativo y no representa asesoramiento financiero personalizado.
+              <b>Alura Quant</b> · Aviso legal y descargo de responsabilidad:<br>
+              Alura Quant es una herramienta tecnológica de análisis cuantitativo y educación financiera. 
+              Los datos, scores, niveles técnicos y análisis generados por algoritmos o inteligencia artificial 
+              no constituyen, ni deben interpretarse como, un servicio de asesoramiento en inversión, recomendación 
+              de compra/venta o análisis financiero personalizado según la Ley del Mercado de Valores. La renta variable
+              conlleva riesgos de pérdida de capital. Cada usuario es responsable exclusivo de sus decisiones de inversión.
             </td>
           </tr>
 
