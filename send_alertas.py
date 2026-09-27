@@ -259,7 +259,7 @@ def build_html_opportunity_card(a):
                 <div style="font-size:12px;font-weight:800;color:#0f172a;margin-top:2px;">{num(sl)}</div>
               </td>
               <td width="1%" align="center" style="white-space:nowrap;">
-                <div style="font-size:9px;font-weight:800;color:#94a3b8;">PRECIO ENTRADA</div>
+                <div style="font-size:9px;font-weight:800;color:#94a3b8;">ENTRADA</div>
                 <div style="font-size:12px;font-weight:800;color:#0f172a;margin-top:2px;">{num(entry)}</div>
               </td>
               <td width="{reward_pct}%" align="right">
