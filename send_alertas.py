@@ -168,17 +168,14 @@ No inventes cifras. No inventes hechos. No cambies Score, RSI, RVOL, ROC20 ni ni
 
 
 # ============================================================
-# COMPONENTES HTML INTEGRADOS (Sin adjuntos / Sin imágenes)
+# COMPONENTES HTML INTEGRADOS (Ficha rediseñada)
 # ============================================================
 def build_html_opportunity_card(a):
-    """
-    Construye la ficha de oportunidad mediante tablas HTML nativas
-    e inline CSS compatible con todos los clientes de email.
-    """
     empresa = esc(a.get("empresa"))
     ticker = esc(a.get("ticker"))
     sector = esc(a.get("sector"))
     score = num(a.get("score_entrada"), 0)
+    rr = safe(num(a.get("ratio_rr")))
 
     try: sl = float(a.get("stop_loss"))
     except: sl = 0.0
@@ -189,136 +186,126 @@ def build_html_opportunity_card(a):
     try: tp = float(a.get("take_profit"))
     except: tp = 0.0
 
-    # Cálculo dinámico de proporciones para la barra visual en HTML
-    vals = [v for v in [sl, entry, current, tp] if v > 0]
-    lo, hi = (min(vals), max(vals)) if len(vals) >= 2 else (0, 1)
-    span = max(0.001, hi - lo)
-    
-    pct_sl = max(0, min(100, int(((sl - lo) / span) * 100)))
-    pct_entry = max(0, min(100, int(((entry - lo) / span) * 100)))
-    pct_tp = max(0, min(100, int(((tp - lo) / span) * 100)))
+    # Cálculo de rendimiento desde la entrada
+    if entry > 0 and current > 0:
+        perf_pct = ((current - entry) / entry) * 100
+        perf_eur = current - entry
+        perf_str = f"{perf_pct:+.2f}% · {perf_eur:+.2f} €"
+        perf_color = "#16a34a" if perf_pct >= 0 else "#dc2626"
+    else:
+        perf_str = "0,00% · 0,00 €"
+        perf_color = "#16a34a"
 
-    # Razones / Pills
-    razones = [x.strip() for x in str(a.get("razones_entrada") or "").split(";") if x.strip()]
-    pills_html = "".join([
-        f'<span style="display:inline-block;background-color:#f1f5f9;border:1px solid #e2e8f0;border-radius:12px;padding:4px 10px;font-size:11px;color:#475569;margin-right:6px;margin-bottom:6px;">✓ {esc(r)}</span>'
-        for r in razones[:3]
-    ])
+    # Posicionamiento proporcional para el gráfico de rango
+    min_val = min(sl, entry, current, tp) if min(sl, entry, current, tp) > 0 else 1.0
+    max_val = max(sl, entry, current, tp) if max(sl, entry, current, tp) > 0 else 2.0
+    span = max(0.001, max_val - min_val)
+
+    p_sl = max(0, min(100, int(((sl - min_val) / span) * 100)))
+    p_entry = max(0, min(100, int(((entry - min_val) / span) * 100)))
+    p_current = max(0, min(100, int(((current - min_val) / span) * 100)))
+    p_tp = max(0, min(100, int(((tp - min_val) / span) * 100)))
 
     return f'''
-    <!-- FICHA OPORTUNIDAD CONTENEDOR PRINCIPAL -->
-    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:20px;margin-bottom:20px;box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+    <!-- FICHA ESTILO DASHBOARD CON GRÁFICO INTERACTIVO -->
+    <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;margin-bottom:24px;box-shadow:0 2px 6px rgba(0,0,0,0.03);">
       
-      <!-- Cabecera Tarjeta: Nombre + Score -->
+      <!-- 1. Cabecera: Quant Score (izq) + Ticker/Empresa + Precio Actual (der) -->
       <tr>
-        <td>
-          <table width="100%" border="0" cellspacing="0" cellpadding="0">
+        <td valign="top" width="20%">
+          <div style="font-size:28px;font-weight:900;color:#2563eb;line-height:1;">{score}</div>
+          <div style="font-size:9px;font-weight:800;color:#94a3b8;letter-spacing:0.05em;margin-top:4px;">QUANT SCORE</div>
+        </td>
+        <td valign="top" align="left" width="50%">
+          <div style="font-size:18px;font-weight:800;color:#0f172a;line-height:1.2;">{empresa} <span style="font-size:12px;color:#94a3b8;font-weight:600;">{ticker}</span></div>
+          <div style="font-size:12px;color:#64748b;margin-top:2px;">{sector}</div>
+        </td>
+        <td valign="top" align="right" width="30%">
+          <div style="font-size:24px;font-weight:900;color:#0f172a;line-height:1;">{num(current)}</div>
+          <div style="font-size:9px;font-weight:800;color:#94a3b8;letter-spacing:0.05em;margin-top:4px;">PRECIO ACTUAL</div>
+        </td>
+      </tr>
+
+      <!-- 2. Banner Risk / Reward + Rendimiento -->
+      <tr>
+        <td colspan="3" style="padding-top:20px;">
+          <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#f8fafc;border:1px solid #f1f5f9;border-radius:12px;padding:12px 16px;">
             <tr>
-              <td valign="top">
-                <div style="font-size:18px;font-weight:700;color:#0f172a;line-height:1.2;">{empresa} ({ticker})</div>
-                <div style="font-size:12px;color:#64748b;margin-top:4px;">Sector: {sector}</div>
+              <td>
+                <div style="font-size:8px;font-weight:800;color:#94a3b8;letter-spacing:0.05em;">RISK / REWARD</div>
+                <div style="font-size:15px;font-weight:800;color:#2563eb;margin-top:2px;">{rr}x</div>
               </td>
-              <td align="right" valign="top">
-                <div style="background-color:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:6px 12px;text-align:center;display:inline-block;">
-                  <div style="font-size:9px;font-weight:800;color:#2563eb;letter-spacing:0.05em;">SCORE</div>
-                  <div style="font-size:18px;font-weight:800;color:#1e40af;">{score}/100</div>
-                </div>
+              <td align="right">
+                <div style="font-size:8px;font-weight:800;color:#94a3b8;letter-spacing:0.05em;">Rendimiento desde entrada</div>
+                <div style="font-size:15px;font-weight:800;color:{perf_color};margin-top:2px;">{perf_str}</div>
               </td>
             </tr>
           </table>
         </td>
       </tr>
 
-      <!-- Separador -->
-      <tr><td style="padding-top:14px;border-bottom:1px solid #f1f5f9;"></td></tr>
-
-      <!-- Seccion Tracker Visual -->
+      <!-- 3. Gráfico de Rango de Precio con Puntos y Tramos en Color -->
       <tr>
-        <td style="padding-top:16px;">
-          <!-- Valores del Tracker -->
-          <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom:8px;">
+        <td colspan="3" style="padding-top:24px;">
+          
+          <!-- Etiquetas superiores de precios -->
+          <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom:6px;">
             <tr>
               <td width="25%" align="left">
-                <div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;">STOP</div>
-                <div style="font-size:12px;font-weight:700;color:#dc2626;">{eur(sl)}</div>
+                <div style="font-size:9px;font-weight:800;color:#94a3b8;">STOP</div>
+                <div style="font-size:12px;font-weight:800;color:#0f172a;margin-top:2px;">{num(sl)}</div>
               </td>
               <td width="25%" align="center">
-                <div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;">ENTRADA</div>
-                <div style="font-size:12px;font-weight:700;color:#2563eb;">{eur(entry)}</div>
+                <div style="font-size:9px;font-weight:800;color:#94a3b8;">ENTRADA</div>
+                <div style="font-size:12px;font-weight:800;color:#0f172a;margin-top:2px;">{num(entry)}</div>
               </td>
               <td width="25%" align="center">
-                <div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;">ACTUAL</div>
-                <div style="font-size:12px;font-weight:700;color:#0f172a;">{eur(current)}</div>
+                <div style="font-size:9px;font-weight:800;color:#94a3b8;">ACTUAL</div>
+                <div style="font-size:12px;font-weight:800;color:#0f172a;margin-top:2px;">{num(current)}</div>
               </td>
               <td width="25%" align="right">
-                <div style="font-size:9px;font-weight:700;color:#94a3b8;text-transform:uppercase;">TAKE PROFIT</div>
-                <div style="font-size:12px;font-weight:700;color:#16a34a;">{eur(tp)}</div>
+                <div style="font-size:9px;font-weight:800;color:#94a3b8;">TAKE PROFIT</div>
+                <div style="font-size:12px;font-weight:800;color:#0f172a;margin-top:2px;">{num(tp)}</div>
               </td>
             </tr>
           </table>
 
-          <!-- Barra Visual Rango (Nativa HTML/CSS) -->
-          <div style="background-color:#e2e8f0;height:8px;border-radius:4px;position:relative;width:100%;margin-bottom:18px;">
-            <div style="background-color:#16a34a;height:8px;border-radius:4px;width:{pct_tp}%;max-width:100%;"></div>
+          <!-- Barra Rango con Tramos y Puntos -->
+          <div style="position:relative;height:16px;width:100%;margin-top:6px;">
+            <!-- Fondo base -->
+            <div style="position:absolute;top:6px;left:0;right:0;height:4px;background-color:#e2e8f0;border-radius:2px;"></div>
+            
+            <!-- Tramo Rojo (Stop -> Entrada) -->
+            <div style="position:absolute;top:6px;left:{p_sl}%;width:{max(0, p_entry - p_sl)}%;height:4px;background-color:#fca5a5;"></div>
+            
+            <!-- Tramo Verde (Actual -> Take Profit) -->
+            <div style="position:absolute;top:6px;left:{p_current}%;width:{max(0, p_tp - p_current)}%;height:4px;background-color:#86efac;"></div>
+
+            <!-- Punto Stop Loss (Rojo) -->
+            <div style="position:absolute;top:1px;left:{p_sl}%;margin-left:-7px;width:14px;height:14px;border:3px solid #dc2626;background:#ffffff;border-radius:50%;box-sizing:border-box;"></div>
+
+            <!-- Punto Entrada (Azul) -->
+            <div style="position:absolute;top:1px;left:{p_entry}%;margin-left:-7px;width:14px;height:14px;border:3px solid #2563eb;background:#ffffff;border-radius:50%;box-sizing:border-box;"></div>
+
+            <!-- Punto Actual (Azul Ancho) -->
+            <div style="position:absolute;top:0px;left:{p_current}%;margin-left:-8px;width:16px;height:16px;border:3px solid #2563eb;background:#ffffff;border-radius:50%;box-sizing:border-box;"></div>
+
+            <!-- Punto Take Profit (Verde) -->
+            <div style="position:absolute;top:1px;left:{p_tp}%;margin-left:-7px;width:14px;height:14px;border:3px solid #16a34a;background:#ffffff;border-radius:50%;box-sizing:border-box;"></div>
+          </div>
+
+        </td>
+      </tr>
+
+      <!-- 4. Tesis del Analista -->
+      <tr>
+        <td colspan="3" style="padding-top:20px;">
+          <div style="background-color:#f8fafc;border:1px solid #f1f5f9;border-radius:12px;padding:16px;">
+            <div style="font-size:10px;font-weight:800;color:#2563eb;letter-spacing:0.05em;margin-bottom:6px;">✦ TESIS DEL ANALISTA</div>
+            <div style="font-size:12px;color:#334155;line-height:1.6;">{esc(a.get('analisis_ia_entrada') or 'Sin tesis adicional disponible.')}</div>
           </div>
         </td>
       </tr>
-
-      <!-- Grilla de Métricas Técnico-Cuantitativas -->
-      <tr>
-        <td>
-          <table width="100%" border="0" cellspacing="0" cellpadding="0">
-            <tr>
-              <!-- Fila 1 de Métricas -->
-              <td width="23%" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;">
-                <div style="font-size:8px;font-weight:700;color:#94a3b8;">PRECIO</div>
-                <div style="font-size:12px;font-weight:700;color:#0f172a;margin-top:2px;">{eur(a.get("precio_alerta"))}</div>
-              </td>
-              <td width="2%"></td>
-              <td width="23%" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;">
-                <div style="font-size:8px;font-weight:700;color:#94a3b8;">RVOL</div>
-                <div style="font-size:12px;font-weight:700;color:#0f172a;margin-top:2px;">{num(a.get("rvol_entrada"))}x</div>
-              </td>
-              <td width="2%"></td>
-              <td width="23%" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;">
-                <div style="font-size:8px;font-weight:700;color:#94a3b8;">RSI</div>
-                <div style="font-size:12px;font-weight:700;color:#0f172a;margin-top:2px;">{safe(num(a.get("rsi_entrada")))}</div>
-              </td>
-              <td width="2%"></td>
-              <td width="23%" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;">
-                <div style="font-size:8px;font-weight:700;color:#94a3b8;">ROC20</div>
-                <div style="font-size:12px;font-weight:700;color:#0f172a;margin-top:2px;">{safe(pct(a.get("roc20_entrada")))}</div>
-              </td>
-            </tr>
-            <tr><td height="8"></td></tr>
-            <tr>
-              <!-- Fila 2 de Métricas -->
-              <td width="23%" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;">
-                <div style="font-size:8px;font-weight:700;color:#94a3b8;">STOP LOSS</div>
-                <div style="font-size:12px;font-weight:700;color:#dc2626;margin-top:2px;">{eur(sl)}</div>
-              </td>
-              <td width="2%"></td>
-              <td width="23%" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;">
-                <div style="font-size:8px;font-weight:700;color:#94a3b8;">TAKE PROFIT</div>
-                <div style="font-size:12px;font-weight:700;color:#16a34a;margin-top:2px;">{eur(tp)}</div>
-              </td>
-              <td width="2%"></td>
-              <td width="23%" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;">
-                <div style="font-size:8px;font-weight:700;color:#94a3b8;">RATIO R:R</div>
-                <div style="font-size:12px;font-weight:700;color:#2563eb;margin-top:2px;">{safe(num(a.get("ratio_rr")))}</div>
-              </td>
-              <td width="2%"></td>
-              <td width="23%" style="background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;">
-                <div style="font-size:8px;font-weight:700;color:#94a3b8;">ACTUAL</div>
-                <div style="font-size:12px;font-weight:700;color:#0f172a;margin-top:2px;">{eur(current)}</div>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-
-      <!-- Pills de Razones -->
-      {f'<tr><td style="padding-top:14px;">{pills_html}</td></tr>' if pills_html else ''}
 
     </table>
     '''
@@ -375,14 +362,14 @@ def html_email(a, ctx, news):
             </td>
           </tr>
 
-          <!-- Ficha Integrada Nativa (HTML/CSS) -->
+          <!-- Ficha Integrada Nativa (Rediseñada estilo Dashboard) -->
           <tr>
             <td style="padding:0 28px 10px;">
               {card_html}
             </td>
           </tr>
 
-          <!-- Contexto Empresa / Sector -->
+          <!-- Contexto Empresa / Sector / Riesgos -->
           <tr>
             <td style="padding:0 28px 20px;">
               <div style="background:#f8fafc;border:1px solid #e3eaf4;border-radius:12px;padding:18px;">
@@ -401,22 +388,12 @@ def html_email(a, ctx, news):
             </td>
           </tr>
 
-          <!-- Noticias -->
+          <!-- Noticias / Actualidad (Movido al final) -->
           <tr>
             <td style="padding:0 28px 20px;">
               <div style="font-size:9px;color:#2563eb;text-transform:uppercase;letter-spacing:.1em;font-weight:800;margin-bottom:6px;">ACTUALIDAD</div>
               <h2 style="font-size:14px;margin:0 0 10px;color:#0f172a;">Noticias recientes</h2>
               {news_html(news)}
-            </td>
-          </tr>
-
-          <!-- Tesis de Entrada -->
-          <tr>
-            <td style="padding:0 28px 24px;">
-              <div style="background:#f4f7ff;border:1px solid #dbe7ff;border-radius:12px;padding:16px;">
-                <div style="font-size:9px;color:#2563eb;text-transform:uppercase;letter-spacing:.08em;font-weight:800;margin-bottom:4px;">TESIS SISTEMÁTICA ENTRADA</div>
-                <p style="font-size:12px;line-height:1.6;color:#334155;margin:0;">{esc(a.get('analisis_ia_entrada') or 'Sin análisis adicional disponible.')}</p>
-              </div>
             </td>
           </tr>
 
