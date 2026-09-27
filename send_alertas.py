@@ -196,6 +196,19 @@ def build_html_opportunity_card(a):
         perf_str = "0,00% · 0,00 €"
         perf_color = "#16a34a"
 
+    # Proporción dinámica del ancho para reflejar la distancia real entre niveles
+    risk_dist = abs(entry - sl)
+    reward_dist = abs(tp - entry)
+    total_dist = risk_dist + reward_dist
+
+    if total_dist > 0 and risk_dist > 0 and reward_dist > 0:
+        # Ponderación porcentual según las distancias reales
+        risk_pct = round((risk_dist / total_dist) * 100, 1)
+        reward_pct = round((reward_dist / total_dist) * 100, 1)
+    else:
+        # Proporción genérica si los niveles no son válidos (30% riesgo / 70% beneficio)
+        risk_pct, reward_pct = 30.0, 70.0
+
     return f'''
     <!-- FICHA ESTILO DASHBOARD RESPONSIVE -->
     <table width="100%" border="0" cellspacing="0" cellpadding="0" class="mobile-card" style="background-color:#ffffff;border:1px solid #e2e8f0;border-radius:16px;padding:24px;margin-bottom:24px;box-shadow:0 2px 6px rgba(0,0,0,0.03);">
@@ -234,42 +247,38 @@ def build_html_opportunity_card(a):
         </td>
       </tr>
 
-      <!-- Gráfico de Rango de Precio Integrado (Alineación Perfecta de Bolitas) -->
+      <!-- Gráfico de Rango Proporcional (Stop Loss -> Entrada -> Take Profit) -->
       <tr>
         <td colspan="3" style="padding-top:24px;">
           
-          <!-- Etiquetas superiores de precios -->
+          <!-- Etiquetas superiores con alineación acorde a la posición de los puntos -->
           <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom:8px;">
             <tr>
-              <td width="25%" align="left">
-                <div style="font-size:9px;font-weight:800;color:#94a3b8;">STOP</div>
+              <td width="{risk_pct}%" align="left">
+                <div style="font-size:9px;font-weight:800;color:#94a3b8;">STOP LOSS</div>
                 <div style="font-size:12px;font-weight:800;color:#0f172a;margin-top:2px;">{num(sl)}</div>
               </td>
-              <td width="25%" align="center">
-                <div style="font-size:9px;font-weight:800;color:#94a3b8;">ENTRADA</div>
+              <td width="1%" align="center" style="white-space:nowrap;">
+                <div style="font-size:9px;font-weight:800;color:#94a3b8;">PRECIO ENTRADA</div>
                 <div style="font-size:12px;font-weight:800;color:#0f172a;margin-top:2px;">{num(entry)}</div>
               </td>
-              <td width="25%" align="center">
-                <div style="font-size:9px;font-weight:800;color:#94a3b8;">ACTUAL</div>
-                <div style="font-size:12px;font-weight:800;color:#0f172a;margin-top:2px;">{num(current)}</div>
-              </td>
-              <td width="25%" align="right">
+              <td width="{reward_pct}%" align="right">
                 <div style="font-size:9px;font-weight:800;color:#94a3b8;">TAKE PROFIT</div>
                 <div style="font-size:12px;font-weight:800;color:#0f172a;margin-top:2px;">{num(tp)}</div>
               </td>
             </tr>
           </table>
 
-          <!-- Componente Visual del Rango: Con Alineación Exacta al Medio -->
+          <!-- Componente Visual del Rango Proporcional con Alineación Exacta al Medio -->
           <table width="100%" border="0" cellspacing="0" cellpadding="0" style="table-layout:fixed;">
             <tr height="16" style="height:16px;line-height:0px;font-size:0px;">
-              <!-- Punto Stop -->
+              <!-- Punto Stop Loss -->
               <td width="14" align="center" valign="middle" style="height:16px;vertical-align:middle;padding:0;">
                 <div style="width:12px;height:12px;border:3px solid #dc2626;background:#ffffff;border-radius:50%;box-sizing:border-box;margin:0 auto;"></div>
               </td>
               
-              <!-- Tramo Stop -> Entrada (Rojo) -->
-              <td border="0" valign="middle" style="height:16px;vertical-align:middle;padding:0;">
+              <!-- Tramo Stop -> Entrada (Rojo, ancho proporcional al riesgo) -->
+              <td width="{risk_pct}%" border="0" valign="middle" style="height:16px;vertical-align:middle;padding:0;">
                 <div style="height:3px;background-color:#fca5a5;font-size:1px;line-height:1px;">&nbsp;</div>
               </td>
               
@@ -278,18 +287,8 @@ def build_html_opportunity_card(a):
                 <div style="width:12px;height:12px;border:3px solid #2563eb;background:#ffffff;border-radius:50%;box-sizing:border-box;margin:0 auto;"></div>
               </td>
               
-              <!-- Tramo Entrada -> Actual (Gris Neutro) -->
-              <td border="0" valign="middle" style="height:16px;vertical-align:middle;padding:0;">
-                <div style="height:3px;background-color:#e2e8f0;font-size:1px;line-height:1px;">&nbsp;</div>
-              </td>
-              
-              <!-- Punto Actual -->
-              <td width="16" align="center" valign="middle" style="height:16px;vertical-align:middle;padding:0;">
-                <div style="width:14px;height:14px;border:3px solid #2563eb;background:#ffffff;border-radius:50%;box-sizing:border-box;margin:0 auto;"></div>
-              </td>
-              
-              <!-- Tramo Actual -> Take Profit (Verde) -->
-              <td border="0" valign="middle" style="height:16px;vertical-align:middle;padding:0;">
+              <!-- Tramo Entrada -> Take Profit (Verde, ancho proporcional al beneficio) -->
+              <td width="{reward_pct}%" border="0" valign="middle" style="height:16px;vertical-align:middle;padding:0;">
                 <div style="height:3px;background-color:#86efac;font-size:1px;line-height:1px;">&nbsp;</div>
               </td>
               
