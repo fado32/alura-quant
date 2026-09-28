@@ -24,7 +24,7 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite").strip()
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 FROM_EMAIL = os.getenv("ALURA_ALERT_FROM", "Alura Quant <onboarding@resend.dev>").strip()
 SCORE_MIN = float(os.getenv("ALURA_ALERT_SCORE_MIN", "70"))
-LOOKBACK_HOURS = int(os.getenv("ALURA_ALERT_LOOKBACK_HOURS", "648"))
+LOOKBACK_HOURS = int(os.getenv("ALURA_ALERT_LOOKBACK_HOURS", "1048"))
 DRY_RUN = os.getenv("ALURA_ALERT_DRY_RUN", "false").lower() == "true"
 IA_DELAY = float(os.getenv("ALURA_ALERT_IA_DELAY", "1.5"))
 
@@ -99,9 +99,9 @@ def get_sent_tickers():
 
 def get_new_alerts(excluded_tickers):
     since = datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
-    cols = ("id,fecha,ticker,empresa,sector,icono,modo,precio_alerta,score_entrada,score_actual,rvol_entrada,"
+    cols = ("id,fecha,ticker,empresa,sector,icono,modo,precio_alerta,score_entrada,score_actual,pnl_actual_pct,rvol_entrada,"
             "rsi_entrada,roc20_entrada,atr_entrada,ema50_entrada,ema200_entrada,razones_entrada,"
-            "soporte_entrada,resistencia_entrada,analisis_ia_entrada,stop_loss,take_profit,ratio_rr,"
+            "soporte_entrada,resistencia_entrada,analisis_ia_entrada,analisis_ia_actual,stop_loss,take_profit,ratio_rr,"
             "riesgo_euros,acciones,nominal,estado_estrategia,fecha_mercado_actual,estado,precio_actual")
     r = (supabase.table("historial_alertas").select(cols).eq("estado", "ACTIVA")
          .gte("fecha", since.isoformat())
@@ -113,14 +113,21 @@ def get_new_alerts(excluded_tickers):
     df["score_n"] = pd.to_numeric(df["score_entrada"], errors="coerce")
     df["score_actual_n"] = pd.to_numeric(df["score_actual"], errors="coerce")
     df["score_filtro"] = df["score_actual_n"].fillna(df["score_n"])
+    df["pnl_actual_n"] = pd.to_numeric(df["pnl_actual_pct"], errors="coerce")
     df["ticker_key"] = df["ticker"].astype(str).str.strip().str.upper()
+    has_current_score = df["score_actual_n"].notna()
+    current_score_has_upside = df["pnl_actual_n"].between(0, 2, inclusive="both")
     df = df[(df["fecha_dt"] >= pd.Timestamp(since)) & (df["score_filtro"] >= SCORE_MIN)
             & (df["estado"].astype(str).str.upper() == "ACTIVA")
-            & (~df["ticker_key"].isin(excluded_tickers))]
+            & (~df["ticker_key"].isin(excluded_tickers))
+            & (~has_current_score | current_score_has_upside)]
     if df.empty:
         return []
     df = df.sort_values(["score_filtro", "fecha_dt"], ascending=[False, False], na_position="last")
-    return [df.iloc[0].to_dict()]
+    winner = df.iloc[0].to_dict()
+    if pd.notna(winner.get("score_actual_n")):
+        winner["analisis_ia_entrada"] = winner.get("analisis_ia_actual")
+    return [winner]
 
 def get_news(ticker, company, limit=4):
     news, seen = [], set()
