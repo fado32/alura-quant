@@ -81,7 +81,8 @@ MAPEO_COLUMNAS_SUPABASE = {
     "RSI_Entrada": "rsi_entrada", "ROC20_Entrada": "roc20_entrada", "ATR_Entrada": "atr_entrada",
     "EMA50_Entrada": "ema50_entrada", "EMA200_Entrada": "ema200_entrada", "Razones_Entrada": "razones_entrada",
     "Soporte_Entrada": "soporte_entrada", "Resistencia_Entrada": "resistencia_entrada", "Analisis_IA_Entrada": "analisis_ia_entrada",
-    "Stop_Loss": "stop_loss", "Take_Profit": "take_profit", "Ratio_RR": "ratio_rr", "Riesgo_Euros": "riesgo_euros",
+    "Stop_Loss": "stop_loss", "Stop_Loss_Inicial": "stop_loss_inicial", "Fecha_Activacion_Breakeven": "fecha_activacion_breakeven",
+    "Take_Profit": "take_profit", "Ratio_RR": "ratio_rr", "Riesgo_Euros": "riesgo_euros",
     "Acciones": "acciones", "Nominal": "nominal", "Precio_Actual": "precio_actual", "Score_Actual": "score_actual",
     "RVOL_Actual": "rvol_actual", "RSI_Actual": "rsi_actual", "ROC20_Actual": "roc20_actual", "ATR_Actual": "atr_actual",
     "EMA50_Actual": "ema50_actual", "EMA200_Actual": "ema200_actual", "Razones_Actuales": "razones_actuales",
@@ -205,23 +206,27 @@ def calcular_pnl_posicion(precio_actual, precio_entrada, capital=300.0):
 
 
 def calcular_metricas(df):
-    """Calcula métricas globales del historial."""
+    """Calcula métricas globales; las salidas en breakeven no cuentan como pérdidas."""
     if df is None or df.empty:
-        return {"total_alertas": 0, "exitos": 0, "fallos": 0, "activas": 0, "win_rate": 0.0}
+        return {"total_alertas": 0, "exitos": 0, "fallos": 0, "break_even": 0, "activas": 0, "win_rate": 0.0}
     estados = df["Estado"].astype(str) if "Estado" in df.columns else pd.Series("", index=df.index)
     activos = estados.str.contains("ACTIVA", na=False, regex=False)
     exitos = estados.str.contains("OBJETIVO_CUMPLIDO", na=False, regex=False)
-    fallos = estados.str.contains("STOP_SALTADO", na=False, regex=False)
-    cerradas = int(exitos.sum() + fallos.sum())
-    win_rate = float(exitos.sum() / cerradas * 100) if cerradas else 0.0
+    stops = estados.str.contains("STOP_SALTADO", na=False, regex=False)
+    resultado_r = pd.to_numeric(df.get("Resultado_R", pd.Series(index=df.index, dtype=float)), errors="coerce")
+    fecha_be = pd.to_datetime(df.get("Fecha_Activacion_Breakeven", pd.Series(index=df.index, dtype=object)), errors="coerce")
+    break_even = stops & (resultado_r.eq(0) | fecha_be.notna())
+    fallos = stops & ~break_even
+    operaciones_decisivas = int(exitos.sum() + fallos.sum())
+    win_rate = float(exitos.sum() / operaciones_decisivas * 100) if operaciones_decisivas else 0.0
     return {
         "total_alertas": int(len(df)),
         "exitos": int(exitos.sum()),
         "fallos": int(fallos.sum()),
+        "break_even": int(break_even.sum()),
         "activas": int(activos.sum()),
         "win_rate": win_rate,
     }
-
 
 def formatear_tesis_ia(texto):
     """Limpia y escapa el comentario de IA para HTML."""
@@ -389,83 +394,36 @@ def obtener_precios_activos(df):
 # BENEFICIO REALIZADO
 # ============================================================
 
+def calcular_beneficio_fila_cerrada(row):
+    """Estima el P&L realizado con R guardada; contempla breakeven a 0R."""
+    entrada = safe_float(row.get("Precio_Alerta"))
+    if entrada is None or entrada <= 0:
+        return 0.0
+
+    resultado_r = safe_float(row.get("Resultado_R"))
+    stop_inicial = safe_float(row.get("Stop_Loss_Inicial"), safe_float(row.get("Stop_Loss")))
+    if resultado_r is not None and stop_inicial is not None:
+        riesgo_pct = abs(entrada - stop_inicial) / entrada
+        return CAPITAL_POR_ALERTA * riesgo_pct * resultado_r
+
+    estado = str(row.get("Estado", ""))
+    if "OBJETIVO_CUMPLIDO" in estado:
+        objetivo = safe_float(row.get("Take_Profit"), entrada * 1.10)
+        return CAPITAL_POR_ALERTA * (objetivo - entrada) / entrada if objetivo is not None else 0.0
+    if "STOP_SALTADO" in estado:
+        fecha_be = row.get("Fecha_Activacion_Breakeven")
+        if fecha_be is not None and not pd.isna(fecha_be) and str(fecha_be).strip():
+            return 0.0
+        stop = safe_float(row.get("Stop_Loss_Inicial"), safe_float(row.get("Stop_Loss"), entrada * 0.96))
+        return -CAPITAL_POR_ALERTA * (entrada - stop) / entrada if stop is not None else 0.0
+    return 0.0
+
+
 def calcular_beneficio_realizado(df):
-
-    """
-    Calcula únicamente operaciones cerradas utilizando 300€ por posición.
-    """
-
-    beneficio = 0.0
-
-    if df.empty:
-        return beneficio
-
-    for _, row in df.iterrows():
-
-        estado = str(
-            row.get(
-                "Estado",
-                ""
-            )
-        )
-
-        precio_entrada = safe_float(
-            row.get(
-                "Precio_Alerta"
-            ),
-            100.0
-        )
-
-        stop_loss = safe_float(
-            row.get(
-                "Stop_Loss"
-            ),
-            precio_entrada * 0.96
-            if precio_entrada is not None
-            else None
-        )
-
-        take_profit = safe_float(
-            row.get(
-                "Take_Profit"
-            ),
-            precio_entrada * 1.10
-            if precio_entrada is not None
-            else None
-        )
-
-        if (
-            precio_entrada is None
-            or precio_entrada <= 0
-        ):
-            continue
-
-        pct_ganancia = (
-            take_profit -
-            precio_entrada
-        ) / precio_entrada
-
-        pct_perdida = (
-            precio_entrada -
-            stop_loss
-        ) / precio_entrada
-
-        if "OBJETIVO_CUMPLIDO" in estado:
-
-            beneficio += (
-                CAPITAL_POR_ALERTA *
-                pct_ganancia
-            )
-
-        elif "STOP_SALTADO" in estado:
-
-            beneficio -= (
-                CAPITAL_POR_ALERTA *
-                pct_perdida
-            )
-
-    return beneficio
-
+    """Calcula operaciones cerradas con 300€ por posición y su resultado R."""
+    if df is None or df.empty:
+        return 0.0
+    return float(sum(calcular_beneficio_fila_cerrada(row) for _, row in df.iterrows()))
 
 # ============================================================
 # BENEFICIO NO REALIZADO
@@ -602,69 +560,7 @@ def calcular_resultados(
         beneficio_dia = 0.0
 
         for _, row in grupo.iterrows():
-
-            estado = str(
-                row.get(
-                    "Estado",
-                    ""
-                )
-            )
-
-            precio_entrada = safe_float(
-                row.get(
-                    "Precio_Alerta"
-                ),
-                100.0
-            )
-
-            stop_loss = safe_float(
-                row.get(
-                    "Stop_Loss"
-                ),
-                precio_entrada * 0.96
-                if precio_entrada is not None
-                else None
-            )
-
-            take_profit = safe_float(
-                row.get(
-                    "Take_Profit"
-                ),
-                precio_entrada * 1.10
-                if precio_entrada is not None
-                else None
-            )
-
-            if (
-                precio_entrada is None
-                or precio_entrada <= 0
-            ):
-                continue
-
-            pct_ganancia = (
-                take_profit -
-                precio_entrada
-            ) / precio_entrada
-
-            pct_perdida = (
-                precio_entrada -
-                stop_loss
-            ) / precio_entrada
-
-            if "OBJETIVO_CUMPLIDO" in estado:
-
-                beneficio_dia += (
-                    CAPITAL_POR_ALERTA *
-                    pct_ganancia
-                )
-
-            elif "STOP_SALTADO" in estado:
-
-                beneficio_dia -= (
-                    CAPITAL_POR_ALERTA *
-                    pct_perdida
-                )
-
+            beneficio_dia += calcular_beneficio_fila_cerrada(row)
         beneficio_realizado += (
             beneficio_dia
         )
@@ -3260,6 +3156,7 @@ metricas = calcular_metricas(df_hist)
 total_alertas = metricas["total_alertas"]
 exitos = metricas["exitos"]
 fallos = metricas["fallos"]
+break_even = metricas.get("break_even", 0)
 activas = metricas["activas"]
 win_rate = metricas["win_rate"]
 
@@ -4084,6 +3981,8 @@ def render_opportunity_card(row, compact=False, ribbon=False):
         precio_entrada = safe_float(row.get("Precio_Actual"))
 
     stop_loss = safe_float(row.get("Stop_Loss"))
+    fecha_be = row.get("Fecha_Activacion_Breakeven")
+    stop_label = "Stop breakeven" if fecha_be is not None and pd.notna(fecha_be) and str(fecha_be).strip() else "Stop"
     take_profit = safe_float(row.get("Take_Profit"))
     ratio_rr = safe_float(row.get("Ratio_RR"))
 
@@ -4127,7 +4026,7 @@ def render_opportunity_card(row, compact=False, ribbon=False):
         position_tracker = f"""
         <div class="position-wrapper">
             <div class="position-labels">
-                <div class="position-label-item"><span class="position-label">Stop</span><span class="position-price">{stop_loss_text}</span></div>
+                <div class="position-label-item"><span class="position-label">{stop_label}</span><span class="position-price">{stop_loss_text}</span></div>
                 <div class="position-label-item"><span class="position-label">Entrada</span><span class="position-price">{entrada_text}</span></div>
                 <div class="position-label-item"><span class="position-label">Actual</span><span class="position-price">{actual_text}</span></div>
                 <div class="position-label-item"><span class="position-label">Take Profit</span><span class="position-price">{take_profit_text}</span></div>
@@ -4186,7 +4085,7 @@ def render_opportunity_card(row, compact=False, ribbon=False):
 
         <div class="performance-row">
             <div class="performance-rr">
-                <div class="performance-rr-label">Risk / Reward</div>
+                <div class="performance-rr-label">R:R inicial</div>
                 <div class="performance-rr-value">{ratio_rr_text}</div>
             </div>
             <div class="performance-left">
@@ -4380,7 +4279,7 @@ if active_page == "Inicio":
     with kpi_cols[2]:
         render_html(f"<div class='aq-kpi'><div class='aq-kpi-label'>Posiciones activas</div><div class='aq-kpi-value'>{activas}</div><div class='aq-kpi-detail'>{TOTAL_ACTIVOS_UNIVERSO} activos monitorizados</div></div>")
     with kpi_cols[3]:
-        render_html(f"<div class='aq-kpi'><div class='aq-kpi-label'>Win Rate</div><div class='aq-kpi-value'>{formatear_numero(win_rate,1,'%')}</div><div class='aq-kpi-detail'>{exitos} TP · {fallos} SL</div></div>")
+        render_html(f"<div class='aq-kpi'><div class='aq-kpi-label'>Win Rate</div><div class='aq-kpi-value'>{formatear_numero(win_rate,1,'%')}</div><div class='aq-kpi-detail'>{exitos} TP · {fallos} SL · {break_even} BE</div></div>")
 
     render_html("""
       <section class="aq-section" id="oportunidad-demo">
@@ -4568,7 +4467,7 @@ if active_page == "Performance":
           <span>Take Profit</span><strong>{exitos}</strong><small>objetivos alcanzados</small>
         </div>
         <div class="performance-kpi negative">
-          <span>Stop Loss</span><strong>{fallos}</strong><small>stops ejecutados</small>
+          <span>Stop Loss</span><strong>{fallos}</strong><small>{break_even} salidas en breakeven</small>
         </div>
         <div class="performance-kpi">
           <span>Win Rate</span><strong>{formatear_numero(win_rate,1,"%")}</strong><small>sobre operaciones cerradas</small>
