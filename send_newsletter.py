@@ -224,8 +224,30 @@ def obtener_backtesting(
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
     df = df.dropna(subset=["fecha_snapshot", "alerta_id"])
-    return df
 
+    # Resultado R es el dato definitivo para separar los cierres a breakeven.
+    df["resultado_r"] = float("nan")
+    alerta_ids = df["alerta_id"].astype(int).unique().tolist()
+    try:
+        resultados = []
+        for inicio_lote in range(0, len(alerta_ids), 200):
+            lote = alerta_ids[inicio_lote:inicio_lote + 200]
+            response_resultados = (
+                supabase.table("historial_alertas")
+                .select("id,resultado_r")
+                .in_("id", lote)
+                .execute()
+            )
+            resultados.extend(response_resultados.data or [])
+        resultado_por_id = {
+            int(row["id"]): pd.to_numeric(row.get("resultado_r"), errors="coerce")
+            for row in resultados if row.get("id") is not None
+        }
+        df["resultado_r"] = df["alerta_id"].astype(int).map(resultado_por_id)
+    except Exception as e:
+        logger.warning("No se pudieron recuperar los resultados R de historial_alertas: %s", e)
+
+    return df
 
 def ultimo_snapshot_por_alerta(df: pd.DataFrame, hasta: date) -> pd.DataFrame:
     subset = df[df["fecha_snapshot"] <= hasta].copy()
@@ -288,25 +310,32 @@ def construir_metricas_cartera(
         keep="first"
     ).copy()
 
-    # Clasificación robusta de resultado.
+    # Las salidas registradas a 0R son breakeven, no pérdidas.
+    resultado_r = pd.to_numeric(
+        cerradas.get("resultado_r", pd.Series(index=cerradas.index, dtype=float)),
+        errors="coerce"
+    )
+    break_even_mask = resultado_r.eq(0)
+    break_even = int(break_even_mask.sum())
+
     def es_win(row: pd.Series) -> bool:
         estado = safe_str(row.get("estado")).upper()
         pnl = row.get("pnl_actual_pct")
-
         if estado in {"OBJETIVO_CUMPLIDO", "WIN", "TP"}:
             return True
-
         if estado in {"STOP_SALTADO", "LOSS", "SL"}:
             return False
-
         return bool(pd.notna(pnl) and float(pnl) > 0)
 
     cerradas["es_win"] = cerradas.apply(es_win, axis=1)
+    # El snapshot puede ser posterior al cierre; a 0R el PnL teórico es cero.
+    cerradas.loc[break_even_mask, "pnl_actual_pct"] = 0.0
 
     total_cerradas = len(cerradas)
     wins = int(cerradas["es_win"].sum()) if total_cerradas else 0
-    losses = total_cerradas - wins
-    win_rate = (wins / total_cerradas * 100) if total_cerradas else None
+    losses = max(0, total_cerradas - wins - break_even)
+    operaciones_con_resultado = wins + losses
+    win_rate = (wins / operaciones_con_resultado * 100) if operaciones_con_resultado else None
 
     pnl_cerradas = pd.to_numeric(
         cerradas.get("pnl_actual_pct", pd.Series(dtype=float)),
@@ -431,6 +460,7 @@ def construir_metricas_cartera(
         "fin": fin.isoformat(),
         "total_operaciones_cerradas": total_cerradas,
         "wins": wins,
+        "break_even": break_even,
         "losses": losses,
         "win_rate": win_rate,
         "pnl_medio_cerradas": pnl_medio,
@@ -692,6 +722,7 @@ def construir_contexto_ia(
             "operaciones_cerradas": metricas["total_operaciones_cerradas"],
             "wins": metricas["wins"],
             "losses": metricas["losses"],
+            "breakeven": metricas["break_even"],
             "win_rate_pct": limpiar_numero(metricas["win_rate"]),
             "pnl_medio_operacion_cerrada_pct": limpiar_numero(
                 metricas["pnl_medio_cerradas"]
@@ -764,11 +795,13 @@ REGLAS:
 7. No uses MAE ni MFE.
 8. No conviertas PnL medio por operación en rentabilidad total de cartera.
 9. No hagas recomendaciones personalizadas de compra/venta.
-10. Las posiciones "a vigilar" no deben calificarse automáticamente
+10. distancia_sl_pct es la distancia al stop vigente y puede reflejar protección en breakeven; no la presentes como riesgo inicial.
+11. Las salidas con resultado_r = 0 son breakeven, no pérdidas.
+12. Las posiciones "a vigilar" no deben calificarse automáticamente
     como malas: explica si el deterioro se observa en PnL, RSI, Score,
     distancia a SL/TP u otros datos disponibles.
-11. No inventes un Estado_Estrategia porque no existe en esta tabla.
-12. Escribe en español, con tono financiero profesional, claro y sobrio.
+13. No inventes un Estado_Estrategia porque no existe en esta tabla.
+14. Escribe en español, con tono financiero profesional, claro y sobrio.
 
 Devuelve exclusivamente JSON válido con esta estructura:
 
@@ -954,7 +987,7 @@ def render_positions_table(
                 <th align="right" style="padding:8px;color:#64748b;font-size:11px;text-transform:uppercase;">PnL</th>
                 <th align="right" style="padding:8px;color:#64748b;font-size:11px;text-transform:uppercase;">Score</th>
                 <th align="right" style="padding:8px;color:#64748b;font-size:11px;text-transform:uppercase;">RSI</th>
-                <th align="right" style="padding:8px;color:#64748b;font-size:11px;text-transform:uppercase;">SL</th>
+                <th align="right" style="padding:8px;color:#64748b;font-size:11px;text-transform:uppercase;">Dist. SL vigente</th>
                 <th align="right" style="padding:8px;color:#64748b;font-size:11px;text-transform:uppercase;">TP</th>
             </tr>
         </thead>
@@ -1103,6 +1136,7 @@ def generar_html_newsletter(
 <td width="25%" style="padding:12px 6px;background:#f8fafc;border-radius:8px;">
     <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Cerradas</div>
     <div style="font-size:23px;font-weight:700;margin-top:5px;">{closed}</div>
+    <div style="font-size:10px;color:#64748b;margin-top:3px;">{metricas["break_even"]} breakeven</div>
 </td>
 <td width="25%" style="padding:12px 6px 12px 12px;">
     <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Win Rate</div>
