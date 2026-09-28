@@ -3,7 +3,7 @@ name: Enviar Alertas Quant
 on:
   schedule:
     # Se ejecuta todos los sábados a las 10:22 UTC
-    - cron: '47 17 * * 1-5'
+    - cron: '47 17 * * 2,4'
   workflow_dispatch: # Permite lanzarlo manualmente desde la pestaña "Actions"
 
 jobs:
