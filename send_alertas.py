@@ -104,7 +104,7 @@ def get_new_alerts(excluded_tickers):
             "soporte_entrada,resistencia_entrada,analisis_ia_entrada,stop_loss,take_profit,ratio_rr,"
             "riesgo_euros,acciones,nominal,estado_estrategia,fecha_mercado_actual,estado,precio_actual")
     r = (supabase.table("historial_alertas").select(cols).eq("estado", "ACTIVA")
-         .gte("fecha", since.isoformat()).gte("score_entrada", SCORE_MIN)
+         .gte("fecha", since.isoformat())
          .order("score_actual", desc=True).execute())
     df = pd.DataFrame(r.data or [])
     if df.empty:
@@ -112,13 +112,14 @@ def get_new_alerts(excluded_tickers):
     df["fecha_dt"] = pd.to_datetime(df["fecha"], errors="coerce", utc=True)
     df["score_n"] = pd.to_numeric(df["score_entrada"], errors="coerce")
     df["score_actual_n"] = pd.to_numeric(df["score_actual"], errors="coerce")
+    df["score_filtro"] = df["score_actual_n"].fillna(df["score_n"])
     df["ticker_key"] = df["ticker"].astype(str).str.strip().str.upper()
-    df = df[(df["fecha_dt"] >= pd.Timestamp(since)) & (df["score_n"] >= SCORE_MIN)
+    df = df[(df["fecha_dt"] >= pd.Timestamp(since)) & (df["score_filtro"] >= SCORE_MIN)
             & (df["estado"].astype(str).str.upper() == "ACTIVA")
             & (~df["ticker_key"].isin(excluded_tickers))]
     if df.empty:
         return []
-    df = df.sort_values(["score_actual_n", "fecha_dt"], ascending=[False, False], na_position="last")
+    df = df.sort_values(["score_filtro", "fecha_dt"], ascending=[False, False], na_position="last")
     return [df.iloc[0].to_dict()]
 
 def get_news(ticker, company, limit=4):
