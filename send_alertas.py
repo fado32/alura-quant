@@ -81,23 +81,45 @@ def get_subscribers():
     return list(dict.fromkeys(str(x.get("email", "")).strip() for x in (r.data or []) if "@" in str(x.get("email", ""))))
 
 
-def get_new_alerts():
+def get_sent_tickers():
+    """Devuelve todos los tickers registrados como enviados, paginando la tabla."""
+    tickers = set()
+    page_size = 1000
+    offset = 0
+    while True:
+        r = (supabase.table("cola_envios_alertas").select("ticker")
+             .range(offset, offset + page_size - 1).execute())
+        rows = r.data or []
+        tickers.update(str(row.get("ticker", "")).strip().upper() for row in rows if row.get("ticker"))
+        if len(rows) < page_size:
+            break
+        offset += page_size
+    return tickers
+
+
+def get_new_alerts(excluded_tickers):
     since = datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
-    cols = ("id,fecha,ticker,empresa,sector,icono,modo,precio_alerta,score_entrada,rvol_entrada,"
+    cols = ("id,fecha,ticker,empresa,sector,icono,modo,precio_alerta,score_entrada,score_actual,rvol_entrada,"
             "rsi_entrada,roc20_entrada,atr_entrada,ema50_entrada,ema200_entrada,razones_entrada,"
             "soporte_entrada,resistencia_entrada,analisis_ia_entrada,stop_loss,take_profit,ratio_rr,"
             "riesgo_euros,acciones,nominal,estado_estrategia,fecha_mercado_actual,estado,precio_actual")
     r = (supabase.table("historial_alertas").select(cols).eq("estado", "ACTIVA")
          .gte("fecha", since.isoformat()).gte("score_entrada", SCORE_MIN)
-         .order("fecha", desc=True).execute())
+         .order("score_actual", desc=True).execute())
     df = pd.DataFrame(r.data or [])
-    if df.empty: return []
+    if df.empty:
+        return []
     df["fecha_dt"] = pd.to_datetime(df["fecha"], errors="coerce", utc=True)
     df["score_n"] = pd.to_numeric(df["score_entrada"], errors="coerce")
+    df["score_actual_n"] = pd.to_numeric(df["score_actual"], errors="coerce")
+    df["ticker_key"] = df["ticker"].astype(str).str.strip().str.upper()
     df = df[(df["fecha_dt"] >= pd.Timestamp(since)) & (df["score_n"] >= SCORE_MIN)
-            & (df["estado"].astype(str).str.upper() == "ACTIVA")]
-    return df.sort_values("fecha_dt", ascending=False).drop_duplicates("ticker").to_dict("records")
-
+            & (df["estado"].astype(str).str.upper() == "ACTIVA")
+            & (~df["ticker_key"].isin(excluded_tickers))]
+    if df.empty:
+        return []
+    df = df.sort_values(["score_actual_n", "fecha_dt"], ascending=[False, False], na_position="last")
+    return [df.iloc[0].to_dict()]
 
 def get_news(ticker, company, limit=4):
     news, seen = [], set()
@@ -455,11 +477,22 @@ def send(a, content, recipients):
 
 def main():
     log.info("ALURA QUANT — ALERTAS PREMIUM | score >= %.0f | ventana=%sh", SCORE_MIN, LOOKBACK_HOURS)
+    now_utc = datetime.now(timezone.utc)
+    start_of_day = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+    daily = (supabase.table("cola_envios_alertas").select("id")
+             .gte("fecha_envio", start_of_day.isoformat())
+             .lt("fecha_envio", (start_of_day + timedelta(days=1)).isoformat())
+             .limit(1).execute())
+    if daily.data:
+        log.info("El cupo diario ya está cubierto; ya hay un envío registrado hoy (UTC).")
+        return
+
+    excluded_tickers = get_sent_tickers()
     recipients = get_subscribers()
     if not recipients:
         log.info("No hay suscriptores.")
         return
-    alerts = get_new_alerts()
+    alerts = get_new_alerts(excluded_tickers)
     if not alerts:
         log.info("No hay alertas nuevas que cumplan el filtro.")
         return
@@ -470,6 +503,12 @@ def main():
             ctx = ai_context(a, news)
             content = html_email(a, ctx, news)
             send(a, content, recipients)
+            if not DRY_RUN:
+                supabase.table("cola_envios_alertas").insert({
+                    "alerta_id": int(a["id"]),
+                    "ticker": ticker,
+                }).execute()
+                log.info("Alerta %s (%s) registrada en cola_envios_alertas.", a["id"], ticker)
         except Exception as e:
             log.exception("Error procesando %s: %s", ticker, e)
 
