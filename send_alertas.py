@@ -24,7 +24,7 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite").strip()
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 FROM_EMAIL = os.getenv("ALURA_ALERT_FROM", "Alura Quant <onboarding@resend.dev>").strip()
 SCORE_MIN = float(os.getenv("ALURA_ALERT_SCORE_MIN", "70"))
-LOOKBACK_HOURS = int(os.getenv("ALURA_ALERT_LOOKBACK_HOURS", "1048"))
+LOOKBACK_HOURS = int(os.getenv("ALURA_ALERT_LOOKBACK_HOURS", "1248"))
 DRY_RUN = os.getenv("ALURA_ALERT_DRY_RUN", "false").lower() == "true"
 IA_DELAY = float(os.getenv("ALURA_ALERT_IA_DELAY", "1.5"))
 
@@ -126,6 +126,7 @@ def get_new_alerts(excluded_tickers):
     df = df.sort_values(["score_filtro", "fecha_dt"], ascending=[False, False], na_position="last")
     winner = df.iloc[0].to_dict()
     if pd.notna(winner.get("score_actual_n")):
+        winner["score_entrada"] = winner.get("score_actual_n")
         winner["analisis_ia_entrada"] = winner.get("analisis_ia_actual")
     return [winner]
 
