@@ -23,7 +23,7 @@ IA_PROVIDER = os.getenv("IA_PROVIDER", "gemini").strip().lower()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite").strip()
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 FROM_EMAIL = os.getenv("ALURA_ALERT_FROM", "Alura Quant <onboarding@resend.dev>").strip()
-SCORE_MIN = float(os.getenv("ALURA_ALERT_SCORE_MIN", "70"))
+SCORE_MIN = float(os.getenv("ALURA_ALERT_SCORE_MIN", "55"))
 LOOKBACK_HOURS = int(os.getenv("ALURA_ALERT_LOOKBACK_HOURS", "1248"))
 DRY_RUN = os.getenv("ALURA_ALERT_DRY_RUN", "false").lower() == "true"
 IA_DELAY = float(os.getenv("ALURA_ALERT_IA_DELAY", "1.5"))
