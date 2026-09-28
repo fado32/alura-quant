@@ -7,7 +7,7 @@
 # 1. Cada alerta guarda una TESIS ORIGINAL INMUTABLE.
 # 2. Cada ejecución actualiza únicamente el ESTADO ACTUAL.
 # 3. La IA compara TESIS ORIGINAL vs SITUACIÓN ACTUAL.
-# 4. Stop Loss y Take Profit originales no se modifican.
+# 4. Take Profit original inmutable; Stop Loss se protege en breakeven al alcanzar +1R.
 # 5. Estado operativo: ACTIVA, STOP_SALTADO, OBJETIVO_CUMPLIDO.
 # 6. Estado_Estrategia: TESIS_REFORZADA, TESIS_ESTABLE, 
 #                      TESIS_DEBILITADA, TESIS_INVALIDADA.
@@ -147,7 +147,7 @@ CAMPOS_HISTORIAL = [
     "Fecha", "Ticker", "Empresa", "Sector", "Icono", "Modo",
     "Precio_Alerta", "Score_Entrada", "RVOL_Entrada", "RSI_Entrada", "ROC20_Entrada", "ATR_Entrada",
     "EMA50_Entrada", "EMA200_Entrada", "Razones_Entrada", "Soporte_Entrada", "Resistencia_Entrada", "Analisis_IA_Entrada",
-    "Stop_Loss", "Take_Profit", "Ratio_RR", "Riesgo_Euros", "Acciones", "Nominal",
+    "Stop_Loss", "Stop_Loss_Inicial", "Fecha_Activacion_Breakeven", "Take_Profit", "Ratio_RR", "Riesgo_Euros", "Acciones", "Nominal",
     "Precio_Actual", "Score_Actual", "RVOL_Actual", "RSI_Actual", "ROC20_Actual", "ATR_Actual",
     "EMA50_Actual", "EMA200_Actual", "Razones_Actuales", "Soporte_Actual", "Resistencia_Actual",
     "Distancia_SL_Pct", "Distancia_TP_Pct", "P&L_Actual_Pct", "Estado_Estrategia",
@@ -161,7 +161,8 @@ MAPEO_COLUMNAS_SUPABASE = {
     "RSI_Entrada": "rsi_entrada", "ROC20_Entrada": "roc20_entrada", "ATR_Entrada": "atr_entrada",
     "EMA50_Entrada": "ema50_entrada", "EMA200_Entrada": "ema200_entrada", "Razones_Entrada": "razones_entrada",
     "Soporte_Entrada": "soporte_entrada", "Resistencia_Entrada": "resistencia_entrada", "Analisis_IA_Entrada": "analisis_ia_entrada",
-    "Stop_Loss": "stop_loss", "Take_Profit": "take_profit", "Ratio_RR": "ratio_rr", "Riesgo_Euros": "riesgo_euros",
+    "Stop_Loss": "stop_loss", "Stop_Loss_Inicial": "stop_loss_inicial",
+    "Fecha_Activacion_Breakeven": "fecha_activacion_breakeven", "Take_Profit": "take_profit", "Ratio_RR": "ratio_rr", "Riesgo_Euros": "riesgo_euros",
     "Acciones": "acciones", "Nominal": "nominal", "Precio_Actual": "precio_actual", "Score_Actual": "score_actual",
     "RVOL_Actual": "rvol_actual", "RSI_Actual": "rsi_actual", "ROC20_Actual": "roc20_actual", "ATR_Actual": "atr_actual",
     "EMA50_Actual": "ema50_actual", "EMA200_Actual": "ema200_actual", "Razones_Actuales": "razones_actuales",
@@ -763,6 +764,9 @@ def actualizar_alertas_activas():
             precio_operativo = obtener_precio_tiempo_real(ticker) or float(actual["precio"])
             entrada = float(df.at[i, "Precio_Alerta"])
             sl = float(df.at[i, "Stop_Loss"])
+            stop_inicial_valor = pd.to_numeric(pd.Series([df.at[i, "Stop_Loss_Inicial"]]), errors="coerce").iloc[0]
+            sl_inicial = float(stop_inicial_valor) if pd.notna(stop_inicial_valor) else sl
+            fecha_be = pd.to_datetime(df.at[i, "Fecha_Activacion_Breakeven"], errors="coerce")
             tp = float(df.at[i, "Take_Profit"])
 
             pnl_pct = ((precio_operativo / entrada) - 1) * 100
@@ -776,6 +780,23 @@ def actualizar_alertas_activas():
                 "P&L_Actual_Pct": round(pnl_pct, 2),
                 "Ultima_Actualizacion": ahora().strftime("%Y-%m-%d %H:%M")
             }
+
+            # Protege la operación en breakeven al alcanzar un beneficio de +1R.
+            riesgo_inicial = abs(entrada - sl_inicial)
+            if (pd.isna(fecha_be) and riesgo_inicial > 0 and sl < entrada
+                    and precio_operativo >= entrada + riesgo_inicial):
+                stop_breakeven = entrada
+                cambios.update({
+                    "Stop_Loss": stop_breakeven,
+                    "Fecha_Activacion_Breakeven": fecha_mercado or ahora().date().isoformat(),
+                    "Distancia_SL_Pct": round(
+                        ((precio_operativo - stop_breakeven) / precio_operativo) * 100, 2
+                    )
+                })
+                print(
+                    f"🛡️ {ticker}: +1R alcanzado; Stop Loss subido a breakeven "
+                    f"({stop_breakeven:.4f})."
+                )
 
             modo = modo_actual()
             if modo == "22" or (not fecha_guardada or fecha_mercado > fecha_guardada):
@@ -847,8 +868,12 @@ def auditar():
             if datos_auditoria is None or datos_auditoria.empty: continue
 
             sl = float(r["Stop_Loss"])
+            stop_inicial_valor = pd.to_numeric(pd.Series([r.get("Stop_Loss_Inicial")]), errors="coerce").iloc[0]
+            sl_inicial = float(stop_inicial_valor) if pd.notna(stop_inicial_valor) else sl
             tp = float(r["Take_Profit"])
-
+            entrada_auditoria = float(r["Precio_Alerta"])
+            fecha_be = pd.to_datetime(r.get("Fecha_Activacion_Breakeven"), errors="coerce")
+            fecha_be_dia = fecha_be.date() if not pd.isna(fecha_be) else None
             for fecha, vela in datos_auditoria.iterrows():
                 try:
                     fecha_comparable = pd.Timestamp(fecha).date()
@@ -863,8 +888,13 @@ def auditar():
 
                 if pd.isna(low) or pd.isna(high): continue
 
-                if low <= sl:
-                    estado, resultado = "STOP_SALTADO", -1.0
+                stop_vigente = sl_inicial
+                resultado_stop = -1.0
+                if fecha_be_dia and fecha_comparable > fecha_be_dia:
+                    stop_vigente = entrada_auditoria
+                    resultado_stop = 0.0
+                if low <= stop_vigente:
+                    estado, resultado = "STOP_SALTADO", resultado_stop
                 elif high >= tp:
                     estado, resultado = "OBJETIVO_CUMPLIDO", RR_TARGET
                 else:
@@ -912,6 +942,8 @@ def guardar(c, comentario):
         "Resistencia_Entrada": c["resistencia"],
         "Analisis_IA_Entrada": comentario.replace("\n", " "),
         "Stop_Loss": c["stop"],
+        "Stop_Loss_Inicial": c["stop"],
+        "Fecha_Activacion_Breakeven": None,
         "Take_Profit": c["tp"],
         "Ratio_RR": ratio_rr_guardado,
         "Riesgo_Euros": c["riesgo"],
