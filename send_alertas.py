@@ -116,7 +116,7 @@ def get_new_alerts(excluded_tickers):
     df["pnl_actual_n"] = pd.to_numeric(df["pnl_actual_pct"], errors="coerce")
     df["ticker_key"] = df["ticker"].astype(str).str.strip().str.upper()
     has_current_score = df["score_actual_n"].notna()
-    current_score_has_upside = df["pnl_actual_n"].between(0, 2, inclusive="both")
+    current_score_has_upside = df["pnl_actual_n"].between(-1.5, 2, inclusive="both")
     df = df[(df["fecha_dt"] >= pd.Timestamp(since)) & (df["score_filtro"] >= SCORE_MIN)
             & (df["estado"].astype(str).str.upper() == "ACTIVA")
             & (~df["ticker_key"].isin(excluded_tickers))
