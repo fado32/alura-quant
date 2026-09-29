@@ -1280,7 +1280,7 @@ def enviar_correo(
     params = {
         "from": os.getenv(
             "RESEND_FROM",
-            "Alura Quant <onboarding@resend.dev>"
+            "Alura Quant <no-reply@aluraquant.es>"
         ),
         "to": destinatarios,
         "subject": asunto,
