@@ -27,6 +27,7 @@ SCORE_MIN = float(os.getenv("ALURA_ALERT_SCORE_MIN", "55"))
 LOOKBACK_HOURS = int(os.getenv("ALURA_ALERT_LOOKBACK_HOURS", "1248"))
 DRY_RUN = os.getenv("ALURA_ALERT_DRY_RUN", "false").lower() == "true"
 IA_DELAY = float(os.getenv("ALURA_ALERT_IA_DELAY", "1.5"))
+REPEAT_COOLDOWN_DAYS = int(os.getenv("ALURA_ALERT_REPEAT_COOLDOWN_DAYS", "30"))
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise RuntimeError("Faltan SUPABASE_URL o SUPABASE_KEY.")
@@ -82,12 +83,14 @@ def get_subscribers():
 
 
 def get_sent_tickers():
-    """Devuelve todos los tickers registrados como enviados, paginando la tabla."""
+    """Tickers enviados dentro del periodo de enfriamiento configurable."""
     tickers = set()
+    cutoff = datetime.now(timezone.utc) - timedelta(days=REPEAT_COOLDOWN_DAYS)
     page_size = 1000
     offset = 0
     while True:
         r = (supabase.table("cola_envios_alertas").select("ticker")
+             .gte("fecha_envio", cutoff.isoformat())
              .range(offset, offset + page_size - 1).execute())
         rows = r.data or []
         tickers.update(str(row.get("ticker", "")).strip().upper() for row in rows if row.get("ticker"))
@@ -95,7 +98,6 @@ def get_sent_tickers():
             break
         offset += page_size
     return tickers
-
 
 def get_new_alerts(excluded_tickers):
     since = datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
@@ -517,6 +519,14 @@ def main():
                     "alerta_id": int(a["id"]),
                     "ticker": ticker,
                 }).execute()
+                sent_at = datetime.now(timezone.utc).isoformat()
+                for recipient in recipients:
+                    try:
+                        supabase.table("suscriptores_free").update({
+                            "fecha_ultima_alerta_enviada": sent_at
+                        }).eq("email", recipient).execute()
+                    except Exception as update_error:
+                        log.warning("No se pudo actualizar fecha de alerta para %s: %s", recipient, update_error)
                 log.info("Alerta %s (%s) registrada en cola_envios_alertas.", a["id"], ticker)
         except Exception as e:
             log.exception("Error procesando %s: %s", ticker, e)
