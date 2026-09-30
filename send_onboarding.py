@@ -463,7 +463,7 @@ def html_onboarding():
 
 
 # ============================================================
-# ENVÍO
+# ENVÍO INDIVIDUALIZADO
 # ============================================================
 
 def enviar(destinatario, content):
@@ -475,15 +475,17 @@ def enviar(destinatario, content):
 
         log.info(
             "DRY_RUN activo; vista previa generada en %s. "
-            "No se enviaron correos.",
+            "No se enviaron correos reales.",
             preview_path,
         )
         return False
 
+    # ¡Clave! Se pasa como lista con un único elemento para que cada usuario
+    # reciba el correo de forma limpia y privada (sin ver a nadie más en el 'Para').
     response = resend.Emails.send(
         {
             "from": FROM_EMAIL,
-            "to": destinatario,
+            "to": [destinatario],
             "subject": SUBJECT,
             "html": content,
         }
@@ -530,14 +532,14 @@ def main():
         pendientes[email] = subscriber
 
     log.info(
-        "Suscriptores: %s | Pendientes: %s | Inválidos: %s",
+        "Suscriptores totales: %s | Pendientes de envío: %s | Inválidos: %s",
         len(subscribers),
         len(pendientes),
         invalidos,
     )
 
     if DRY_RUN:
-        enviar("", content)
+        enviar("test@example.com", content)
         return
 
     if not pendientes:
@@ -547,6 +549,7 @@ def main():
     enviados = 0
     errores = 0
 
+    # Bucle individual para asegurar total privacidad en el campo "Para"
     for email, subscriber in pendientes.items():
         try:
             if enviar(email, content):
@@ -561,11 +564,11 @@ def main():
                 )
 
                 enviados += 1
-                log.info("Onboarding registrado para %s", email)
+                log.info("Onboarding registrado correctamente para %s", email)
 
         except Exception as exc:
             errores += 1
-            log.exception("Error procesando %s: %s", email, exc)
+            log.exception("Error procesando el envío a %s: %s", email, exc)
 
     log.info(
         "Proceso terminado | enviados=%s | errores=%s",
