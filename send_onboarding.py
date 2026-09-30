@@ -16,7 +16,7 @@ FROM_EMAIL = os.getenv("ALURA_ONBOARDING_FROM", "Alura Quant <updates@aluraquant
 DASHBOARD_URL = os.getenv("ALURA_DASHBOARD_URL", "https://aluraquant.es").strip()
 HERO_IMAGE_URL = os.getenv(
     "ALURA_EMAIL_HERO_IMAGE_URL",
-    "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=1200&q=80",
+    "https://unsplash.com/es/fotos/persona-sosteniendo-un-telefono-inteligente-android-negro-xruML_FcCOk",
 ).strip()
 DRY_RUN = os.getenv("ALURA_ONBOARDING_DRY_RUN", "false").strip().lower() == "true"
 PAGE_SIZE = 500
