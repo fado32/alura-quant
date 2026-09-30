@@ -105,7 +105,7 @@ def feature_card(numero, titulo, texto):
     <tr>
       <td style="padding:0 0 10px 0;">
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
-               style="border:none;border-radius:12px;background:#f8fafc;">
+               style="border:none;border-radius:12px;background:#ffffff;">
           <tr>
             <td width="54" valign="top" style="padding:16px 0 16px 16px;">
               <div style="
