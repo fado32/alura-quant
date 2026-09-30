@@ -56,7 +56,6 @@ def html_onboarding():
 <body style="margin:0;background:#f3f6fb;font-family:Arial,sans-serif;color:#172033;">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="padding:24px 10px;background:#f3f6fb;"><tr><td align="center">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;background:#fff;border-radius:18px;overflow:hidden;">
-<tr><td><img src="{image}" alt="Mercados y análisis cuantitativo" width="640" style="display:block;width:100%;max-width:640px;height:auto;border:0;"></td></tr>
 <tr><td style="padding:30px 32px 12px;"><div style="font-size:12px;font-weight:bold;letter-spacing:2px;color:#2563eb;text-transform:uppercase;">Bienvenido a Alura Quant</div><h1 style="font-size:27px;line-height:1.2;margin:10px 0;color:#10213a;">Tres formas de entender mejor el mercado</h1><p style="font-size:15px;line-height:1.65;color:#526176;margin:0;">Gracias por unirte. Hemos diseñado una experiencia clara para seguir oportunidades y tener contexto de mercado, sin promesas de rentabilidad.</p></td></tr>
 <tr><td style="padding:14px 32px 26px;">
 <div style="padding:17px;margin:10px 0;background:#f8faff;border:1px solid #e7edf7;border-radius:12px;"><strong style="color:#2563eb;">01 · Alertas cuantitativas</strong><p style="margin:7px 0 0;font-size:14px;line-height:1.6;color:#526176;">Recibe señales seleccionadas con métricas, niveles técnicos y una explicación de la tesis para que puedas evaluarlas por tu cuenta.</p></div>
