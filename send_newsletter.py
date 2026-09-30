@@ -894,8 +894,8 @@ def render_market_table(mercado: Dict[str, Dict[str, Any]]) -> str:
         rows.append(
             f"""
             <tr>
-                <td style="padding:11px 14px;border-bottom:1px solid #edf2f7;color:#334155;font-size:13px;">{esc(nombre)}</td>
-                <td style="padding:11px 14px;border-bottom:1px solid #edf2f7;text-align:right;font-weight:700;color:#0f172a;font-size:13px;">
+                <td>{esc(nombre)}</td>
+                <td style="text-align:right;font-weight:600;">
                     {esc(fmt_pct(data.get("weekly_return_pct")))}
                 </td>
             </tr>
@@ -907,13 +907,13 @@ def render_market_table(mercado: Dict[str, Dict[str, Any]]) -> str:
 
     return f"""
     <table width="100%" cellpadding="0" cellspacing="0"
-           style="border-collapse:separate;border-spacing:0;margin:14px 0 8px 0;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
+           style="border-collapse:collapse;margin:14px 0 8px 0;">
         <thead>
-            <tr style="background:#f1f5f9;">
-                <th align="left" style="padding:12px 14px;border-bottom:1px solid #e2e8f0;color:#475569;font-size:10px;letter-spacing:.08em;text-transform:uppercase;">
+            <tr>
+                <th align="left" style="padding:9px;border-bottom:1px solid #e2e8f0;color:#64748b;font-size:12px;text-transform:uppercase;">
                     Indicador
                 </th>
-                <th align="right" style="padding:12px 14px;border-bottom:1px solid #e2e8f0;color:#475569;font-size:10px;letter-spacing:.08em;text-transform:uppercase;">
+                <th align="right" style="padding:9px;border-bottom:1px solid #e2e8f0;color:#64748b;font-size:12px;text-transform:uppercase;">
                     Semana
                 </th>
             </tr>
@@ -922,7 +922,7 @@ def render_market_table(mercado: Dict[str, Dict[str, Any]]) -> str:
             {''.join(rows)}
         </tbody>
     </table>
-        <p style="font-size:11px;color:#64748b;line-height:1.6;margin-top:8px;">
+    <p style="font-size:12px;color:#64748b;margin-top:4px;">
         HYGH se utiliza como referencia del segmento high yield/crédito y de las
         condiciones de riesgo, no como medida directa y aislada de liquidez.
     </p>
@@ -977,26 +977,24 @@ def render_positions_table(
         )
 
     return f"""
-    <h3 style="margin:24px 0 10px;color:#0f172a;font-size:15px;line-height:1.35;">{esc(title)}</h3>
+    <h3 style="margin:20px 0 8px;color:#1e293b;">{esc(title)}</h3>
 
-    <div style="width:100%;overflow-x:auto;border:1px solid #e2e8f0;border-radius:12px;">
     <table width="100%" cellpadding="0" cellspacing="0"
-           style="border-collapse:collapse;min-width:570px;">
+           style="border-collapse:collapse;">
         <thead>
-            <tr style="background:#f1f5f9;">
-                <th align="left" style="padding:11px 10px;color:#475569;font-size:9px;letter-spacing:.07em;text-transform:uppercase;">Activo</th>
-                <th align="right" style="padding:11px 10px;color:#475569;font-size:9px;letter-spacing:.07em;text-transform:uppercase;">PnL</th>
-                <th align="right" style="padding:11px 10px;color:#475569;font-size:9px;letter-spacing:.07em;text-transform:uppercase;">Score</th>
-                <th align="right" style="padding:11px 10px;color:#475569;font-size:9px;letter-spacing:.07em;text-transform:uppercase;">RSI</th>
-                <th align="right" style="padding:11px 10px;color:#475569;font-size:9px;letter-spacing:.07em;text-transform:uppercase;">Dist. SL vigente</th>
-                <th align="right" style="padding:11px 10px;color:#475569;font-size:9px;letter-spacing:.07em;text-transform:uppercase;">TP</th>
+            <tr>
+                <th align="left" style="padding:8px;color:#64748b;font-size:11px;text-transform:uppercase;">Activo</th>
+                <th align="right" style="padding:8px;color:#64748b;font-size:11px;text-transform:uppercase;">PnL</th>
+                <th align="right" style="padding:8px;color:#64748b;font-size:11px;text-transform:uppercase;">Score</th>
+                <th align="right" style="padding:8px;color:#64748b;font-size:11px;text-transform:uppercase;">RSI</th>
+                <th align="right" style="padding:8px;color:#64748b;font-size:11px;text-transform:uppercase;">Dist. SL vigente</th>
+                <th align="right" style="padding:8px;color:#64748b;font-size:11px;text-transform:uppercase;">TP</th>
             </tr>
         </thead>
         <tbody>
             {''.join(rows)}
         </tbody>
     </table>
-    </div>
     """
 
 
@@ -1016,11 +1014,11 @@ def render_analysis_list(
 
         blocks.append(
             f"""
-            <div style="margin:12px 0;padding:16px 18px;background:#f8fafc;border:1px solid #e8eef6;border-left:3px solid #2563eb;border-radius:10px;">
-                <div style="font-weight:700;color:#0f172a;margin-bottom:7px;font-size:13px;">
+            <div style="margin:12px 0;padding:12px 14px;background:#f8fafc;border-radius:8px;">
+                <div style="font-weight:700;color:#1e293b;margin-bottom:5px;">
                     {ticker}
                 </div>
-                <div style="font-size:13px;line-height:1.7;color:#475569;">
+                <div style="font-size:14px;line-height:1.55;color:#475569;">
                     {analysis}
                 </div>
             </div>
@@ -1028,7 +1026,7 @@ def render_analysis_list(
         )
 
     return f"""
-    <h3 style="margin:26px 0 10px;color:#0f172a;font-size:15px;">{esc(title)}</h3>
+    <h3 style="margin:22px 0 10px;color:#1e293b;">{esc(title)}</h3>
     {''.join(blocks)}
     """
 
@@ -1090,14 +1088,6 @@ def generar_html_newsletter(
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Alura Quant — Weekly Intelligence</title>
-<style type="text/css">
-@media screen and (max-width:600px) {{
-  .newsletter-shell {{ width:100% !important; }}
-  .newsletter-pad {{ padding-left:20px !important; padding-right:20px !important; }}
-  .newsletter-title {{ font-size:25px !important; }}
-  .newsletter-kpi {{ padding:12px 8px !important; }}
-}}
-</style>
 </head>
 
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;color:#1e293b;">
@@ -1106,35 +1096,32 @@ def generar_html_newsletter(
 <tr>
 <td align="center" style="padding:28px 12px;">
 
-<table width="680" cellpadding="0" cellspacing="0" class="newsletter-shell"
-       style="max-width:680px;width:100%;background:#ffffff;border:1px solid #e2e8f0;border-radius:18px;overflow:hidden;box-shadow:0 12px 36px rgba(15,23,42,.08);">
+<table width="680" cellpadding="0" cellspacing="0"
+       style="max-width:680px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;">
 
 <!-- HEADER -->
 <tr>
-<td style="background-color:#0f172a;background-image:linear-gradient(120deg,#0f172a 0%,#172554 58%,#1d4ed8 100%);padding:0;color:#ffffff;">
-    <div style="height:5px;background:#38bdf8;font-size:1px;line-height:1px;">&nbsp;</div>
-    <div class="newsletter-pad" style="padding:30px 34px 32px;">
-    <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#bfdbfe;font-weight:700;">
-        ALURA QUANT
+<td style="background:#1e293b;padding:30px 32px;color:#ffffff;">
+    <div style="font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:#cbd5e1;">
+        Alura Quant
     </div>
-    <div class="newsletter-title" style="font-size:30px;font-weight:700;line-height:1.2;margin-top:13px;">
+    <div style="font-size:27px;font-weight:700;margin-top:7px;">
         Weekly Intelligence
     </div>
-    <div style="font-size:13px;color:#dbeafe;margin-top:10px;">
+    <div style="font-size:13px;color:#cbd5e1;margin-top:8px;">
         {esc(inicio.strftime("%d/%m/%Y"))} — {esc(fin.strftime("%d/%m/%Y"))}
-    </div>
     </div>
 </td>
 </tr>
 
 <!-- EXECUTIVE SUMMARY -->
 <tr>
-<td class="newsletter-pad" style="padding:30px 34px 10px;">
-    <div style="font-size:10px;text-transform:uppercase;letter-spacing:1.3px;color:#2563eb;font-weight:800;">
+<td style="padding:28px 32px 10px;">
+    <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#64748b;font-weight:700;">
         Resumen ejecutivo
     </div>
 
-    <p style="font-size:15px;line-height:1.75;color:#334155;margin:12px 0 0;">
+    <p style="font-size:16px;line-height:1.65;color:#334155;margin:12px 0 0;">
         {summary}
     </p>
 </td>
@@ -1142,26 +1129,26 @@ def generar_html_newsletter(
 
 <!-- KPIs -->
 <tr>
-<td class="newsletter-pad" style="padding:18px 34px 24px;">
+<td style="padding:16px 32px 20px;">
 
 <table width="100%" cellpadding="0" cellspacing="0">
 <tr>
-<td width="25%" class="newsletter-kpi" style="padding:14px 10px;background:#f8fafc;border:1px solid #e8eef6;border-radius:10px;">
-    <div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.08em;font-weight:700;">Cerradas</div>
-    <div style="font-size:23px;font-weight:700;color:#0f172a;margin-top:7px;">{closed}</div>
-    <div style="font-size:10px;color:#64748b;margin-top:4px;">{metricas["break_even"]} breakeven</div>
+<td width="25%" style="padding:12px 6px;background:#f8fafc;border-radius:8px;">
+    <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Cerradas</div>
+    <div style="font-size:23px;font-weight:700;margin-top:5px;">{closed}</div>
+    <div style="font-size:10px;color:#64748b;margin-top:3px;">{metricas["break_even"]} breakeven</div>
 </td>
-<td width="25%" class="newsletter-kpi" style="padding:14px 10px;background:#f8fafc;border:1px solid #e8eef6;border-radius:10px;">
-    <div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.08em;font-weight:700;">Win Rate</div>
-    <div style="font-size:23px;font-weight:700;color:#0f172a;margin-top:7px;">{esc(fmt_pct(win_rate))}</div>
+<td width="25%" style="padding:12px 6px 12px 12px;">
+    <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Win Rate</div>
+    <div style="font-size:23px;font-weight:700;margin-top:5px;">{esc(fmt_pct(win_rate))}</div>
 </td>
-<td width="25%" class="newsletter-kpi" style="padding:14px 10px;background:#f8fafc;border:1px solid #e8eef6;border-radius:10px;">
-    <div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.08em;font-weight:700;">Activas</div>
-    <div style="font-size:23px;font-weight:700;color:#0f172a;margin-top:7px;">{active}</div>
+<td width="25%" style="padding:12px 6px 12px 12px;">
+    <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Activas</div>
+    <div style="font-size:23px;font-weight:700;margin-top:5px;">{active}</div>
 </td>
-<td width="25%" class="newsletter-kpi" style="padding:14px 10px;background:#f8fafc;border:1px solid #e8eef6;border-radius:10px;">
-    <div style="font-size:9px;color:#64748b;text-transform:uppercase;letter-spacing:.08em;font-weight:700;">PnL medio</div>
-    <div style="font-size:23px;font-weight:700;color:#0f172a;margin-top:7px;">{esc(fmt_pct(pnl_mean))}</div>
+<td width="25%" style="padding:12px 6px 12px 12px;">
+    <div style="font-size:11px;color:#64748b;text-transform:uppercase;">PnL medio</div>
+    <div style="font-size:23px;font-weight:700;margin-top:5px;">{esc(fmt_pct(pnl_mean))}</div>
 </td>
 </tr>
 </table>
@@ -1177,12 +1164,12 @@ def generar_html_newsletter(
 
 <!-- MARKET -->
 <tr>
-<td class="newsletter-pad" style="padding:16px 34px 24px;">
-    <h2 style="font-size:19px;margin:8px 0 12px;color:#0f172a;line-height:1.3;">
+<td style="padding:8px 32px 20px;">
+    <h2 style="font-size:19px;margin:12px 0;color:#1e293b;">
         Contexto de mercado
     </h2>
 
-    <p style="font-size:13px;line-height:1.75;color:#475569;">
+    <p style="font-size:14px;line-height:1.65;color:#475569;">
         {market_context}
     </p>
 
@@ -1192,12 +1179,12 @@ def generar_html_newsletter(
 
 <!-- PORTFOLIO -->
 <tr>
-<td class="newsletter-pad" style="padding:24px 34px;border-top:1px solid #edf2f7;">
-    <h2 style="font-size:19px;margin:0 0 12px;color:#0f172a;line-height:1.3;">
+<td style="padding:20px 32px;">
+    <h2 style="font-size:19px;margin:0 0 10px;color:#1e293b;">
         Radiografía de cartera
     </h2>
 
-    <p style="font-size:13px;line-height:1.75;color:#475569;">
+    <p style="font-size:14px;line-height:1.65;color:#475569;">
         {portfolio_analysis}
     </p>
 </td>
@@ -1205,7 +1192,7 @@ def generar_html_newsletter(
 
 <!-- POSITIONS -->
 <tr>
-<td class="newsletter-pad" style="padding:4px 34px 24px;">
+<td style="padding:4px 32px 20px;">
     {top_html}
     {best_analysis_html}
 
@@ -1216,12 +1203,12 @@ def generar_html_newsletter(
 
 <!-- RISK -->
 <tr>
-<td class="newsletter-pad" style="padding:24px 34px;background:#f1f5f9;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;">
-    <h2 style="font-size:19px;margin:0 0 12px;color:#0f172a;line-height:1.3;">
+<td style="padding:20px 32px;background:#f8fafc;">
+    <h2 style="font-size:19px;margin:0 0 10px;color:#1e293b;">
         Monitor de riesgo
     </h2>
 
-    <p style="font-size:13px;line-height:1.75;color:#475569;margin-bottom:0;">
+    <p style="font-size:14px;line-height:1.65;color:#475569;margin-bottom:0;">
         {risk_monitor}
     </p>
 </td>
@@ -1229,20 +1216,20 @@ def generar_html_newsletter(
 
 <!-- OUTLOOK -->
 <tr>
-<td class="newsletter-pad" style="padding:28px 34px 24px;">
-    <h2 style="font-size:19px;margin:0 0 12px;color:#0f172a;line-height:1.3;">
+<td style="padding:24px 32px 20px;">
+    <h2 style="font-size:19px;margin:0 0 10px;color:#1e293b;">
         Próxima semana
     </h2>
 
-    <p style="font-size:13px;line-height:1.75;color:#475569;">
+    <p style="font-size:14px;line-height:1.65;color:#475569;">
         {next_week}
     </p>
 
-    <h3 style="font-size:14px;margin:22px 0 9px;color:#0f172a;">
+    <h3 style="font-size:15px;margin:22px 0 9px;color:#1e293b;">
         Puntos clave
     </h3>
 
-    <ul style="padding-left:20px;font-size:13px;line-height:1.7;color:#475569;">
+    <ul style="padding-left:20px;font-size:14px;line-height:1.55;color:#475569;">
         {takeaway_html}
     </ul>
 </td>
@@ -1250,8 +1237,8 @@ def generar_html_newsletter(
 
 <!-- FOOTER -->
 <tr>
-<td class="newsletter-pad" style="padding:22px 34px;background:#0f172a;color:#cbd5e1;font-size:10px;line-height:1.7;border-top:4px solid #2563eb;">
-    <strong style="color:#ffffff;font-size:12px;letter-spacing:.04em;">Alura Quant</strong><br>
+<td style="padding:20px 32px;background:#1e293b;color:#cbd5e1;font-size:11px;line-height:1.55;">
+    <strong style="color:#ffffff;">Alura Quant</strong><br>
     Informe generado automáticamente. Alura Quant es una herramienta tecnológica de análisis cuantitativo y educación financiera. 
     Los datos, scores, niveles técnicos y análisis generados por algoritmos o inteligencia artificial no constituyen, ni deben interpretarse como,
     un servicio de asesoramiento en inversión, recomendación de compra/venta o análisis financiero personalizado según la Ley del Mercado de Valores.
