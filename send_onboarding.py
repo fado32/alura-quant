@@ -198,6 +198,7 @@ def html_onboarding():
     }}
 
     .email-shell {{
+      width:100% !important;
       border-radius:14px !important;
     }}
 
@@ -224,14 +225,15 @@ def html_onboarding():
 </head>
 
 <body>
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f4f6fa;">
   <tr>
-    <td class="outer-pad" align="center" style="padding:24px 12px;">
+    <td class="outer-pad" align="center" style="padding:32px 16px;">
 
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+      <!-- Contenedor principal con ancho fijo para escritorio (600px) -->
+      <table role="presentation" width="600" cellspacing="0" cellpadding="0"
              class="email-shell"
              style="
-               max-width:680px;
+               width:600px;
                background:#ffffff;
                border:1px solid #e2e8f0;
                border-radius:16px;
@@ -242,7 +244,7 @@ def html_onboarding():
              BRAND
              ================================================= -->
         <tr>
-          <td class="content-pad" style="padding:20px 28px 18px;border-bottom:1px solid #edf1f5;">
+          <td class="content-pad" style="padding:22px 32px 20px;border-bottom:1px solid #edf1f5;">
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
               <tr>
                 <td>
@@ -278,7 +280,7 @@ def html_onboarding():
              INTRO
              ================================================= -->
         <tr>
-          <td class="content-pad" style="padding:31px 28px 22px;">
+          <td class="content-pad" style="padding:36px 32px 24px;">
 
             <div style="
               color:#2563eb;
@@ -305,11 +307,11 @@ def html_onboarding():
             </h1>
 
             <p class="intro-copy" style="
-              max-width:570px;
-              margin:11px 0 0;
+              max-width:520px;
+              margin:12px 0 0;
               color:#64748b;
-              font-size:12px;
-              line-height:19px;
+              font-size:13px;
+              line-height:20px;
             ">
               Gracias por unirte a Alura Quant. Una experiencia centrada en
               datos, contexto y disciplina cuantitativa para seguir el mercado
@@ -323,7 +325,7 @@ def html_onboarding():
              FEATURES
              ================================================= -->
         <tr>
-          <td class="content-pad" style="padding:0 28px 23px;">
+          <td class="content-pad" style="padding:0 32px 26px;">
 
             <div style="
               color:#172033;
@@ -339,7 +341,7 @@ def html_onboarding():
               color:#94a3b8;
               font-size:10px;
               line-height:15px;
-              padding-bottom:13px;
+              padding-bottom:14px;
             ">
               Tres formatos para seguir oportunidades y contexto sin ruido.
             </div>
@@ -355,7 +357,7 @@ def html_onboarding():
              CTA
              ================================================= -->
         <tr>
-          <td class="content-pad" style="padding:0 28px 24px;">
+          <td class="content-pad" style="padding:0 32px 28px;">
 
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
                    style="
@@ -364,7 +366,7 @@ def html_onboarding():
                      background:#f7faff;
                    ">
               <tr>
-                <td align="center" style="padding:20px 18px 19px;">
+                <td align="center" style="padding:22px 20px 21px;">
 
                   <div style="
                     color:#172033;
@@ -376,10 +378,10 @@ def html_onboarding():
                   </div>
 
                   <div style="
-                    max-width:470px;
-                    margin:5px auto 13px;
+                    max-width:440px;
+                    margin:6px auto 14px;
                     color:#64748b;
-                    font-size:10px;
+                    font-size:11px;
                     line-height:16px;
                   ">
                     Accede al dashboard y descubre cómo presentamos las
@@ -393,8 +395,8 @@ def html_onboarding():
                        color:#ffffff;
                        text-decoration:none;
                        border-radius:8px;
-                       padding:10px 18px;
-                       font-size:10px;
+                       padding:11px 20px;
+                       font-size:11px;
                        line-height:15px;
                        font-weight:800;
                      ">
@@ -412,14 +414,14 @@ def html_onboarding():
              DISCLAIMER
              ================================================= -->
         <tr>
-          <td class="content-pad" style="padding:0 28px 20px;">
+          <td class="content-pad" style="padding:0 32px 22px;">
 
             <div style="
               border-top:1px solid #edf1f5;
-              padding-top:15px;
+              padding-top:16px;
               color:#94a3b8;
               font-size:9px;
-              line-height:14px;
+              line-height:15px;
             ">
               El contenido de Alura Quant es informativo y educativo.
               No constituye asesoramiento financiero ni recomendación
@@ -435,7 +437,7 @@ def html_onboarding():
              ================================================= -->
         <tr>
           <td class="content-pad" style="
-            padding:15px 28px 17px;
+            padding:16px 32px 18px;
             background:#fafbfc;
             border-top:1px solid #edf1f5;
           ">
