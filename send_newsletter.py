@@ -269,11 +269,6 @@ def construir_metricas_cartera(
 ) -> Dict[str, Any]:
     """
     Reconstruye la evolución semanal a partir de los snapshots diarios.
-
-    Importante:
-    - No usa MAE/MFE.
-    - Las operaciones cerradas se identifican por transición a estado terminal.
-    - Una alerta_id se trata como una operación.
     """
     estados_terminales = {
         "STOP_SALTADO",
@@ -288,7 +283,6 @@ def construir_metricas_cartera(
 
     df = df.sort_values(["alerta_id", "fecha_snapshot"]).copy()
 
-    # Estado anterior para detectar transiciones reales.
     df["estado_anterior"] = df.groupby("alerta_id")["estado"].shift(1)
 
     terminales_semana = df[
@@ -298,8 +292,6 @@ def construir_metricas_cartera(
         & (~df["estado_anterior"].isin(estados_terminales))
     ].copy()
 
-    # Si la operación aparece por primera vez ya en estado terminal,
-    # también debe contabilizarse.
     terminales_semana.loc[
         terminales_semana["estado_anterior"].isna(),
         "estado_anterior"
@@ -310,7 +302,6 @@ def construir_metricas_cartera(
         keep="first"
     ).copy()
 
-    # Las salidas registradas a 0R son breakeven, no pérdidas.
     resultado_r = pd.to_numeric(
         cerradas.get("resultado_r", pd.Series(index=cerradas.index, dtype=float)),
         errors="coerce"
@@ -328,7 +319,6 @@ def construir_metricas_cartera(
         return bool(pd.notna(pnl) and float(pnl) > 0)
 
     cerradas["es_win"] = cerradas.apply(es_win, axis=1)
-    # El snapshot puede ser posterior al cierre; a 0R el PnL teórico es cero.
     cerradas.loc[break_even_mask, "pnl_actual_pct"] = 0.0
 
     total_cerradas = len(cerradas)
@@ -362,7 +352,6 @@ def construir_metricas_cartera(
 
     expectancy = pnl_medio
 
-    # Última fotografía disponible al cierre de la semana.
     snapshot_fin = ultimo_snapshot_por_alerta(df, fin)
 
     activas = snapshot_fin[
@@ -374,7 +363,6 @@ def construir_metricas_cartera(
         errors="coerce"
     ).dropna()
 
-    # Snapshot inicial de la semana.
     snapshot_inicio = (
         df[df["fecha_snapshot"] < inicio]
         .sort_values(["alerta_id", "fecha_snapshot"])
@@ -388,7 +376,6 @@ def construir_metricas_cartera(
             .drop_duplicates("alerta_id", keep="first")
         )
 
-    # Cambios de PnL de alertas que estaban activas tanto al inicio como al final.
     common_ids = set(snapshot_inicio["alerta_id"]).intersection(
         set(activas["alerta_id"])
     )
@@ -419,9 +406,6 @@ def construir_metricas_cartera(
             if not delta.empty:
                 delta_pnl_activos = delta.mean()
 
-    # Estado de tesis: solo se puede aproximar con los estados disponibles.
-    # La tabla backtesting_diario_alertas no contiene Estado_Estrategia.
-    # Por ello NO inventamos TESIS_REFORZADA/DEBILITADA.
     score_actual = pd.to_numeric(
         activas.get("score_actual", pd.Series(dtype=float)),
         errors="coerce"
@@ -431,9 +415,6 @@ def construir_metricas_cartera(
         activas.get("rsi_actual", pd.Series(dtype=float)),
         errors="coerce"
     ).dropna()
-
-    rvol = None  # No existe en la estructura proporcionada.
-    roc20 = None  # No existe en la estructura proporcionada.
 
     top_3 = (
         activas.sort_values("pnl_actual_pct", ascending=False)
@@ -447,7 +428,6 @@ def construir_metricas_cartera(
         .copy()
     )
 
-    # Distribución de estados al cierre.
     estado_counts = (
         snapshot_fin["estado"]
         .replace("", "SIN_ESTADO")
@@ -483,7 +463,6 @@ def construir_metricas_cartera(
 
 def dataframe_a_posiciones(df: pd.DataFrame) -> List[Dict[str, Any]]:
     result = []
-
     for _, row in df.iterrows():
         result.append({
             "alerta_id": int(row["alerta_id"]) if pd.notna(row["alerta_id"]) else None,
@@ -497,13 +476,11 @@ def dataframe_a_posiciones(df: pd.DataFrame) -> List[Dict[str, Any]]:
             "precio_actual": limpiar_numero(row.get("precio_actual"), 4),
             "precio_alerta": limpiar_numero(row.get("precio_alerta"), 4),
         })
-
     return result
 
 
 def dataframe_a_cerradas(df: pd.DataFrame) -> List[Dict[str, Any]]:
     result = []
-
     for _, row in df.iterrows():
         result.append({
             "alerta_id": int(row["alerta_id"]) if pd.notna(row["alerta_id"]) else None,
@@ -516,7 +493,6 @@ def dataframe_a_cerradas(df: pd.DataFrame) -> List[Dict[str, Any]]:
                 else None
             ),
         })
-
     return result
 
 
@@ -528,12 +504,6 @@ def descargar_mercado_yfinance(
     inicio: date,
     fin: date
 ) -> Dict[str, Dict[str, Any]]:
-    """
-    Descarga datos semanales mediante yfinance.
-
-    Se importa aquí para mantener la ejecución compatible con entornos
-    donde el paquete esté instalado en GitHub Actions.
-    """
     try:
         import yfinance as yf
     except ImportError:
@@ -542,10 +512,8 @@ def descargar_mercado_yfinance(
         )
         return {}
 
-    # Añadimos margen porque algunos índices tienen calendarios distintos.
     start = inicio - timedelta(days=5)
     end = fin + timedelta(days=2)
-
     result = {}
 
     for nombre, ticker in MARKET_TICKERS.items():
@@ -569,7 +537,6 @@ def descargar_mercado_yfinance(
                 close = df["Close"]
 
             close = pd.to_numeric(close, errors="coerce").dropna()
-
             if close.empty:
                 continue
 
@@ -583,7 +550,6 @@ def descargar_mercado_yfinance(
                 & (close.index <= fin_ts + pd.Timedelta(days=1))
             ]
 
-            # Para índices/ETFs se usa el primer y último cierre disponible.
             if len(semana) >= 2:
                 first = float(semana.iloc[0])
                 last = float(semana.iloc[-1])
@@ -591,7 +557,6 @@ def descargar_mercado_yfinance(
             else:
                 weekly_return = None
 
-            # Volatilidad aproximada semanal a partir de retornos diarios.
             daily_returns = close.pct_change().dropna() * 100
             daily_week = daily_returns[
                 (daily_returns.index >= inicio_ts)
@@ -613,12 +578,7 @@ def descargar_mercado_yfinance(
             }
 
         except Exception as exc:
-            logger.warning(
-                "Error descargando %s (%s): %s",
-                nombre,
-                ticker,
-                exc
-            )
+            logger.warning("Error descargando %s (%s): %s", nombre, ticker, exc)
 
     return result
 
@@ -632,12 +592,6 @@ def obtener_noticias_semana(
     fin: date,
     max_items: int = NEWS_MAX_ITEMS
 ) -> List[Dict[str, str]]:
-    """
-    Obtiene titulares mediante Google News RSS.
-
-    La IA recibe titulares/enlaces como contexto, no se le pide que
-    invente el contexto macro de la semana.
-    """
     queries = [
         "stock market S&P Nasdaq Europe markets economy",
         "Federal Reserve ECB interest rates inflation markets",
@@ -680,8 +634,6 @@ def obtener_noticias_semana(
                     except Exception:
                         published = pub_date
 
-                # Intentamos filtrar por semana. Si Google RSS no aporta
-                # una fecha interpretable, conservamos el titular.
                 if published and re.match(r"^\d{4}-\d{2}-\d{2}$", published):
                     pub = date.fromisoformat(published)
                     if pub < inicio - timedelta(days=1) or pub > fin + timedelta(days=2):
@@ -769,10 +721,6 @@ def construir_contexto_ia(
 # ============================================================
 
 def generar_analisis_ia(contexto: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    La IA genera narrativa estructurada.
-    NO genera HTML.
-    """
     client = cliente_ia()
 
     system_prompt = """
@@ -855,7 +803,6 @@ Devuelve exclusivamente JSON válido con esta estructura:
     try:
         return json.loads(content)
     except json.JSONDecodeError:
-        # Fallback por si el proveedor devuelve markdown.
         cleaned = (
             content
             .replace("```json", "")
@@ -875,7 +822,6 @@ def esc(value: Any) -> str:
 
 def render_market_table(mercado: Dict[str, Dict[str, Any]]) -> str:
     rows = []
-
     order = [
         "S&P 500",
         "Nasdaq 100",
@@ -933,7 +879,6 @@ def render_positions_table(
     positions: List[Dict[str, Any]],
     title: str
 ) -> str:
-
     if not positions:
         return f"""
         <h3 style="margin:20px 0 8px;color:#1e293b;">{esc(title)}</h3>
@@ -941,7 +886,6 @@ def render_positions_table(
         """
 
     rows = []
-
     for p in positions:
         pnl = p.get("pnl_pct")
         pnl_display = fmt_pct(pnl)
@@ -1002,12 +946,10 @@ def render_analysis_list(
     title: str,
     analyses: List[Dict[str, Any]]
 ) -> str:
-
     if not analyses:
         return ""
 
     blocks = []
-
     for item in analyses:
         ticker = esc(item.get("ticker"))
         analysis = esc(item.get("analysis")).replace("\n", "<br>")
@@ -1038,7 +980,6 @@ def generar_html_newsletter(
     inicio: date,
     fin: date
 ) -> str:
-
     summary = esc(analisis.get("executive_summary", ""))
     market_context = esc(analisis.get("market_context", "")).replace("\n", "<br><br>")
     portfolio_analysis = esc(analisis.get("portfolio_analysis", "")).replace("\n", "<br><br>")
@@ -1060,16 +1001,8 @@ def generar_html_newsletter(
     )
 
     market_html = render_market_table(mercado)
-
-    top_html = render_positions_table(
-        metricas["top_3"],
-        "Posiciones activas destacadas"
-    )
-
-    watch_html = render_positions_table(
-        metricas["worst_3"],
-        "Posiciones a vigilar"
-    )
+    top_html = render_positions_table(metricas["top_3"], "Posiciones activas destacadas")
+    watch_html = render_positions_table(metricas["worst_3"], "Posiciones a vigilar")
 
     best_analysis_html = render_analysis_list(
         "Lectura de las posiciones destacadas",
@@ -1277,25 +1210,30 @@ def enviar_correo(
         f"— {inicio.strftime('%d/%m')} → {fin.strftime('%d/%m/%Y')}"
     )
 
-    params = {
-        "from": os.getenv(
-            "RESEND_FROM",
-            "Alura Quant <updates@aluraquant.es>"
-        ),
-        "to": destinatarios,
-        "subject": asunto,
-        "html": html_content,
-    }
+    remitente = os.getenv(
+        "RESEND_FROM",
+        "Alura Quant <updates@aluraquant.es>"
+    )
 
-    try:
-        response = resend.Emails.send(params)
-        logger.info(
-            "Newsletter enviada correctamente. Respuesta Resend: %s",
-            response
-        )
-    except Exception as exc:
-        logger.exception("Error enviando newsletter: %s", exc)
-        raise
+    for correo in destinatarios:
+        # ¡Clave! Se pasa como lista con un único elemento para que cada usuario
+        # reciba el correo de forma limpia y privada (sin ver a nadie más en el 'Para').
+        params = {
+            "from": remitente,
+            "to": [correo],
+            "subject": asunto,
+            "html": html_content,
+        }
+
+        try:
+            response = resend.Emails.send(params)
+            logger.info(
+                "Newsletter enviada correctamente a %s. Respuesta Resend: %s",
+                correo,
+                response
+            )
+        except Exception as exc:
+            logger.exception("Error enviando newsletter a %s: %s", correo, exc)
 
 
 # ============================================================
@@ -1317,33 +1255,13 @@ def main() -> None:
         logger.info("No hay suscriptores. Proceso finalizado.")
         return
 
-    # 1. Histórico de snapshots.
     df_backtest = obtener_backtesting(inicio, fin)
-
-    # 2. Métricas deterministas de cartera.
-    metricas = construir_metricas_cartera(
-        df_backtest,
-        inicio,
-        fin
-    )
-
-    # 3. Benchmark y contexto de mercado.
+    metricas = construir_metricas_cartera(df_backtest, inicio, fin)
     mercado = descargar_mercado_yfinance(inicio, fin)
-
-    # 4. Titulares de la semana.
     noticias = obtener_noticias_semana(inicio, fin)
-
-    # 5. Contexto estructurado para la IA.
-    contexto = construir_contexto_ia(
-        metricas,
-        mercado,
-        noticias
-    )
-
-    # 6. IA: únicamente narrativa/análisis.
+    contexto = construir_contexto_ia(metricas, mercado, noticias)
     analisis = generar_analisis_ia(contexto)
 
-    # 7. Python: HTML determinista.
     html_content = generar_html_newsletter(
         metricas,
         mercado,
@@ -1352,7 +1270,6 @@ def main() -> None:
         fin
     )
 
-    # 8. Envío.
     enviar_correo(
         html_content,
         destinatarios,
