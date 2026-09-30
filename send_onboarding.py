@@ -100,14 +100,14 @@ def listar_suscriptores():
 # BLOQUES VISUALES
 # ============================================================
 
-def feature_card(numero, titulo, texto, etiqueta):
+def feature_card(numero, titulo, texto):
     return f"""
     <tr>
-      <td style="padding:0 0 9px 0;">
+      <td style="padding:0 0 10px 0;">
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
-               style="border:1px solid #e3e9f2;border-radius:13px;background:#ffffff;">
+               style="border:1px solid #cbd5e1;border-radius:12px;background:#ffffff;">
           <tr>
-            <td width="54" valign="top" style="padding:15px 0 15px 15px;">
+            <td width="54" valign="top" style="padding:16px 0 16px 16px;">
               <div style="
                 width:38px;
                 height:38px;
@@ -116,13 +116,13 @@ def feature_card(numero, titulo, texto, etiqueta):
                 border-radius:10px;
                 background:#f1f5ff;
                 color:#2563eb;
-                font-size:10px;
+                font-size:11px;
                 font-weight:800;
                 letter-spacing:.04em;
               ">{escapar(numero)}</div>
             </td>
 
-            <td valign="middle" style="padding:14px 8px 14px 10px;">
+            <td valign="middle" style="padding:16px 16px 16px 12px;">
               <div style="
                 color:#172033;
                 font-size:13px;
@@ -134,18 +134,8 @@ def feature_card(numero, titulo, texto, etiqueta):
                 color:#64748b;
                 font-size:11px;
                 line-height:17px;
-                padding-top:3px;
+                padding-top:4px;
               ">{escapar(texto)}</div>
-            </td>
-
-            <td width="55" valign="middle" align="right" style="padding:14px 15px 14px 4px;">
-              <div style="
-                color:#94a3b8;
-                font-size:11px;
-                line-height:20px;
-                font-weight:700;
-                text-align:right;
-              ">{escapar(etiqueta)}</div>
             </td>
           </tr>
         </table>
@@ -163,19 +153,16 @@ def html_onboarding():
                 "01",
                 "Alertas cuantitativas",
                 "Señales con métricas, niveles técnicos y una lectura cuantitativa de la oportunidad.",
-                "EN TIEMPO REAL",
             ),
             feature_card(
                 "02",
                 "Newsletter semanal",
                 "Actividad de la cartera, señales abiertas y contexto de mercado relevante de la semana.",
-                "SEMANAL",
             ),
             feature_card(
                 "03",
                 "Resumen mensual de mercados",
                 "Una visión de conjunto sobre tendencias e indicadores de los principales mercados.",
-                "MENSUAL",
             ),
         ]
     )
