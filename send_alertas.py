@@ -235,11 +235,9 @@ def build_html_opportunity_card(a):
     total_dist = risk_dist + reward_dist
 
     if total_dist > 0 and risk_dist > 0 and reward_dist > 0:
-        # Ponderación porcentual según las distancias reales
         risk_pct = round((risk_dist / total_dist) * 100, 1)
         reward_pct = round((reward_dist / total_dist) * 100, 1)
     else:
-        # Proporción genérica si los niveles no son válidos (30% riesgo / 70% beneficio)
         risk_pct, reward_pct = 30.0, 70.0
 
     return f'''
@@ -284,7 +282,6 @@ def build_html_opportunity_card(a):
       <tr>
         <td colspan="3" style="padding-top:24px;">
           
-          <!-- Etiquetas superiores con alineación acorde a la posición de los puntos -->
           <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom:8px;">
             <tr>
               <td width="{risk_pct}%" align="left">
@@ -302,30 +299,20 @@ def build_html_opportunity_card(a):
             </tr>
           </table>
 
-          <!-- Componente Visual del Rango Proporcional con Alineación Exacta al Medio -->
           <table width="100%" border="0" cellspacing="0" cellpadding="0" style="table-layout:fixed;">
             <tr height="16" style="height:16px;line-height:0px;font-size:0px;">
-              <!-- Punto Stop Loss -->
               <td width="14" align="center" valign="middle" style="height:16px;vertical-align:middle;padding:0;">
                 <div style="width:12px;height:12px;border:3px solid #dc2626;background:#ffffff;border-radius:50%;box-sizing:border-box;margin:0 auto;"></div>
               </td>
-              
-              <!-- Tramo Stop -> Entrada (Rojo, ancho proporcional al riesgo) -->
               <td width="{risk_pct}%" border="0" valign="middle" style="height:16px;vertical-align:middle;padding:0;">
                 <div style="height:3px;background-color:#fca5a5;font-size:1px;line-height:1px;">&nbsp;</div>
               </td>
-              
-              <!-- Punto Entrada -->
               <td width="14" align="center" valign="middle" style="height:16px;vertical-align:middle;padding:0;">
                 <div style="width:12px;height:12px;border:3px solid #2563eb;background:#ffffff;border-radius:50%;box-sizing:border-box;margin:0 auto;"></div>
               </td>
-              
-              <!-- Tramo Entrada -> Take Profit (Verde, ancho proporcional al beneficio) -->
               <td width="{reward_pct}%" border="0" valign="middle" style="height:16px;vertical-align:middle;padding:0;">
                 <div style="height:3px;background-color:#86efac;font-size:1px;line-height:1px;">&nbsp;</div>
               </td>
-              
-              <!-- Punto Take Profit -->
               <td width="14" align="center" valign="middle" style="height:16px;vertical-align:middle;padding:0;">
                 <div style="width:12px;height:12px;border:3px solid #16a34a;background:#ffffff;border-radius:50%;box-sizing:border-box;margin:0 auto;"></div>
               </td>
@@ -464,7 +451,7 @@ def html_email(a, ctx, news):
 </html>'''
 
 
-def send(a, content, recipients):
+def send(a, content, recipient):
     ticker = safe(a.get("ticker"))
     score = num(a.get("score_entrada"), 0)
     subject = f"Alura Quant | Nueva alerta: {ticker} · Score {score}/100"
@@ -473,17 +460,18 @@ def send(a, content, recipients):
         fn_html = f"preview_alerta_{ticker.replace('.', '_')}.html"
         open(fn_html, "w", encoding="utf-8").write(content)
         log.info("DRY_RUN: archivo preview generado en %s", fn_html)
-        return
+        return False
 
     payload = {
         "from": FROM_EMAIL,
-        "to": recipients,
+        "to": [recipient],  # Lista de un solo elemento para privacidad total en el campo "Para"
         "subject": subject,
         "html": content,
     }
     
-    resend.Emails.send(payload)
-    log.info("Email enviado exitosamente: %s", subject)
+    response = resend.Emails.send(payload)
+    log.info("Email enviado exitosamente a %s. Respuesta Resend: %s", recipient, response)
+    return True
 
 
 def main():
@@ -507,27 +495,39 @@ def main():
     if not alerts:
         log.info("No hay alertas nuevas que cumplan el filtro.")
         return
+
     for a in alerts:
         ticker = safe(a.get("ticker"))
         try:
             news = get_news(ticker, safe(a.get("empresa"), ""))
             ctx = ai_context(a, news)
             content = html_email(a, ctx, news)
-            send(a, content, recipients)
-            if not DRY_RUN:
+
+            if DRY_RUN:
+                send(a, content, "test@example.com")
+                return
+
+            enviados_exitosos = 0
+            
+            # Bucle iterativo individual por cada suscriptor
+            for recipient in recipients:
+                try:
+                    if send(a, content, recipient):
+                        enviados_exitosos += 1
+                        sent_at = datetime.now(timezone.utc).isoformat()
+                        supabase.table("suscriptores_free").update({
+                            "fecha_ultima_alerta_enviada": sent_at
+                        }).eq("email", recipient).execute()
+                except Exception as sub_error:
+                    log.warning("No se pudo enviar la alerta a %s: %s", recipient, sub_error)
+
+            if enviados_exitosos > 0:
                 supabase.table("cola_envios_alertas").insert({
                     "alerta_id": int(a["id"]),
                     "ticker": ticker,
                 }).execute()
-                sent_at = datetime.now(timezone.utc).isoformat()
-                for recipient in recipients:
-                    try:
-                        supabase.table("suscriptores_free").update({
-                            "fecha_ultima_alerta_enviada": sent_at
-                        }).eq("email", recipient).execute()
-                    except Exception as update_error:
-                        log.warning("No se pudo actualizar fecha de alerta para %s: %s", recipient, update_error)
-                log.info("Alerta %s (%s) registrada en cola_envios_alertas.", a["id"], ticker)
+                log.info("Alerta %s (%s) registrada en cola_envios_alertas. Total enviados: %s", a["id"], ticker, enviados_exitosos)
+
         except Exception as e:
             log.exception("Error procesando %s: %s", ticker, e)
 
