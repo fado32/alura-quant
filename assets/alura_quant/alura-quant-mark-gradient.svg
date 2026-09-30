@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Alura Quant</title>
+  <desc id="desc">Símbolo geométrico azul de Alura Quant sobre fondo azul noche.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0b1220"/><stop offset="1" stop-color="#172554"/></linearGradient>
+    <linearGradient id="blue" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#38bdf8"/><stop offset="1" stop-color="#2563eb"/></linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <path d="M108 350 197 145h47l91 205h-52l-18-44h-88l-18 44h-51Zm86-85h54l-27-67-27 67Z" fill="url(#blue)"/>
+  <path d="M340 351V193h44v158h-44Zm0-184v-42h44v42h-44Z" fill="#e2e8f0"/>
+  <circle cx="393" cy="119" r="11" fill="#38bdf8"/>
+</svg>
