@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-label="Alura Quant mark">
+  <rect width="256" height="256" rx="56" fill="#0f172a"/>
+  <path d="M54 191 L128 45 L202 191 L170 191 L128 109 L86 191 Z" fill="#2563eb"/>
+  <path d="M99 191 L128 136 L157 191 Z" fill="#ffffff"/>
+  <path d="M128 136 L141 161 L115 161 Z" fill="#0f172a"/>
+</svg>

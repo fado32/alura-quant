@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="180" viewBox="0 0 760 180" role="img" aria-label="Alura Quant">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1" y1="1" y2="0">
+      <stop offset="0" stop-color="#60a5fa"/><stop offset="1" stop-color="#bfdbfe"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(18 18)">
+    <path d="M0 125 L62 12 L124 125 L99 125 L62 59 L25 125 Z" fill="url(#g)"/>
+    <path d="M37 125 L62 80 L87 125 Z" fill="#ffffff"/>
+    <path d="M62 80 L74 102 L50 102 Z" fill="#0f172a"/>
+  </g>
+  <text x="165" y="88" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="800" letter-spacing="1.2" fill="#ffffff">ALURA</text>
+  <text x="165" y="138" font-family="Arial, Helvetica, sans-serif" font-size="43" font-weight="300" letter-spacing="10" fill="#cbd5e1">QUANT</text>
+</svg>
