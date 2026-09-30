@@ -7,26 +7,56 @@ from datetime import datetime, timezone
 import resend
 from supabase import Client, create_client
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
+
+# ============================================================
+# CONFIGURACIÓN
+# ============================================================
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+)
 log = logging.getLogger("alura-onboarding")
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
-FROM_EMAIL = os.getenv("ALURA_ONBOARDING_FROM", "Alura Quant <updates@aluraquant.es>").strip()
-DASHBOARD_URL = os.getenv("ALURA_DASHBOARD_URL", "https://aluraquant.es").strip()
-DRY_RUN = os.getenv("ALURA_ONBOARDING_DRY_RUN", "false").strip().lower() == "true"
+
+FROM_EMAIL = os.getenv(
+    "ALURA_ONBOARDING_FROM",
+    "Alura Quant <updates@aluraquant.es>",
+).strip()
+
+DASHBOARD_URL = os.getenv(
+    "ALURA_DASHBOARD_URL",
+    "https://aluraquant.es",
+).strip()
+
+DRY_RUN = (
+    os.getenv("ALURA_ONBOARDING_DRY_RUN", "false")
+    .strip()
+    .lower()
+    == "true"
+)
+
 PAGE_SIZE = 500
 SUBJECT = "Bienvenido a Alura Quant | Cómo empezar"
 
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise RuntimeError("Faltan SUPABASE_URL o SUPABASE_KEY.")
+
 if not RESEND_API_KEY and not DRY_RUN:
     raise RuntimeError("Falta RESEND_API_KEY.")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 if RESEND_API_KEY:
     resend.api_key = RESEND_API_KEY
+
+
+# ============================================================
+# HELPERS
+# ============================================================
 
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", re.IGNORECASE)
 
@@ -34,6 +64,7 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", re.IGNORECASE)
 def escapar(value, default=""):
     if value is None:
         return default
+
     value = str(value).strip()
     return html.escape(value, quote=True) if value else default
 
@@ -43,138 +74,478 @@ def email_valido(email):
 
 
 def listar_suscriptores():
-    rows, offset = [], 0
+    rows = []
+    offset = 0
+
     while True:
         response = (
-            supabase.table("suscriptores_free")
+            supabase
+            .table("suscriptores_free")
             .select("id,email,fecha_envio_onboarding")
             .order("id")
             .range(offset, offset + PAGE_SIZE - 1)
             .execute()
         )
+
         batch = response.data or []
         rows.extend(batch)
+
         if len(batch) < PAGE_SIZE:
-            break
+            return rows
+
         offset += PAGE_SIZE
-    return rows
 
 
-def tarjeta_numero(numero, titulo, texto):
+# ============================================================
+# BLOQUES VISUALES
+# ============================================================
+
+def feature_card(numero, titulo, texto, etiqueta):
     return f"""
-    <div class="feature-card">
-        <div class="feature-number">{escapar(numero)}</div>
-        <div class="feature-content">
-            <div class="feature-title">{escapar(titulo)}</div>
-            <div class="feature-text">{escapar(texto)}</div>
-        </div>
-        <div class="feature-arrow">↗</div>
-    </div>
+    <tr>
+      <td style="padding:0 0 9px 0;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+               style="border:1px solid #e3e9f2;border-radius:13px;background:#ffffff;">
+          <tr>
+            <td width="54" valign="top" style="padding:15px 0 15px 15px;">
+              <div style="
+                width:38px;
+                height:38px;
+                line-height:38px;
+                text-align:center;
+                border-radius:10px;
+                background:#f1f5ff;
+                color:#2563eb;
+                font-size:10px;
+                font-weight:800;
+                letter-spacing:.04em;
+              ">{escapar(numero)}</div>
+            </td>
+
+            <td valign="middle" style="padding:14px 8px 14px 10px;">
+              <div style="
+                color:#172033;
+                font-size:13px;
+                line-height:18px;
+                font-weight:800;
+              ">{escapar(titulo)}</div>
+
+              <div style="
+                color:#64748b;
+                font-size:11px;
+                line-height:17px;
+                padding-top:3px;
+              ">{escapar(texto)}</div>
+            </td>
+
+            <td width="55" valign="middle" align="right" style="padding:14px 15px 14px 4px;">
+              <div style="
+                color:#94a3b8;
+                font-size:11px;
+                line-height:20px;
+                font-weight:700;
+                text-align:right;
+              ">{escapar(etiqueta)}</div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
     """
 
 
 def html_onboarding():
     dashboard = escapar(DASHBOARD_URL)
-    features = "".join([
-        tarjeta_numero("01", "Alertas cuantitativas", "Señales seleccionadas a partir de métricas sistemáticas, niveles técnicos y una lectura cuantitativa de la oportunidad."),
-        tarjeta_numero("02", "Newsletter semanal", "Una lectura compacta de la actividad de Alura Quant, el comportamiento de la cartera y el contexto de mercado."),
-        tarjeta_numero("03", "Resumen mensual de mercados", "Una visión de conjunto para revisar tendencias, indicadores y movimientos relevantes de los principales mercados."),
-    ])
 
-    return f'''<!doctype html>
+    features = "".join(
+        [
+            feature_card(
+                "01",
+                "Alertas cuantitativas",
+                "Señales con métricas, niveles técnicos y una lectura cuantitativa de la oportunidad.",
+                "EN TIEMPO REAL",
+            ),
+            feature_card(
+                "02",
+                "Newsletter semanal",
+                "Actividad de la cartera, señales abiertas y contexto de mercado relevante de la semana.",
+                "SEMANAL",
+            ),
+            feature_card(
+                "03",
+                "Resumen mensual de mercados",
+                "Una visión de conjunto sobre tendencias e indicadores de los principales mercados.",
+                "MENSUAL",
+            ),
+        ]
+    )
+
+    return f"""<!doctype html>
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="color-scheme" content="light">
 <title>Alura Quant · Bienvenido</title>
+
 <style>
-body {{ margin:0; padding:0; background:#f5f7fb; color:#172033; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif; -webkit-font-smoothing:antialiased; }}
-.wrapper {{ width:100%; padding:22px 12px; box-sizing:border-box; }}
-.email {{ width:100%; max-width:700px; margin:0 auto; background:#fff; border:1px solid #e6ebf2; border-radius:18px; overflow:hidden; box-shadow:0 8px 30px rgba(15,23,42,.07); }}
-.topbar {{ padding:21px 28px 18px; border-bottom:1px solid #edf1f5; }}
-.brand {{ color:#0f172a; font-size:14px; line-height:1; font-weight:850; letter-spacing:.01em; }}
-.brand span {{ color:#2563eb; }}
-.intro {{ padding:34px 28px 27px; }}
-.eyebrow {{ color:#2563eb; font-size:9px; line-height:1; text-transform:uppercase; letter-spacing:.12em; font-weight:850; margin-bottom:12px; }}
-.headline {{ color:#0f172a; font-size:29px; line-height:1.16; letter-spacing:-.025em; font-weight:850; margin:0; }}
-.intro-text {{ max-width:590px; color:#64748b; font-size:13px; line-height:1.7; margin:13px 0 0; }}
-.section {{ padding:0 28px 26px; }}
-.section-heading {{ color:#0f172a; font-size:13px; line-height:1.3; font-weight:800; margin:0 0 11px; }}
-.section-subtitle {{ color:#94a3b8; font-size:10px; line-height:1.5; margin:0 0 13px; }}
-.feature-card {{ display:flex; align-items:center; gap:14px; padding:16px; margin-bottom:8px; background:#fff; border:1px solid #e4e9f0; border-radius:14px; }}
-.feature-card:last-child {{ margin-bottom:0; }}
-.feature-number {{ flex:0 0 auto; width:37px; height:37px; border-radius:11px; background:#f1f5ff; color:#2563eb; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:850; letter-spacing:.03em; }}
-.feature-content {{ min-width:0; flex:1; }}
-.feature-title {{ color:#1e293b; font-size:12px; line-height:1.3; font-weight:800; }}
-.feature-text {{ color:#64748b; font-size:11px; line-height:1.55; margin-top:4px; }}
-.feature-arrow {{ flex:0 0 auto; color:#94a3b8; font-size:16px; font-weight:500; }}
-.cta-card {{ margin-top:6px; padding:21px; background:#f7faff; border:1px solid #dbe7fb; border-radius:14px; text-align:center; }}
-.cta-title {{ color:#0f172a; font-size:14px; line-height:1.3; font-weight:800; margin:0; }}
-.cta-text {{ color:#64748b; font-size:11px; line-height:1.6; margin:7px auto 14px; max-width:470px; }}
-.button {{ display:inline-block; padding:12px 21px; background:#2563eb; color:#fff !important; text-decoration:none; border-radius:9px; font-size:11px; font-weight:800; letter-spacing:.01em; }}
-.disclaimer {{ padding:0 28px 24px; color:#94a3b8; font-size:9px; line-height:1.65; }}
-.footer {{ padding:17px 28px 20px; border-top:1px solid #edf1f5; background:#fafbfc; color:#94a3b8; font-size:9px; line-height:1.55; }}
-.footer strong {{ color:#64748b; }}
-@media (max-width:600px) {{ .topbar,.intro,.section,.disclaimer,.footer {{ padding-left:18px; padding-right:18px; }} .headline {{ font-size:25px; }} .feature-card {{ padding:14px; }} }}
+  html, body {{
+    margin:0 !important;
+    padding:0 !important;
+    width:100% !important;
+    background:#f4f6fa;
+  }}
+
+  body {{
+    -webkit-font-smoothing:antialiased;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+  }}
+
+  table {{
+    border-collapse:collapse;
+  }}
+
+  @media only screen and (max-width:600px) {{
+    .outer-pad {{
+      padding:14px 8px !important;
+    }}
+
+    .email-shell {{
+      border-radius:14px !important;
+    }}
+
+    .content-pad {{
+      padding-left:20px !important;
+      padding-right:20px !important;
+    }}
+
+    .headline {{
+      font-size:25px !important;
+      line-height:30px !important;
+    }}
+
+    .intro-copy {{
+      font-size:12px !important;
+      line-height:19px !important;
+    }}
+
+    .mobile-hide {{
+      display:none !important;
+    }}
+  }}
 </style>
 </head>
-<body>
-<div class="wrapper"><div class="email">
-<div class="topbar"><div class="brand">Alura <span>Quant</span></div></div>
-<div class="intro">
-<div class="eyebrow">Bienvenido</div>
-<h1 class="headline">Una forma más clara de leer el mercado.</h1>
-<p class="intro-text">Gracias por unirte a Alura Quant. Hemos diseñado una experiencia centrada en datos, contexto y disciplina cuantitativa para que puedas seguir el mercado con una perspectiva estructurada.</p>
-</div>
-<div class="section">
-<h2 class="section-heading">Qué encontrarás en Alura Quant</h2>
-<p class="section-subtitle">Tres formatos para seguir las oportunidades y el contexto sin convertir el ruido de mercado en ruido informativo.</p>
-{features}
-</div>
-<div class="section"><div class="cta-card">
-<h2 class="cta-title">Empieza por explorar Alura Quant</h2>
-<p class="cta-text">Accede al dashboard y descubre cómo se presentan las oportunidades, métricas y señales del sistema.</p>
-<a class="button" href="{dashboard}">Explorar Alura Quant ↗</a>
-</div></div>
-<div class="disclaimer">El contenido de Alura Quant es informativo y educativo. No constituye asesoramiento financiero ni una recomendación personalizada de inversión. La inversión en renta variable conlleva riesgo de pérdida.</div>
-<div class="footer"><strong>Alura Quant</strong> · Datos, contexto y análisis cuantitativo.<br>Gracias por acompañarnos.</div>
-</div></div>
-</body></html>'''
 
+<body>
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+  <tr>
+    <td class="outer-pad" align="center" style="padding:24px 12px;">
+
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+             class="email-shell"
+             style="
+               max-width:680px;
+               background:#ffffff;
+               border:1px solid #e2e8f0;
+               border-radius:16px;
+               overflow:hidden;
+             ">
+
+        <!-- =================================================
+             BRAND
+             ================================================= -->
+        <tr>
+          <td class="content-pad" style="padding:20px 28px 18px;border-bottom:1px solid #edf1f5;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+              <tr>
+                <td>
+                  <div style="
+                    color:#172033;
+                    font-size:14px;
+                    line-height:18px;
+                    font-weight:850;
+                    letter-spacing:-.01em;
+                  ">
+                    Alura <span style="color:#2563eb;">Quant</span>
+                  </div>
+                </td>
+
+                <td align="right">
+                  <div style="
+                    color:#94a3b8;
+                    font-size:9px;
+                    line-height:18px;
+                    font-weight:700;
+                    letter-spacing:.08em;
+                    text-transform:uppercase;
+                  ">
+                    Bienvenido
+                  </div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- =================================================
+             INTRO
+             ================================================= -->
+        <tr>
+          <td class="content-pad" style="padding:31px 28px 22px;">
+
+            <div style="
+              color:#2563eb;
+              font-size:9px;
+              line-height:12px;
+              font-weight:850;
+              letter-spacing:.12em;
+              text-transform:uppercase;
+              padding-bottom:10px;
+            ">
+              Alura Quant
+            </div>
+
+            <h1 class="headline" style="
+              margin:0;
+              color:#111827;
+              font-size:28px;
+              line-height:33px;
+              letter-spacing:-.035em;
+              font-weight:850;
+            ">
+              Una forma más clara<br class="mobile-hide">
+              de leer el mercado.
+            </h1>
+
+            <p class="intro-copy" style="
+              max-width:570px;
+              margin:11px 0 0;
+              color:#64748b;
+              font-size:12px;
+              line-height:19px;
+            ">
+              Gracias por unirte a Alura Quant. Una experiencia centrada en
+              datos, contexto y disciplina cuantitativa para seguir el mercado
+              con una perspectiva estructurada.
+            </p>
+
+          </td>
+        </tr>
+
+        <!-- =================================================
+             FEATURES
+             ================================================= -->
+        <tr>
+          <td class="content-pad" style="padding:0 28px 23px;">
+
+            <div style="
+              color:#172033;
+              font-size:12px;
+              line-height:17px;
+              font-weight:850;
+              padding-bottom:4px;
+            ">
+              Qué encontrarás
+            </div>
+
+            <div style="
+              color:#94a3b8;
+              font-size:10px;
+              line-height:15px;
+              padding-bottom:13px;
+            ">
+              Tres formatos para seguir oportunidades y contexto sin ruido.
+            </div>
+
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+              {features}
+            </table>
+
+          </td>
+        </tr>
+
+        <!-- =================================================
+             CTA
+             ================================================= -->
+        <tr>
+          <td class="content-pad" style="padding:0 28px 24px;">
+
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+                   style="
+                     border:1px solid #dbe7fb;
+                     border-radius:13px;
+                     background:#f7faff;
+                   ">
+              <tr>
+                <td align="center" style="padding:20px 18px 19px;">
+
+                  <div style="
+                    color:#172033;
+                    font-size:13px;
+                    line-height:18px;
+                    font-weight:850;
+                  ">
+                    Empieza por explorar Alura Quant
+                  </div>
+
+                  <div style="
+                    max-width:470px;
+                    margin:5px auto 13px;
+                    color:#64748b;
+                    font-size:10px;
+                    line-height:16px;
+                  ">
+                    Accede al dashboard y descubre cómo presentamos las
+                    oportunidades, métricas y señales del sistema.
+                  </div>
+
+                  <a href="{dashboard}"
+                     style="
+                       display:inline-block;
+                       background:#2563eb;
+                       color:#ffffff;
+                       text-decoration:none;
+                       border-radius:8px;
+                       padding:10px 18px;
+                       font-size:10px;
+                       line-height:15px;
+                       font-weight:800;
+                     ">
+                    Explorar Alura Quant&nbsp; ↗
+                  </a>
+
+                </td>
+              </tr>
+            </table>
+
+          </td>
+        </tr>
+
+        <!-- =================================================
+             DISCLAIMER
+             ================================================= -->
+        <tr>
+          <td class="content-pad" style="padding:0 28px 20px;">
+
+            <div style="
+              border-top:1px solid #edf1f5;
+              padding-top:15px;
+              color:#94a3b8;
+              font-size:9px;
+              line-height:14px;
+            ">
+              El contenido de Alura Quant es informativo y educativo.
+              No constituye asesoramiento financiero ni recomendación
+              personalizada de inversión. La inversión en renta variable
+              conlleva riesgo de pérdida.
+            </div>
+
+          </td>
+        </tr>
+
+        <!-- =================================================
+             FOOTER
+             ================================================= -->
+        <tr>
+          <td class="content-pad" style="
+            padding:15px 28px 17px;
+            background:#fafbfc;
+            border-top:1px solid #edf1f5;
+          ">
+            <div style="
+              color:#94a3b8;
+              font-size:9px;
+              line-height:14px;
+            ">
+              <strong style="color:#64748b;">Alura Quant</strong>
+              · Datos, contexto y análisis cuantitativo.
+            </div>
+          </td>
+        </tr>
+
+      </table>
+
+    </td>
+  </tr>
+</table>
+</body>
+</html>
+"""
+
+
+# ============================================================
+# ENVÍO
+# ============================================================
 
 def enviar(destinatario, content):
     if DRY_RUN:
         preview_path = "preview_onboarding.html"
+
         with open(preview_path, "w", encoding="utf-8") as file:
             file.write(content)
-        log.info("DRY_RUN activo; vista previa generada en %s. No se enviaron correos.", preview_path)
+
+        log.info(
+            "DRY_RUN activo; vista previa generada en %s. "
+            "No se enviaron correos.",
+            preview_path,
+        )
         return False
-    response = resend.Emails.send({"from":FROM_EMAIL,"to":destinatario,"subject":SUBJECT,"html":content})
-    log.info("Email enviado a %s. Respuesta Resend: %s", destinatario, response)
+
+    response = resend.Emails.send(
+        {
+            "from": FROM_EMAIL,
+            "to": destinatario,
+            "subject": SUBJECT,
+            "html": content,
+        }
+    )
+
+    log.info(
+        "Email enviado a %s. Respuesta Resend: %s",
+        destinatario,
+        response,
+    )
     return True
 
 
+# ============================================================
+# MAIN
+# ============================================================
+
 def main():
     log.info("Preparando onboarding de Alura Quant...")
+
     content = html_onboarding()
     subscribers = listar_suscriptores()
+
     pendientes = {}
     invalidos = 0
 
     for subscriber in subscribers:
         raw_email = subscriber.get("email")
+
         if not raw_email:
             continue
+
         email = str(raw_email).strip().lower()
+
         if not email_valido(email):
             invalidos += 1
             log.warning("Email descartado por formato no válido: %s", email)
             continue
+
         if subscriber.get("fecha_envio_onboarding"):
             continue
+
+        # Deduplicación por email.
         pendientes[email] = subscriber
 
-    log.info("Suscriptores encontrados: %s | Pendientes: %s | Inválidos: %s", len(subscribers), len(pendientes), invalidos)
+    log.info(
+        "Suscriptores: %s | Pendientes: %s | Inválidos: %s",
+        len(subscribers),
+        len(pendientes),
+        invalidos,
+    )
 
     if DRY_RUN:
         enviar("", content)
@@ -184,19 +555,34 @@ def main():
         log.info("No hay suscriptores pendientes de onboarding.")
         return
 
-    enviados, errores = 0, 0
+    enviados = 0
+    errores = 0
+
     for email, subscriber in pendientes.items():
         try:
             if enviar(email, content):
                 sent_at = datetime.now(timezone.utc).isoformat()
-                supabase.table("suscriptores_free").update({"fecha_envio_onboarding":sent_at}).eq("id", subscriber["id"]).execute()
+
+                (
+                    supabase
+                    .table("suscriptores_free")
+                    .update({"fecha_envio_onboarding": sent_at})
+                    .eq("id", subscriber["id"])
+                    .execute()
+                )
+
                 enviados += 1
                 log.info("Onboarding registrado para %s", email)
+
         except Exception as exc:
             errores += 1
             log.exception("Error procesando %s: %s", email, exc)
 
-    log.info("Proceso terminado | enviados=%s | errores=%s", enviados, errores)
+    log.info(
+        "Proceso terminado | enviados=%s | errores=%s",
+        enviados,
+        errores,
+    )
 
 
 if __name__ == "__main__":
