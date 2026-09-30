@@ -361,7 +361,7 @@ def html_onboarding():
 
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
                    style="
-                     border:1px solid #dbe7fb;
+                     border:none;
                      border-radius:13px;
                      background:#f7faff;
                    ">
