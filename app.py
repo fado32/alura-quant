@@ -74,6 +74,7 @@ def comprobar_suscripcion(email):
 # ============================================================
 
 CAPITAL_POR_ALERTA = 300.0
+CAPITAL_REFERENCIA = 100000.0
 
 MAPEO_COLUMNAS_SUPABASE = {
     "Fecha": "fecha", "Ticker": "ticker", "Empresa": "empresa", "Sector": "sector", "Icono": "icono", "Modo": "modo",
@@ -227,6 +228,52 @@ def calcular_metricas(df):
         "activas": int(activos.sum()),
         "win_rate": win_rate,
     }
+
+def calcular_metricas_avanzadas(df):
+    """Métricas de edge y riesgo usando Resultado_R y Riesgo_Euros reales."""
+    if df is None or df.empty:
+        return {"expectancy_r": 0.0, "profit_factor": 0.0, "max_drawdown_eur": 0.0, "avg_rr": 0.0, "sharpe_trade": 0.0, "cagr": 0.0}
+
+    cerradas = df[df["Estado"].astype(str).isin(["OBJETIVO_CUMPLIDO", "STOP_SALTADO"])].copy() if "Estado" in df.columns else pd.DataFrame()
+    if cerradas.empty:
+        return {"expectancy_r": 0.0, "profit_factor": 0.0, "max_drawdown_eur": 0.0, "avg_rr": 0.0, "sharpe_trade": 0.0, "cagr": 0.0}
+
+    r = pd.to_numeric(cerradas.get("Resultado_R"), errors="coerce").dropna()
+    riesgo = pd.to_numeric(cerradas.get("Riesgo_Euros"), errors="coerce")
+    pnl = (r.reset_index(drop=True) * riesgo.reset_index(drop=True)).dropna()
+    if pnl.empty:
+        pnl = r.copy()
+
+    ganancias = float(pnl[pnl > 0].sum())
+    perdidas = float(abs(pnl[pnl < 0].sum()))
+    pf = ganancias / perdidas if perdidas > 0 else (float("inf") if ganancias > 0 else 0.0)
+    expectancy_r = float(r.mean()) if not r.empty else 0.0
+    avg_rr = float(pd.to_numeric(cerradas.get("Ratio_RR"), errors="coerce").mean()) if "Ratio_RR" in cerradas else 0.0
+    sharpe = float(r.mean() / r.std() * (len(r) ** 0.5)) if len(r) > 1 and r.std() > 0 else 0.0
+
+    equity = pnl.cumsum()
+    peak = equity.cummax()
+    dd = equity - peak
+    max_dd = float(dd.min()) if not dd.empty else 0.0
+
+    cagr = 0.0
+    try:
+        fechas = pd.to_datetime(cerradas["Fecha"], errors="coerce").dropna()
+        if len(fechas) >= 2 and pnl.sum() > -CAPITAL_REFERENCIA:
+            anos = max((fechas.max() - fechas.min()).days / 365.25, 1 / 365.25)
+            cagr = ((CAPITAL_REFERENCIA + float(pnl.sum())) / CAPITAL_REFERENCIA) ** (1 / anos) - 1
+    except Exception:
+        pass
+
+    return {
+        "expectancy_r": expectancy_r,
+        "profit_factor": pf,
+        "max_drawdown_eur": max_dd,
+        "avg_rr": avg_rr,
+        "sharpe_trade": sharpe,
+        "cagr": cagr * 100,
+    }
+
 
 def formatear_tesis_ia(texto):
     """Limpia y escapa el comentario de IA para HTML."""
@@ -401,6 +448,14 @@ def calcular_beneficio_fila_cerrada(row):
         return 0.0
 
     resultado_r = safe_float(row.get("Resultado_R"))
+    riesgo_euros = safe_float(row.get("Riesgo_Euros"))
+
+    # Prioridad: usar el riesgo monetario REAL calculado por bot.py.
+    # Esto mantiene la métrica del dashboard alineada con el sizing real
+    # (acciones x distancia al stop), sin alterar el esquema de Supabase.
+    if resultado_r is not None and riesgo_euros is not None:
+        return riesgo_euros * resultado_r
+
     stop_inicial = safe_float(row.get("Stop_Loss_Inicial"), safe_float(row.get("Stop_Loss")))
     if resultado_r is not None and stop_inicial is not None:
         riesgo_pct = abs(entrada - stop_inicial) / entrada
@@ -420,7 +475,7 @@ def calcular_beneficio_fila_cerrada(row):
 
 
 def calcular_beneficio_realizado(df):
-    """Calcula operaciones cerradas con 300€ por posición y su resultado R."""
+    """Calcula operaciones cerradas usando el riesgo monetario real de cada alerta."""
     if df is None or df.empty:
         return 0.0
     return float(sum(calcular_beneficio_fila_cerrada(row) for _, row in df.iterrows()))
@@ -435,8 +490,8 @@ def calcular_beneficio_no_realizado(
 ):
 
     """
-    Calcula el beneficio/pérdida actual de todas las posiciones
-    abiertas basándose en 300€ por posición.
+    Calcula el beneficio/pérdida actual usando el número real de acciones
+    guardado por bot.py; mantiene fallback a 300€ para alertas antiguas.
     """
 
     beneficio_total = 0.0
@@ -472,13 +527,16 @@ def calcular_beneficio_no_realizado(
             )
         )
 
-        beneficio, porcentaje = (
-            calcular_pnl_posicion(
-                precio_actual,
-                precio_entrada,
-                CAPITAL_POR_ALERTA
+        # Para posiciones activas, usar las acciones reales guardadas por bot.py.
+        # Fallback a la lógica histórica de 300€ si la alerta antigua no las tiene.
+        acciones = safe_float(row.get("Acciones"))
+        if acciones is not None and precio_actual is not None and precio_entrada is not None:
+            beneficio = acciones * (float(precio_actual) - float(precio_entrada))
+            porcentaje = (float(precio_actual) - float(precio_entrada)) / float(precio_entrada) * 100
+        else:
+            beneficio, porcentaje = calcular_pnl_posicion(
+                precio_actual, precio_entrada, CAPITAL_POR_ALERTA
             )
-        )
 
         if beneficio is None:
             continue
@@ -3176,8 +3234,9 @@ beneficio_no_realizado, posiciones_con_beneficio, posiciones_con_perdida = calcu
     df_activas_global, precios_actuales
 )
 beneficio_acumulado = beneficio_realizado + beneficio_no_realizado
-capital_inicial = max(3600.0, max(1, len(df_hist)) * CAPITAL_POR_ALERTA)
+capital_inicial = CAPITAL_REFERENCIA
 rentabilidad_pct = (beneficio_acumulado / capital_inicial * 100) if capital_inicial else 0
+metricas_avanzadas = calcular_metricas_avanzadas(df_hist)
 beneficio_realizado_curva, fechas_curva, beneficios_curva = calcular_resultados(
     df_hist, beneficio_no_realizado
 )
@@ -4447,7 +4506,7 @@ if active_page == "Performance":
         <div>
           <div class="aq-eyebrow">PERFORMANCE</div>
           <h2>Resultados del sistema</h2>
-          <p>Beneficio realizado y valoración actual de las posiciones abiertas.</p>
+          <p>Beneficio realizado, edge estadístico y valoración actual de las posiciones abiertas.</p>
         </div>
         <div class="performance-total">
           <span>BENEFICIO TOTAL</span>
@@ -4474,6 +4533,18 @@ if active_page == "Performance":
         </div>
         <div class="performance-kpi">
           <span>Beneficio realizado</span><strong style="color:{'#16a34a' if beneficio_realizado >= 0 else '#dc2626'};">{formatear_numero(beneficio_realizado,2," €",True)}</strong><small>operaciones cerradas</small>
+        </div>
+        <div class="performance-kpi">
+          <span>Expectancy</span><strong>{formatear_numero(metricas_avanzadas["expectancy_r"],2," R",True)}</strong><small>R medio por operación</small>
+        </div>
+        <div class="performance-kpi">
+          <span>Profit Factor</span><strong>{("∞" if metricas_avanzadas["profit_factor"] == float("inf") else formatear_numero(metricas_avanzadas["profit_factor"],2,"",False))}</strong><small>ganancias / pérdidas</small>
+        </div>
+        <div class="performance-kpi">
+          <span>Max Drawdown</span><strong>{formatear_numero(metricas_avanzadas["max_drawdown_eur"],0," €",True)}</strong><small>desde el pico acumulado</small>
+        </div>
+        <div class="performance-kpi">
+          <span>CAGR</span><strong>{formatear_numero(metricas_avanzadas["cagr"],1,"%",True)}</strong><small>si existe histórico suficiente</small>
         </div>
       </div>
 
