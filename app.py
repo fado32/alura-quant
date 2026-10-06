@@ -1,6 +1,5 @@
-import os
-import re
-import html
+
+import math
 from datetime import datetime, timedelta
 import gspread
 import pandas as pd
@@ -151,18 +150,13 @@ def safe_text(value, default="—"):
 
 
 def safe_float(value, default=None):
-    """
-    Conversión segura a float.
-    """
+    """Conversión segura a float, rechazando NaN e infinitos."""
     try:
-
         if value is None or pd.isna(value):
             return default
-
-        return float(value)
-
-    except Exception:
-
+        numero = float(value)
+        return numero if math.isfinite(numero) else default
+    except (TypeError, ValueError, OverflowError):
         return default
 
 
@@ -480,11 +474,18 @@ def calcular_beneficio_no_realizado(
             )
         )
 
+        precio_actual = safe_float(precio_actual)
         acciones = safe_float(row.get("Acciones"))
         nominal = safe_float(row.get("Nominal"))
-        if acciones is not None and acciones > 0 and precio_entrada and precio_entrada > 0:
-            beneficio = (float(precio_actual) - float(precio_entrada)) * acciones
-            porcentaje = (float(precio_actual) - float(precio_entrada)) / float(precio_entrada) * 100
+        if (
+            precio_actual is not None
+            and precio_entrada is not None
+            and precio_entrada > 0
+            and acciones is not None
+            and acciones > 0
+        ):
+            beneficio = (precio_actual - precio_entrada) * acciones
+            porcentaje = (precio_actual - precio_entrada) / precio_entrada * 100
         else:
             beneficio, porcentaje = calcular_pnl_posicion(
                 precio_actual,
@@ -3996,9 +3997,15 @@ def render_opportunity_card(row, compact=False, ribbon=False):
 
     acciones_posicion = safe_float(row.get("Acciones"))
     nominal_posicion = safe_float(row.get("Nominal"))
-    if acciones_posicion is not None and acciones_posicion > 0 and precio_entrada and precio_entrada > 0 and precio_actual is not None:
-        beneficio_posicion = (float(precio_actual) - float(precio_entrada)) * acciones_posicion
-        porcentaje_posicion = (float(precio_actual) - float(precio_entrada)) / float(precio_entrada) * 100
+    if (
+        precio_actual is not None
+        and precio_entrada is not None
+        and precio_entrada > 0
+        and acciones_posicion is not None
+        and acciones_posicion > 0
+    ):
+        beneficio_posicion = (precio_actual - precio_entrada) * acciones_posicion
+        porcentaje_posicion = (precio_actual - precio_entrada) / precio_entrada * 100
     else:
         beneficio_posicion, porcentaje_posicion = calcular_pnl_posicion(
             precio_actual, precio_entrada,
