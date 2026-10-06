@@ -75,7 +75,7 @@ def comprobar_suscripcion(email):
 # ============================================================
 
 CAPITAL_POR_ALERTA = 300.0  # Fallback únicamente para registros históricos sin Acciones/Nominal.
-CAPITAL_REFERENCIA = 10000.0
+CAPITAL_REFERENCIA = 100000.0
 
 MAPEO_COLUMNAS_SUPABASE = {
     "Fecha": "fecha", "Ticker": "ticker", "Empresa": "empresa", "Sector": "sector", "Icono": "icono", "Modo": "modo",
