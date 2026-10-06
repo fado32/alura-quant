@@ -1,4 +1,6 @@
-
+import os
+import re
+import html
 import math
 from datetime import datetime, timedelta
 import gspread
@@ -3161,6 +3163,8 @@ fecha_actualizacion_sistema = obtener_fecha_ultima_actualizacion(df_hist)
 # Datos globales
 
 df_hist = preparar_fecha(cargar_datos())
+# Siempre definida antes de cualquier renderizado HTML; evita NameError en reruns de Streamlit.
+fecha_actualizacion_sistema = datetime.now().strftime("%d/%m/%Y %H:%M")
 metricas = calcular_metricas(df_hist)
 total_alertas = metricas["total_alertas"]
 exitos = metricas["exitos"]
