@@ -73,7 +73,8 @@ def comprobar_suscripcion(email):
 # CONFIGURACIÓN SUPABASE
 # ============================================================
 
-CAPITAL_POR_ALERTA = 300.0
+CAPITAL_POR_ALERTA = 300.0  # Fallback únicamente para registros históricos sin Acciones/Nominal.
+CAPITAL_REFERENCIA = 100000.0
 
 MAPEO_COLUMNAS_SUPABASE = {
     "Fecha": "fecha", "Ticker": "ticker", "Empresa": "empresa", "Sector": "sector", "Icono": "icono", "Modo": "modo",
@@ -402,9 +403,16 @@ def calcular_beneficio_fila_cerrada(row):
 
     resultado_r = safe_float(row.get("Resultado_R"))
     stop_inicial = safe_float(row.get("Stop_Loss_Inicial"), safe_float(row.get("Stop_Loss")))
+    riesgo_euros = safe_float(row.get("Riesgo_Euros"))
+    if resultado_r is not None and riesgo_euros is not None:
+        return riesgo_euros * resultado_r
+
     if resultado_r is not None and stop_inicial is not None:
+        # Compatibilidad con registros antiguos que no guardasen Riesgo_Euros.
         riesgo_pct = abs(entrada - stop_inicial) / entrada
-        return CAPITAL_POR_ALERTA * riesgo_pct * resultado_r
+        nominal = safe_float(row.get("Nominal"))
+        capital_base = nominal if nominal is not None and nominal > 0 else CAPITAL_POR_ALERTA
+        return capital_base * riesgo_pct * resultado_r
 
     estado = str(row.get("Estado", ""))
     if "OBJETIVO_CUMPLIDO" in estado:
@@ -420,7 +428,7 @@ def calcular_beneficio_fila_cerrada(row):
 
 
 def calcular_beneficio_realizado(df):
-    """Calcula operaciones cerradas con 300€ por posición y su resultado R."""
+    """Calcula operaciones cerradas con el riesgo/nominal real guardado en cada alerta y su resultado R."""
     if df is None or df.empty:
         return 0.0
     return float(sum(calcular_beneficio_fila_cerrada(row) for _, row in df.iterrows()))
@@ -436,7 +444,7 @@ def calcular_beneficio_no_realizado(
 
     """
     Calcula el beneficio/pérdida actual de todas las posiciones
-    abiertas basándose en 300€ por posición.
+    abiertas basándose en Acciones y Nominal reales de cada alerta.
     """
 
     beneficio_total = 0.0
@@ -472,13 +480,17 @@ def calcular_beneficio_no_realizado(
             )
         )
 
-        beneficio, porcentaje = (
-            calcular_pnl_posicion(
+        acciones = safe_float(row.get("Acciones"))
+        nominal = safe_float(row.get("Nominal"))
+        if acciones is not None and acciones > 0 and precio_entrada and precio_entrada > 0:
+            beneficio = (float(precio_actual) - float(precio_entrada)) * acciones
+            porcentaje = (float(precio_actual) - float(precio_entrada)) / float(precio_entrada) * 100
+        else:
+            beneficio, porcentaje = calcular_pnl_posicion(
                 precio_actual,
                 precio_entrada,
-                CAPITAL_POR_ALERTA
+                nominal if nominal is not None and nominal > 0 else CAPITAL_POR_ALERTA
             )
-        )
 
         if beneficio is None:
             continue
@@ -508,7 +520,7 @@ def calcular_resultados(
 ):
 
     """
-    Calcula la curva de beneficio histórico escalada a 300€ por posición.
+    Calcula la curva de beneficio histórico usando el tamaño real de cada posición.
     """
 
     beneficio_realizado = 0.0
@@ -3086,11 +3098,7 @@ total_operaciones_historicas = max(
     len(df_hist)
 )
 
-CAPITAL_INICIAL = max(
-    3600.0,
-    total_operaciones_historicas *
-    CAPITAL_POR_ALERTA
-)
+CAPITAL_INICIAL = CAPITAL_REFERENCIA
 
 rentabilidad_pct = (
     beneficio_acumulado
@@ -3176,7 +3184,7 @@ beneficio_no_realizado, posiciones_con_beneficio, posiciones_con_perdida = calcu
     df_activas_global, precios_actuales
 )
 beneficio_acumulado = beneficio_realizado + beneficio_no_realizado
-capital_inicial = max(3600.0, max(1, len(df_hist)) * CAPITAL_POR_ALERTA)
+capital_inicial = CAPITAL_REFERENCIA
 rentabilidad_pct = (beneficio_acumulado / capital_inicial * 100) if capital_inicial else 0
 beneficio_realizado_curva, fechas_curva, beneficios_curva = calcular_resultados(
     df_hist, beneficio_no_realizado
@@ -3986,9 +3994,16 @@ def render_opportunity_card(row, compact=False, ribbon=False):
     take_profit = safe_float(row.get("Take_Profit"))
     ratio_rr = safe_float(row.get("Ratio_RR"))
 
-    beneficio_posicion, porcentaje_posicion = calcular_pnl_posicion(
-        precio_actual, precio_entrada, CAPITAL_POR_ALERTA
-    )
+    acciones_posicion = safe_float(row.get("Acciones"))
+    nominal_posicion = safe_float(row.get("Nominal"))
+    if acciones_posicion is not None and acciones_posicion > 0 and precio_entrada and precio_entrada > 0 and precio_actual is not None:
+        beneficio_posicion = (float(precio_actual) - float(precio_entrada)) * acciones_posicion
+        porcentaje_posicion = (float(precio_actual) - float(precio_entrada)) / float(precio_entrada) * 100
+    else:
+        beneficio_posicion, porcentaje_posicion = calcular_pnl_posicion(
+            precio_actual, precio_entrada,
+            nominal_posicion if nominal_posicion is not None and nominal_posicion > 0 else CAPITAL_POR_ALERTA
+        )
 
     if beneficio_posicion is None or porcentaje_posicion is None:
         performance_text = "—"
