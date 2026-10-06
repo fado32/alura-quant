@@ -45,16 +45,22 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY) if SUPABASE_URL and SUPABAS
 MODO_EJECUCION = os.getenv("ALURA_MODO", "AUTO").strip()
 # AUTO | 14 | 18 | 22
 
-CAPITAL = 100000.0
+CAPITAL = 10000.0
 RIESGO_POR_OPERACION = 0.005
 ATR_MULTIPLICADOR = 1.75
+ATR_MULT_BAJA_VOL = 1.50
+ATR_MULT_ALTA_VOL = 2.00
 RR_TARGET = 2.5
 RR_MINIMO_PERMITIDO = 1.5  # Ratio R:R mínimo exigido tras ajustar a resistencia
-UMBRAL_SCORE_18 = 55
-UMBRAL_SCORE_14 = 55
+UMBRAL_SCORE_18 = 60
+UMBRAL_SCORE_14 = 60
 LIQUIDEZ_MIN_EUR = 500000
+LIQUIDEZ_PERCENTIL_MIN = 0.25
+ATR_PCT_MAX_SOFT = 0.08
 CUARENTENA_STOP_DIAS = 15
 TAMANO_LOTE = 50
+CAPITAL_ASIGNACION_MIN_PCT = 0.05
+CAPITAL_ASIGNACION_MAX_PCT = 0.10
 
 # ------------------------------------------------------------
 # YAHOO
@@ -427,6 +433,68 @@ def preparar_indicadores(d):
 # ESTADO ACTUAL Y PROCESAMIENTO
 # ============================================================
 
+def calcular_score_cuantitativo(price, e50, e200, rsi_actual, roc20, rvol, clv, ruptura, atr_actual):
+    """Score cuantitativo 0-100. Los filtros operativos críticos se aplican aparte."""
+    score = 0.0
+    razones = []
+
+    # Tendencia: 35 puntos
+    if price > e50:
+        score += 15
+        razones.append("Precio > EMA50")
+    if e50 > e200:
+        score += 20
+        razones.append("EMA50 > EMA200")
+
+    # RSI continuo: premia momentum sin convertir 55/75 en fronteras artificiales.
+    if 50 <= rsi_actual <= 72:
+        rsi_score = 15 * min(1.0, max(0.0, (rsi_actual - 50) / 22))
+        score += rsi_score
+        if rsi_actual >= 55:
+            razones.append("RSI en zona de momentum")
+    elif 72 < rsi_actual <= 80:
+        score += max(0.0, 15 * (80 - rsi_actual) / 8)
+        razones.append("RSI elevado, momentum aún válido")
+
+    # ROC20 continuo hasta 10 puntos.
+    roc_score = min(10.0, max(0.0, roc20))
+    if roc_score > 0:
+        score += roc_score
+        if roc20 > 5:
+            razones.append("ROC20 positivo")
+
+    # RVOL continuo desde el mínimo operativo de 1.2x hasta 1.5x+.
+    if rvol >= 1.2:
+        rvol_score = min(15.0, 8.0 + (rvol - 1.2) / 0.3 * 7.0)
+        score += rvol_score
+        razones.append("RVOL >= 1.5x" if rvol >= 1.5 else "RVOL >= 1.2x")
+
+    # Calidad de cierre.
+    if clv >= 0.55:
+        score += min(5.0, (clv - 0.55) / 0.25 * 5.0)
+        if clv >= 0.70:
+            razones.append("Cierre cerca de máximos")
+
+    # Breakout + presión compradora previa al breakout.
+    if ruptura:
+        score += 15
+        razones.append("Ruptura máximo 20 sesiones")
+    elif price >= e50 and rvol >= 1.5:
+        score += 5
+        razones.append("Presión compradora sin ruptura completa")
+
+    # ATR relativo: premia volatilidad operable y penaliza suavemente la extrema.
+    atr_pct = atr_actual / price if price > 0 else 0.0
+    if 0.015 <= atr_pct <= 0.05:
+        score += 5
+        razones.append("Volatilidad operable")
+    elif atr_pct > ATR_PCT_MAX_SOFT:
+        score -= min(8.0, (atr_pct - ATR_PCT_MAX_SOFT) / 0.02 * 4.0)
+        razones.append("ATR relativo elevado")
+
+    return int(round(max(0.0, min(100.0, score)))), razones
+
+
 def obtener_estado_actual(t, d):
     if d is None:
         return None
@@ -442,7 +510,6 @@ def obtener_estado_actual(t, d):
         "Close", "E50", "E200", "RSI", "ATR", "VM20",
         "TO20", "ROC20", "H20", "Volume", "CLV"
     ]
-
     valores = {}
     for campo in requeridos:
         if campo not in x.index:
@@ -466,37 +533,25 @@ def obtener_estado_actual(t, d):
 
     rvol = volume / vm20 if vm20 > 0 else 0.0
     ruptura = price > h20
-
-    score = 0
-    razones = []
-    tests = [
-        (price > e50, 15, "Precio > EMA50"),
-        (e50 > e200, 20, "EMA50 > EMA200"),
-        (55 <= rsi_actual <= 75, 15, "RSI 55-75"),
-        (roc20 > 5, 10, "ROC20 > 5%"),
-        (rvol >= 1.5, 15, "RVOL >= 1.5x"),
-        (1.2 <= rvol < 1.5, 8, "RVOL >= 1.2x"),
-        (clv >= .70, 5, "Cierre cerca de máximos"),
-        (ruptura, 15, "Ruptura máximo 20 sesiones")
-    ]
-
-    for condicion, puntos, texto in tests:
-        if condicion:
-            score += puntos
-            razones.append(texto)
+    score, razones = calcular_score_cuantitativo(
+        price, e50, e200, rsi_actual, roc20, rvol, clv, ruptura, atr_actual
+    )
 
     info = MAESTRO_ACTIVOS.get(t, (t, "General", "📈"))
     fecha_datos = ultima_sesion_real(d)
+    atr_pct = atr_actual / price * 100 if price > 0 else 0.0
 
     return {
         "ticker": t, "empresa": info[0], "sector": info[1], "icono": info[2],
-        "precio": round(price, 2), "score": int(score), "rvol": round(rvol, 2),
+        "precio": round(price, 2), "score": score, "rvol": round(rvol, 2),
         "rsi": round(rsi_actual, 2), "roc20": round(roc20, 2), "atr": round(atr_actual, 2),
-        "e50": round(e50, 2), "e200": round(e200, 2), "razones": "; ".join(razones),
+        "atr_pct": round(atr_pct, 2), "e50": round(e50, 2), "e200": round(e200, 2),
+        "razones": "; ".join(razones),
         "soporte": round(float(d.Low.iloc[-16:-1].min()), 2),
         "resistencia": round(float(d.High.iloc[-61:-1].max()), 2),
         "liquidez": round(liquidez, 2), "fecha_datos": fecha_datos
     }
+
 
 def procesar_dataframe_activo(t, d):
     estado = obtener_estado_actual(t, d)
@@ -510,6 +565,7 @@ def procesar_dataframe_activo(t, d):
     e200 = estado["e200"]
     liquidez = estado["liquidez"]
 
+    # Filtros estructurales duros: liquidez, score, volumen y tendencia.
     if liquidez < LIQUIDEZ_MIN_EUR:
         return None
     umbral = UMBRAL_SCORE_14 if modo == "14" else UMBRAL_SCORE_18
@@ -519,48 +575,93 @@ def procesar_dataframe_activo(t, d):
     soporte = estado["soporte"]
     resistencia = estado["resistencia"]
     atr_actual = estado["atr"]
-    
-    # Cálculo inicial de Stop Loss
-    stop = min(precio - ATR_MULTIPLICADOR * atr_actual, soporte * .99)
+
+    # Stop adaptativo al régimen de volatilidad. Mantiene estructura + ATR.
+    atr_pct = atr_actual / precio if precio > 0 else 0.0
+    if atr_pct < 0.02:
+        multiplicador_atr = ATR_MULT_BAJA_VOL
+    elif atr_pct > 0.05:
+        multiplicador_atr = ATR_MULT_ALTA_VOL
+    else:
+        multiplicador_atr = ATR_MULTIPLICADOR
+
+    stop = min(precio - multiplicador_atr * atr_actual, soporte * .99)
     riesgo_unitario = precio - stop
 
     if riesgo_unitario <= 0 or riesgo_unitario > precio * .20:
         return None
 
-    # --- TAKE PROFIT HÍBRIDO (R:R + Resistencia Estructural) ---
+    # TP híbrido: objetivo 2.5R limitado por resistencia estructural.
     take_profit_teorico = precio + RR_TARGET * riesgo_unitario
-    
-    # Si la resistencia técnica se encuentra por debajo del objetivo teórico, 
-    # ajustamos el Take Profit a la resistencia para ser más realistas.
     if resistencia > precio and resistencia < take_profit_teorico:
         take_profit = resistencia
     else:
         take_profit = take_profit_teorico
 
-    # Comprobamos el Ratio R:R real resultante tras el ajuste estructural
     beneficio_unitario = take_profit - precio
     ratio_rr_real = beneficio_unitario / riesgo_unitario if riesgo_unitario > 0 else 0
 
-    # Si el recorrido hasta la resistencia es insuficiente, descartamos la señal
+    # Si la resistencia deja menos de 1.5R, la señal no entra.
     if ratio_rr_real < RR_MINIMO_PERMITIDO:
         return None
-    # -----------------------------------------------------------
 
-    acciones = int((CAPITAL * RIESGO_POR_OPERACION) / riesgo_unitario)
+    # Dimensionamiento híbrido: el riesgo por operación sigue siendo la referencia,
+    # pero el nominal invertido se adapta también a la calidad de la señal.
+    # Score 60 -> 5% del capital; Score 100 -> 10% del capital.
+    factor_score = (score - UMBRAL_SCORE_14) / max(1.0, 100.0 - UMBRAL_SCORE_14)
+    factor_score = max(0.0, min(1.0, factor_score))
+    capital_asignado_pct = CAPITAL_ASIGNACION_MIN_PCT + (
+        CAPITAL_ASIGNACION_MAX_PCT - CAPITAL_ASIGNACION_MIN_PCT
+    ) * factor_score
+    nominal_objetivo = CAPITAL * capital_asignado_pct
+
+    # El tamaño final respeta simultáneamente el presupuesto de riesgo y el
+    # presupuesto nominal adaptativo. Si el límite nominal manda, el riesgo
+    # monetario real queda por debajo del 0,5%, nunca por encima.
+    acciones_por_riesgo = int((CAPITAL * RIESGO_POR_OPERACION) / riesgo_unitario)
+    acciones_por_nominal = int(nominal_objetivo / precio)
+    acciones = min(acciones_por_riesgo, acciones_por_nominal)
     if acciones < 1:
         return None
 
-    info = MAESTRO_ACTIVOS.get(t, (t, "General", "📈"))
+    nominal_real = acciones * precio
+    riesgo_real = acciones * riesgo_unitario
 
+    info = MAESTRO_ACTIVOS.get(t, (t, "General", "📈"))
     return {
         "ticker": t, "empresa": info[0], "sector": info[1], "icono": info[2], "modo": modo,
         "precio": precio, "score": estado["score"], "rvol": estado["rvol"], "rsi": estado["rsi"],
         "roc20": estado["roc20"], "atr": estado["atr"], "e50": estado["e50"], "e200": estado["e200"],
         "razones": estado["razones"], "soporte": soporte, "resistencia": resistencia,
         "stop": round(stop, 2), "tp": round(take_profit, 2), "acciones": acciones,
-        "nominal": round(acciones * precio, 2), "riesgo": round(acciones * riesgo_unitario, 2),
-        "fecha_datos": estado["fecha_datos"]
+        "nominal": round(nominal_real, 2), "riesgo": round(riesgo_real, 2),
+        "capital_asignado_pct": round(nominal_real / CAPITAL * 100, 2),
+        "ratio_rr": round(ratio_rr_real, 2), "atr_pct": estado.get("atr_pct", 0.0),
+        "liquidez": estado.get("liquidez", 0.0), "fecha_datos": estado["fecha_datos"]
     }
+
+
+def filtrar_liquidez_relativa(candidatos):
+    """Elimina solo el tramo inferior de liquidez entre candidatos válidos.
+
+    No limita el número de alertas ni introduce sector/correlación; todos los
+    candidatos restantes pasan al guardado.
+    """
+    if not candidatos:
+        return []
+    valores = sorted(float(c.get("liquidez", 0) or 0) for c in candidatos)
+    if len(valores) <= 1:
+        for c in candidatos:
+            c["liquidez_percentil"] = 1.0
+        return candidatos
+
+    for c in candidatos:
+        valor = float(c.get("liquidez", 0) or 0)
+        menores = sum(v <= valor for v in valores) - 1
+        percentil = menores / (len(valores) - 1)
+        c["liquidez_percentil"] = round(percentil, 3)
+
+    return [c for c in candidatos if c["liquidez_percentil"] >= LIQUIDEZ_PERCENTIL_MIN]
 
 
 # ============================================================
@@ -854,49 +955,73 @@ def auditar():
             continue
         ticker = str(r.get("Ticker", "")).strip()
         fecha_creacion = str(r.get("Fecha", ""))
-        if not ticker: continue
+        if not ticker:
+            continue
 
         try:
             fecha_alerta = pd.to_datetime(r["Fecha"]).date()
             inicio = fecha_alerta + timedelta(days=1)
-            if inicio > hoy: continue
+            if inicio > hoy:
+                continue
 
             datos, _ = descargar_historico_ticker(ticker, period=PERIODO_AUDITORIA)
-            if datos is None: continue
+            if datos is None:
+                continue
 
             datos_auditoria = filtrar_desde_fecha(datos, inicio)
-            if datos_auditoria is None or datos_auditoria.empty: continue
+            if datos_auditoria is None or datos_auditoria.empty:
+                continue
 
             sl = float(r["Stop_Loss"])
             stop_inicial_valor = pd.to_numeric(pd.Series([r.get("Stop_Loss_Inicial")]), errors="coerce").iloc[0]
             sl_inicial = float(stop_inicial_valor) if pd.notna(stop_inicial_valor) else sl
             tp = float(r["Take_Profit"])
             entrada_auditoria = float(r["Precio_Alerta"])
+            riesgo_inicial = abs(entrada_auditoria - sl_inicial)
             fecha_be = pd.to_datetime(r.get("Fecha_Activacion_Breakeven"), errors="coerce")
             fecha_be_dia = fecha_be.date() if not pd.isna(fecha_be) else None
+
+            ratio_rr_guardado = pd.to_numeric(pd.Series([r.get("Ratio_RR")]), errors="coerce").iloc[0]
+            if pd.isna(ratio_rr_guardado) and riesgo_inicial > 0:
+                ratio_rr_guardado = (tp - entrada_auditoria) / riesgo_inicial
+            ratio_rr_guardado = float(ratio_rr_guardado) if pd.notna(ratio_rr_guardado) else RR_TARGET
+
+            # MAE/MFE se expresan en R usando el riesgo inicial, para que sean
+            # comparables entre operaciones aunque el stop haya pasado a breakeven.
+            mae_r = 0.0
+            mfe_r = 0.0
+
             for fecha, vela in datos_auditoria.iterrows():
                 try:
                     fecha_comparable = pd.Timestamp(fecha).date()
                 except Exception:
                     continue
-                if fecha_comparable < inicio: continue
+                if fecha_comparable < inicio:
+                    continue
 
                 try:
                     low, high = float(vela.Low), float(vela.High)
                 except Exception:
                     continue
+                if pd.isna(low) or pd.isna(high):
+                    continue
 
-                if pd.isna(low) or pd.isna(high): continue
+                if riesgo_inicial > 0:
+                    mae_r = min(mae_r, (low - entrada_auditoria) / riesgo_inicial)
+                    mfe_r = max(mfe_r, (high - entrada_auditoria) / riesgo_inicial)
 
                 stop_vigente = sl_inicial
                 resultado_stop = -1.0
                 if fecha_be_dia and fecha_comparable > fecha_be_dia:
                     stop_vigente = entrada_auditoria
                     resultado_stop = 0.0
+
+                # En una vela diaria que toca SL y TP, el criterio sigue siendo
+                # conservador: asumimos primero el stop porque no conocemos el orden intradía.
                 if low <= stop_vigente:
                     estado, resultado = "STOP_SALTADO", resultado_stop
                 elif high >= tp:
-                    estado, resultado = "OBJETIVO_CUMPLIDO", RR_TARGET
+                    estado, resultado = "OBJETIVO_CUMPLIDO", ratio_rr_guardado
                 else:
                     continue
 
@@ -904,9 +1029,11 @@ def auditar():
                 actualizar_fila_en_supabase(ticker, fecha_creacion, {
                     "Estado": estado,
                     "Fecha_Salida": fecha_salida_str,
-                    "Resultado_R": resultado
+                    "Resultado_R": round(float(resultado), 4),
+                    "MAE_R": round(float(mae_r), 4),
+                    "MFE_R": round(float(mfe_r), 4)
                 })
-                print(f"{'🔴' if resultado < 0 else '🟢'} {ticker} -> {estado} | {fecha_salida_str}")
+                print(f"{'🔴' if resultado < 0 else '🟢'} {ticker} -> {estado} | {fecha_salida_str} | R={resultado:.2f} | MAE={mae_r:.2f}R | MFE={mfe_r:.2f}R")
                 break
         except Exception as e:
             print(f"⚠️ Error auditando {ticker}: {e}")
@@ -1018,8 +1145,11 @@ def main():
             except Exception as e:
                 print(f"⚠️ Error {ticker}: {e}")
 
-    nuevas_alertas.sort(key=lambda x: (x["score"], x["rvol"]), reverse=True)
-    print(f"\n📊 Nuevas señales: {len(nuevas_alertas)}")
+    antes_liquidez = len(nuevas_alertas)
+    nuevas_alertas = filtrar_liquidez_relativa(nuevas_alertas)
+    nuevas_alertas.sort(key=lambda x: (x["score"], x["rvol"], x.get("ratio_rr", 0)), reverse=True)
+    print(f"\n📊 Candidatos válidos: {antes_liquidez} | Tras filtro de liquidez relativa: {len(nuevas_alertas)}")
+    print("📌 Piloto: sin límite de alertas, sin filtro sectorial y sin filtro de correlación.")
 
     for c in nuevas_alertas:
         comentario = comentario_entrada(c)
