@@ -61,6 +61,10 @@ CUARENTENA_STOP_DIAS = 15
 TAMANO_LOTE = 50
 CAPITAL_ASIGNACION_MIN_PCT = 0.05
 CAPITAL_ASIGNACION_MAX_PCT = 0.10
+RVOL_MIN_CONFIRMACION = 1.2
+RVOL_MIN_PRE_RUPTURA = 0.9
+DISTANCIA_MAX_PRE_RUPTURA_PCT = 6.0
+COMPRESION_MAX_PRE_RUPTURA = 0.95
 
 # ------------------------------------------------------------
 # YAHOO
@@ -417,10 +421,16 @@ def preparar_indicadores(d):
     d = d.dropna(subset=["Close", "High", "Low", "Volume"])
     
     d["E20"] = d.Close.ewm(span=20, adjust=False).mean()
+    d["E20_5"] = d["E20"].shift(5)
     d["E50"] = d.Close.ewm(span=50, adjust=False).mean()
     d["E200"] = d.Close.ewm(span=200, adjust=False).mean()
     d["RSI"] = rsi(d.Close)
     d["ATR"] = atr(d)
+    d["ATR10"] = atr(d, 10)
+    d["ATR30"] = atr(d, 30)
+    # Usa la sesión anterior para que una vela diaria todavía abierta no
+    # parezca comprimida simplemente por llevar pocas horas de negociación.
+    d["COMPRESION_ATR"] = d["ATR10"].shift(1) / d["ATR30"].shift(1).replace(0, pd.NA)
     d["VM20"] = d.Volume.rolling(20).mean()
     d["TO20"] = (d.Close * d.Volume).rolling(20).mean()
     d["ROC20"] = d.Close.pct_change(20) * 100
@@ -433,41 +443,52 @@ def preparar_indicadores(d):
 # ESTADO ACTUAL Y PROCESAMIENTO
 # ============================================================
 
-def calcular_score_cuantitativo(price, e50, e200, rsi_actual, roc20, rvol, clv, ruptura, atr_actual):
-    """Score cuantitativo 0-100. Los filtros operativos críticos se aplican aparte."""
+def calcular_score_cuantitativo(
+    price, e20, e20_hace_5, e50, e200, rsi_actual, roc20, rvol, clv,
+    ruptura, distancia_maximo_pct, compresion_atr, atr_actual
+):
+    """Score 0-100 con prioridad a setups de aproximación antes de la ruptura."""
     score = 0.0
     razones = []
 
-    # Tendencia: 35 puntos
+    # Tendencia principal: 30 puntos.
     if price > e50:
-        score += 15
+        score += 12
         razones.append("Precio > EMA50")
     if e50 > e200:
-        score += 20
+        score += 18
         razones.append("EMA50 > EMA200")
 
-    # RSI continuo: premia momentum sin convertir 55/75 en fronteras artificiales.
-    if 50 <= rsi_actual <= 72:
-        rsi_score = 15 * min(1.0, max(0.0, (rsi_actual - 50) / 22))
+    # Tendencia corta ascendente: confirma que el precio se aproxima al pivot.
+    tendencia_corta = price >= e20 and e20 > e20_hace_5
+    if price >= e20:
+        score += 2.0
+    if e20 > e20_hace_5:
+        score += 3.0
+        razones.append("EMA20 ascendente")
+
+    # RSI continuo: premia momentum sin favorecer una condición sobrecomprada.
+    if 50 <= rsi_actual <= 68:
+        rsi_score = 12 * min(1.0, max(0.0, (rsi_actual - 50) / 18))
         score += rsi_score
         if rsi_actual >= 55:
             razones.append("RSI en zona de momentum")
-    elif 72 < rsi_actual <= 80:
-        score += max(0.0, 15 * (80 - rsi_actual) / 8)
+    elif 68 < rsi_actual <= 78:
+        score += max(0.0, 12 * (78 - rsi_actual) / 10)
         razones.append("RSI elevado, momentum aún válido")
 
-    # ROC20 continuo hasta 10 puntos.
-    roc_score = min(10.0, max(0.0, roc20))
+    # ROC20 continuo hasta 8 puntos.
+    roc_score = min(8.0, max(0.0, roc20))
     if roc_score > 0:
         score += roc_score
         if roc20 > 5:
             razones.append("ROC20 positivo")
 
-    # RVOL continuo desde el mínimo operativo de 1.2x hasta 1.5x+.
-    if rvol >= 1.2:
-        rvol_score = min(15.0, 8.0 + (rvol - 1.2) / 0.3 * 7.0)
+    # Premia expansión gradual de volumen, sin exigir el pico típico del breakout.
+    if rvol >= 0.8:
+        rvol_score = min(12.0, 4.0 + (rvol - 0.8) / 0.7 * 8.0)
         score += rvol_score
-        razones.append("RVOL >= 1.5x" if rvol >= 1.5 else "RVOL >= 1.2x")
+        razones.append("RVOL >= 1.5x" if rvol >= 1.5 else ("RVOL >= 1.2x" if rvol >= 1.2 else "Volumen en expansión"))
 
     # Calidad de cierre.
     if clv >= 0.55:
@@ -475,13 +496,32 @@ def calcular_score_cuantitativo(price, e50, e200, rsi_actual, roc20, rvol, clv, 
         if clv >= 0.70:
             razones.append("Cierre cerca de máximos")
 
-    # Breakout + presión compradora previa al breakout.
+    # Proximidad al máximo previo: la estructura cercana a ruptura suma antes del cruce.
+    if not ruptura and 0 <= distancia_maximo_pct <= DISTANCIA_MAX_PRE_RUPTURA_PCT:
+        score += 10.0 * (1.0 - distancia_maximo_pct / DISTANCIA_MAX_PRE_RUPTURA_PCT)
+        razones.append("Precio próximo al máximo de 20 sesiones")
+
+    # La contracción de volatilidad ayuda a detectar bases antes de la expansión.
+    if compresion_atr <= 0.8:
+        score += 8.0
+        razones.append("Volatilidad en fuerte contracción")
+    elif compresion_atr < 1.2:
+        score += 8.0 * (1.2 - compresion_atr) / 0.4
+        razones.append("Volatilidad en contracción")
+
+    # La ruptura confirma el movimiento, pero pesa menos que la preparación previa.
     if ruptura:
-        score += 15
+        score += 6
         razones.append("Ruptura máximo 20 sesiones")
-    elif price >= e50 and rvol >= 1.5:
-        score += 5
-        razones.append("Presión compradora sin ruptura completa")
+
+    pre_ruptura = (
+        not ruptura
+        and 0 <= distancia_maximo_pct <= DISTANCIA_MAX_PRE_RUPTURA_PCT
+        and compresion_atr <= COMPRESION_MAX_PRE_RUPTURA
+        and tendencia_corta
+    )
+    if pre_ruptura:
+        razones.append("Setup pre-ruptura")
 
     # ATR relativo: premia volatilidad operable y penaliza suavemente la extrema.
     atr_pct = atr_actual / price if price > 0 else 0.0
@@ -492,7 +532,7 @@ def calcular_score_cuantitativo(price, e50, e200, rsi_actual, roc20, rvol, clv, 
         score -= min(8.0, (atr_pct - ATR_PCT_MAX_SOFT) / 0.02 * 4.0)
         razones.append("ATR relativo elevado")
 
-    return int(round(max(0.0, min(100.0, score)))), razones
+    return int(round(max(0.0, min(100.0, score)))), razones, pre_ruptura
 
 
 def obtener_estado_actual(t, d):
@@ -507,8 +547,8 @@ def obtener_estado_actual(t, d):
     x = d.iloc[-1]
 
     requeridos = [
-        "Close", "E50", "E200", "RSI", "ATR", "VM20",
-        "TO20", "ROC20", "H20", "Volume", "CLV"
+        "Close", "E20", "E20_5", "E50", "E200", "RSI", "ATR", "ATR10", "ATR30",
+        "COMPRESION_ATR", "VM20", "TO20", "ROC20", "H20", "Volume", "CLV"
     ]
     valores = {}
     for campo in requeridos:
@@ -520,6 +560,8 @@ def obtener_estado_actual(t, d):
         valores[campo] = float(valor)
 
     price = valores["Close"]
+    e20 = valores["E20"]
+    e20_hace_5 = valores["E20_5"]
     e50 = valores["E50"]
     e200 = valores["E200"]
     rsi_actual = valores["RSI"]
@@ -530,11 +572,14 @@ def obtener_estado_actual(t, d):
     h20 = valores["H20"]
     volume = valores["Volume"]
     clv = valores["CLV"]
+    compresion_atr = valores["COMPRESION_ATR"]
 
     rvol = volume / vm20 if vm20 > 0 else 0.0
     ruptura = price > h20
-    score, razones = calcular_score_cuantitativo(
-        price, e50, e200, rsi_actual, roc20, rvol, clv, ruptura, atr_actual
+    distancia_maximo_pct = ((h20 - price) / h20 * 100) if h20 > 0 else 0.0
+    score, razones, pre_ruptura = calcular_score_cuantitativo(
+        price, e20, e20_hace_5, e50, e200, rsi_actual, roc20, rvol, clv,
+        ruptura, distancia_maximo_pct, compresion_atr, atr_actual
     )
 
     info = MAESTRO_ACTIVOS.get(t, (t, "General", "📈"))
@@ -544,6 +589,7 @@ def obtener_estado_actual(t, d):
     return {
         "ticker": t, "empresa": info[0], "sector": info[1], "icono": info[2],
         "precio": round(price, 2), "score": score, "rvol": round(rvol, 2),
+        "pre_ruptura": pre_ruptura,
         "rsi": round(rsi_actual, 2), "roc20": round(roc20, 2), "atr": round(atr_actual, 2),
         "atr_pct": round(atr_pct, 2), "e50": round(e50, 2), "e200": round(e200, 2),
         "razones": "; ".join(razones),
@@ -569,7 +615,8 @@ def procesar_dataframe_activo(t, d):
     if liquidez < LIQUIDEZ_MIN_EUR:
         return None
     umbral = UMBRAL_SCORE_14 if modo == "14" else UMBRAL_SCORE_18
-    if score < umbral or rvol < 1.2 or not (precio > e50 and e50 > e200):
+    rvol_minimo = RVOL_MIN_PRE_RUPTURA if estado["pre_ruptura"] else RVOL_MIN_CONFIRMACION
+    if score < umbral or rvol < rvol_minimo or not (precio > e50 and e50 > e200):
         return None
 
     soporte = estado["soporte"]
@@ -685,8 +732,14 @@ def comentario_entrada(c):
 
 def evaluar_evolucion_estrategia(original, actual):
     cambios = []
-    delta_score = float(actual["score"]) - float(original["score"])
-    cambios.append("score claramente reforzado" if delta_score >= 10 else ("score claramente deteriorado" if delta_score <= -10 else "score relativamente estable"))
+    delta_rsi = float(actual["rsi"]) - float(original["rsi"])
+    delta_roc = float(actual["roc20"]) - float(original["roc20"])
+    impulso = (1 if delta_rsi >= 3 else (-1 if delta_rsi <= -3 else 0))
+    impulso += (1 if delta_roc >= 1.5 else (-1 if delta_roc <= -1.5 else 0))
+    cambios.append(
+        "momentum mejorado" if impulso > 0
+        else ("momentum deteriorado" if impulso < 0 else "momentum estable")
+    )
     
     tendencia = float(actual["precio"]) > float(actual["e50"]) and float(actual["e50"]) > float(actual["e200"])
     cambios.append("estructura de tendencia preservada" if tendencia else "estructura de tendencia deteriorada")
@@ -700,9 +753,18 @@ def estado_estrategia(original, actual):
     fuertes, debiles = 0, 0
     if float(actual["precio"]) > float(actual["e50"]) > float(actual["e200"]): fuertes += 1
     else: debiles += 1
-    
-    if float(actual["score"]) >= float(original["score"]) + 10: fuertes += 1
-    elif float(actual["score"]) <= float(original["score"]) - 10: debiles += 1
+
+    delta_rsi = float(actual["rsi"]) - float(original["rsi"])
+    delta_roc = float(actual["roc20"]) - float(original["roc20"])
+    impulso = (1 if delta_rsi >= 3 else (-1 if delta_rsi <= -3 else 0))
+    impulso += (1 if delta_roc >= 1.5 else (-1 if delta_roc <= -1.5 else 0))
+    if impulso > 0: fuertes += 1
+    elif impulso < 0: debiles += 1
+
+    rvol_original = float(original["rvol"])
+    rvol_actual = float(actual["rvol"])
+    if rvol_actual >= rvol_original * 1.10: fuertes += 1
+    elif rvol_actual <= rvol_original * 0.80: debiles += 1
 
     if debiles >= 3: return "TESIS_INVALIDADA"
     if debiles >= 2: return "TESIS_DEBILITADA"
@@ -903,7 +965,6 @@ def actualizar_alertas_activas():
             if modo == "22" or (not fecha_guardada or fecha_mercado > fecha_guardada):
                 original = {
                     "empresa": df.at[i, "Empresa"], "ticker": ticker,
-                    "score": float(df.at[i, "Score_Entrada"] or 0),
                     "rvol": float(df.at[i, "RVOL_Entrada"] or 0),
                     "rsi": float(df.at[i, "RSI_Entrada"] or 0),
                     "roc20": float(df.at[i, "ROC20_Entrada"] or 0),
