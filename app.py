@@ -75,7 +75,6 @@ def comprobar_suscripcion(email):
 # ============================================================
 
 CAPITAL_POR_ALERTA = 300.0  # Fallback únicamente para registros históricos sin Acciones/Nominal.
-CAPITAL_REFERENCIA = 10000.0
 
 MAPEO_COLUMNAS_SUPABASE = {
     "Fecha": "fecha", "Ticker": "ticker", "Empresa": "empresa", "Sector": "sector", "Icono": "icono", "Modo": "modo",
@@ -428,6 +427,14 @@ def calcular_beneficio_realizado(df):
     if df is None or df.empty:
         return 0.0
     return float(sum(calcular_beneficio_fila_cerrada(row) for _, row in df.iterrows()))
+
+
+def calcular_capital_invertido(df):
+    """Suma el nominal registrado para las alertas del historial."""
+    if df is None or df.empty or "Nominal" not in df.columns:
+        return 0.0
+    nominales = pd.to_numeric(df["Nominal"], errors="coerce").fillna(0)
+    return float(nominales[nominales > 0].sum())
 
 # ============================================================
 # BENEFICIO NO REALIZADO
@@ -3101,7 +3108,7 @@ total_operaciones_historicas = max(
     len(df_hist)
 )
 
-CAPITAL_INICIAL = CAPITAL_REFERENCIA
+CAPITAL_INICIAL = calcular_capital_invertido(df_hist)
 
 rentabilidad_pct = (
     beneficio_acumulado
@@ -3189,7 +3196,8 @@ beneficio_no_realizado, posiciones_con_beneficio, posiciones_con_perdida = calcu
     df_activas_global, precios_actuales
 )
 beneficio_acumulado = beneficio_realizado + beneficio_no_realizado
-capital_inicial = CAPITAL_REFERENCIA
+CAPITAL_INICIAL = calcular_capital_invertido(df_hist)
+capital_inicial = CAPITAL_INICIAL
 rentabilidad_pct = (beneficio_acumulado / capital_inicial * 100) if capital_inicial else 0
 beneficio_realizado_curva, fechas_curva, beneficios_curva = calcular_resultados(
     df_hist, beneficio_no_realizado
@@ -4047,7 +4055,8 @@ def render_opportunity_card(row, compact=False, ribbon=False):
         tp_pct = positions["tp"] if positions["tp"] is not None else 100
 
         risk_width = max(0, min(entry_pct, current_pct) - sl_pct)
-        reward_width = max(0, tp_pct - max(entry_pct, current_pct))
+        reward_start_pct = max(entry_pct, current_pct)
+        reward_width = max(0, tp_pct - reward_start_pct)
 
         position_tracker = f"""
         <div class="position-wrapper">
@@ -4059,7 +4068,7 @@ def render_opportunity_card(row, compact=False, ribbon=False):
             </div>
             <div class="position-track">
                 <div class="position-risk" style="left:{sl_pct:.2f}%;width:{risk_width:.2f}%;"></div>
-                <div class="position-reward" style="left:{current_pct:.2f}%;width:{reward_width:.2f}%;"></div>
+                <div class="position-reward" style="left:{reward_start_pct:.2f}%;width:{reward_width:.2f}%;"></div>
                 <div class="position-marker marker-sl" style="left:{sl_pct:.2f}%;"></div>
                 <div class="position-marker marker-entry" style="left:{entry_pct:.2f}%;"></div>
                 <div class="position-marker marker-current" style="left:{current_pct:.2f}%;"></div>
@@ -4301,7 +4310,7 @@ if active_page == "Inicio":
         </script></body></html>
         """, height=112, scrolling=False)
     with kpi_cols[1]:
-        render_html(f"<div class='aq-kpi'><div class='aq-kpi-label'>Rentabilidad</div><div class='aq-kpi-value' style='color:{color_resultado};'>{formatear_numero(rentabilidad_pct,2,'%',True)}</div><div class='aq-kpi-detail'>Sobre {formatear_numero(CAPITAL_INICIAL,0,' €')}</div></div>")
+        render_html(f"<div class='aq-kpi'><div class='aq-kpi-label'>Rentabilidad</div><div class='aq-kpi-value' style='color:{color_resultado};'>{formatear_numero(rentabilidad_pct,2,'%',True)}</div><div class='aq-kpi-detail'>Sobre {formatear_numero(CAPITAL_INICIAL,0,' €')} de nominal</div></div>")
     with kpi_cols[2]:
         render_html(f"<div class='aq-kpi'><div class='aq-kpi-label'>Posiciones activas</div><div class='aq-kpi-value'>{activas}</div><div class='aq-kpi-detail'>{TOTAL_ACTIVOS_UNIVERSO} activos monitorizados</div></div>")
     with kpi_cols[3]:
@@ -4478,7 +4487,7 @@ if active_page == "Performance":
         <div class="performance-total">
           <span>BENEFICIO TOTAL</span>
           <strong style="color:{color_resultado};">{formatear_numero(beneficio_acumulado,2," €",True)}</strong>
-          <small>{formatear_numero(rentabilidad_pct,2,"%",True)} sobre {formatear_numero(CAPITAL_INICIAL,0," €")}</small>
+          <small>{formatear_numero(rentabilidad_pct,2,"%",True)} sobre {formatear_numero(CAPITAL_INICIAL,0," €")} de nominal</small>
         </div>
       </div>
 
@@ -4533,7 +4542,7 @@ if active_page == "Performance":
         <div class="performance-chart-footer">
           <span>Realizado: <strong>{formatear_numero(beneficio_realizado,2," €",True)}</strong></span>
           <span>Abierto: <strong>{formatear_numero(beneficio_no_realizado,2," €",True)}</strong></span>
-          <span>Capital de referencia: <strong>{formatear_numero(CAPITAL_INICIAL,0," €")}</strong></span>
+          <span>Nominal acumulado: <strong>{formatear_numero(CAPITAL_INICIAL,0," €")}</strong></span>
         </div>
         """)
 
