@@ -59,6 +59,7 @@ LIQUIDEZ_PERCENTIL_MIN = 0.25
 ATR_PCT_MAX_SOFT = 0.08
 CUARENTENA_STOP_DIAS = 15
 TAMANO_LOTE = 50
+TAMANO_PAGINA_UNIVERSO_SUPABASE = 1000
 CAPITAL_ASIGNACION_MIN_PCT = 0.05
 CAPITAL_ASIGNACION_MAX_PCT = 0.10
 RVOL_MIN_CONFIRMACION = 1.2
@@ -113,9 +114,31 @@ def cargar_universo():
     
     if supabase:
         try:
-            response = supabase.table("universo_activos").select("ticker, empresa, sector, icono, activo").execute()
-            if response.data:
-                for r in response.data:
+            registros_supabase = []
+            ultimo_ticker = None
+            while True:
+                consulta = (
+                    supabase.table("universo_activos")
+                    .select("ticker, empresa, sector, icono, activo")
+                    .order("ticker")
+                    .limit(TAMANO_PAGINA_UNIVERSO_SUPABASE)
+                )
+                # Paginación por clave: sigue funcionando aunque Supabase tenga
+                # configurado un máximo por respuesta inferior a 1.000 filas.
+                if ultimo_ticker is not None:
+                    consulta = consulta.gt("ticker", ultimo_ticker)
+                pagina = consulta.execute().data or []
+                if not pagina:
+                    break
+
+                registros_supabase.extend(pagina)
+                nuevo_ultimo_ticker = str(pagina[-1].get("ticker", "")).strip()
+                if not nuevo_ultimo_ticker or nuevo_ultimo_ticker == ultimo_ticker:
+                    raise RuntimeError("La paginación de universo_activos no avanzó por ticker.")
+                ultimo_ticker = nuevo_ultimo_ticker
+
+            if registros_supabase:
+                for r in registros_supabase:
                     ticker = str(r.get("ticker", "")).strip()
                     if ticker and r.get("activo", True):
                         universo[ticker] = (
@@ -123,7 +146,7 @@ def cargar_universo():
                             str(r.get("sector", "General")),
                             str(r.get("icono", "📈"))
                         )
-                print(f"✅ Universo cargado desde Supabase: {len(universo)} activos.")
+                print(f"✅ Universo cargado desde Supabase: {len(universo)} activos ({len(registros_supabase)} filas leídas).")
                 return universo
         except Exception as e:
             print(f"⚠️ Error cargando universo desde Supabase, usando respaldo base: {e}")
