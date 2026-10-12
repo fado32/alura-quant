@@ -1,9 +1,9 @@
 name: Enviar Onboarding
 
 on:
-  #schedule:
+  schedule:
     # Se ejecuta todos los sábados a las 10:22 UTC
-    #- cron: '12 5 * * 2,4'
+    - cron: '12 7 * * 1-6'
   workflow_dispatch: # Permite lanzarlo manualmente desde la pestaña "Actions"
 
 jobs:
