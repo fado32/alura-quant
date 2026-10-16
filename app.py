@@ -3952,7 +3952,18 @@ div[data-testid="stHorizontalBlock"]:has(.st-key-open_analysis_pro) > div[data-t
 .st-key-open_analysis_pro button{border-radius:10px!important;font-weight:700!important;white-space:nowrap!important;min-height:38px!important}
 .st-key-open_analysis_pro button p{white-space:nowrap!important;margin:0!important}
 .aq-brand{white-space:nowrap!important}
-@media(max-width:650px){div[data-testid="stHorizontalBlock"]:has(.st-key-open_analysis_pro){display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;align-items:center!important}}
+@media(max-width:650px){
+  div[data-testid="stHorizontalBlock"]:has(.st-key-open_analysis_pro){
+    display:grid!important;grid-template-columns:minmax(0,1fr) max-content!important;
+    width:100%!important;max-width:100%!important;box-sizing:border-box!important;
+    padding:0 12px 8px!important;column-gap:8px!important;overflow:hidden!important
+  }
+  div[data-testid="stHorizontalBlock"]:has(.st-key-open_analysis_pro)>div[data-testid="column"]{
+    width:auto!important;min-width:0!important;max-width:100%!important;flex:none!important
+  }
+  .st-key-open_analysis_pro{justify-self:end!important;max-width:100%!important}
+  .st-key-open_analysis_pro button{font-size:12px!important;padding:0 10px!important}
+}
 </style>
 """, unsafe_allow_html=True)
 def _abrir_analisis_pro():
