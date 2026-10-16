@@ -310,47 +310,49 @@ def generar_pdf(symbol: str, periodo_label: str, data: pd.DataFrame,
         ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
     ]))
     story.append(table)
-    if semaforo:
-        status_colors = {"green": "#15803d", "red": "#b91c1c", "yellow": "#a16207", "gray": "#64748b"}
-        story.append(Paragraph("Semáforo del algoritmo Alura Quant", section_style))
-        overall_color = status_colors.get(semaforo.get("status"), "#64748b")
-        story.append(Paragraph(f'<font color="{overall_color}"><b>{_ascii(semaforo.get("label", "NO EVALUABLE"))}</b></font>', body_style))
-        checks = [["Categoría", "Estado", "Lectura"]]
-        for check in semaforo.get("checks", []):
-            checks.append([_ascii(check.get("category", "")),
-                           _ascii({"green": "OK", "yellow": "PARCIAL", "red": "NO", "gray": "N/D"}.get(check.get("status"), "N/D")),
-                           _ascii(check.get("detail", ""))])
-        if len(checks) > 1:
-            check_table = Table(checks, colWidths=[38 * mm, 22 * mm, 112 * mm], repeatRows=1)
-            check_table.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
-                ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#334155")),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 7), ("LEADING", (0, 0), (-1, -1), 9),
-                ("GRID", (0, 0), (-1, -1), .35, colors.HexColor("#e2e8f0")),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("LEFTPADDING", (0, 0), (-1, -1), 5), ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-                ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
-            ]))
-            story.append(check_table)
-    if commentary:
-        sections = [
-            ("Resumen ejecutivo", commentary.get("resumen_ejecutivo") or commentary.get("resumen")),
-            ("Perfil de la compañía", commentary.get("perfil_compania")),
-            ("Lectura técnica", commentary.get("lectura_tecnica")),
-            ("Contexto fundamental", commentary.get("contexto_fundamental")),
-        ]
-        for title, text in sections:
-            if text:
-                story.append(Paragraph(_ascii(title), section_style))
-                story.append(Paragraph(_ascii(text), body_style))
-        risks = commentary.get("riesgos", [])
-        if risks:
-            story.append(Paragraph("Riesgos y limitaciones", section_style))
-            story.append(Paragraph(_ascii(" • ".join(map(str, risks))), body_style))
-        if commentary.get("conclusion"):
-            story.append(Paragraph("Conclusión", section_style))
-            story.append(Paragraph(_ascii(commentary["conclusion"]), body_style))
+    status_colors = {"green": "#15803d", "red": "#b91c1c", "yellow": "#a16207", "gray": "#64748b"}
+    story.append(Paragraph("Semáforo del algoritmo Alura Quant", section_style))
+    overall_color = status_colors.get(semaforo.get("status"), "#64748b")
+    story.append(Paragraph(f'<font color="{overall_color}"><b>{_ascii(semaforo.get("label", "NO EVALUABLE"))}</b></font>', body_style))
+    checks = [["Categoría", "Estado", "Lectura"]]
+    for check in semaforo.get("checks", []):
+        check_status = check.get("status", "gray")
+        check_color = status_colors.get(check_status, "#64748b")
+        check_label = {"green": "OK", "yellow": "PARCIAL", "red": "NO", "gray": "N/D"}.get(check_status, "N/D")
+        checks.append([_ascii(check.get("category", "")),
+                       Paragraph(f'<font color="{check_color}"><b>● {check_label}</b></font>', body_style),
+                       _ascii(check.get("detail", ""))])
+    if len(checks) > 1:
+        check_table = Table(checks, colWidths=[38 * mm, 22 * mm, 112 * mm], repeatRows=1)
+        check_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f1f5f9")),
+            ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#334155")),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 7), ("LEADING", (0, 0), (-1, -1), 9),
+            ("GRID", (0, 0), (-1, -1), .35, colors.HexColor("#e2e8f0")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5), ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        story.append(check_table)
+
+    commentary = commentary or {}
+    sections = [
+        ("Resumen ejecutivo", commentary.get("resumen_ejecutivo") or commentary.get("resumen")),
+        ("Perfil de la compañía", commentary.get("perfil_compania")),
+        ("Lectura técnica", commentary.get("lectura_tecnica")),
+        ("Contexto fundamental", commentary.get("contexto_fundamental")),
+    ]
+    for title, text in sections:
+        story.append(Paragraph(_ascii(title), section_style))
+        story.append(Paragraph(_ascii(text or "No disponible en esta generación del análisis."), body_style))
+    risks = commentary.get("riesgos", [])
+    if isinstance(risks, str):
+        risks = [line.strip(" •-\t") for line in risks.splitlines() if line.strip(" •-\t")]
+    story.append(Paragraph("Riesgos y limitaciones", section_style))
+    story.append(Paragraph(_ascii(" • ".join(map(str, risks)) or "No se han identificado riesgos adicionales con los datos disponibles."), body_style))
+    story.append(Paragraph("Conclusión", section_style))
+    story.append(Paragraph(_ascii(commentary.get("conclusion") or "No disponible en esta generación del análisis."), body_style))
     story.append(Paragraph("Datos cuantitativos", section_style))
     latest = indicators.iloc[-1] if indicators is not None and not indicators.empty else {}
     story.append(Paragraph(
