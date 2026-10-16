@@ -2,7 +2,10 @@
 
 import os
 import html
+import base64
+import struct
 import unicodedata
+import zlib
 from io import BytesIO
 from typing import Any
 
@@ -259,6 +262,68 @@ def _fmt(value: Any, suffix: str = "") -> str:
         return "N/D"
 
 
+def _sparkline_png(history: pd.DataFrame, width: int = 960, height: int = 360) -> bytes | None:
+    """Dibuja una curva de cierre PNG sin dependencias gráficas externas."""
+    if history is None or history.empty or "Close" not in history:
+        return None
+    values = pd.to_numeric(history["Close"], errors="coerce").dropna().astype(float).tolist()
+    if len(values) < 2:
+        return None
+    pixels = bytearray([255] * (width * height * 3))
+
+    def paint(x: int, y: int, color: tuple[int, int, int]) -> None:
+        if 0 <= x < width and 0 <= y < height:
+            pos = (y * width + x) * 3
+            pixels[pos:pos + 3] = bytes(color)
+
+    def line(x0: int, y0: int, x1: int, y1: int, color: tuple[int, int, int]) -> None:
+        dx, sx = abs(x1 - x0), 1 if x0 < x1 else -1
+        dy, sy = -abs(y1 - y0), 1 if y0 < y1 else -1
+        error = dx + dy
+        while True:
+            paint(x0, y0, color)
+            if x0 == x1 and y0 == y1:
+                break
+            doubled = 2 * error
+            if doubled >= dy:
+                error += dy
+                x0 += sx
+            if doubled <= dx:
+                error += dx
+                y0 += sy
+
+    left, right, top, bottom = 42, width - 18, 22, height - 30
+    grid = (231, 237, 245)
+    for step in range(5):
+        y = top + (bottom - top) * step // 4
+        line(left, y, right, y, grid)
+    low, high = min(values), max(values)
+    spread = high - low or max(abs(high) * 0.01, 1.0)
+    points = []
+    for idx, value in enumerate(values):
+        x = left + round(idx * (right - left) / (len(values) - 1))
+        y = bottom - round((value - low) / spread * (bottom - top))
+        points.append((x, y))
+    blue = (37, 99, 235)
+    for first, second in zip(points, points[1:]):
+        line(first[0], first[1], second[0], second[1], blue)
+    end_color = (22, 163, 74) if values[-1] >= values[0] else (220, 38, 38)
+    ex, ey = points[-1]
+    for dy in range(-5, 6):
+        for dx in range(-5, 6):
+            if dx * dx + dy * dy <= 25:
+                paint(ex + dx, ey + dy, end_color)
+
+    raw = b"".join(b"\x00" + pixels[y * width * 3:(y + 1) * width * 3] for y in range(height))
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", zlib.crc32(kind + payload) & 0xffffffff)
+
+    return (b"\x89PNG\r\n\x1a\n" +
+            chunk(b"IHDR", struct.pack(">2I5B", width, height, 8, 2, 0, 0, 0)) +
+            chunk(b"IDAT", zlib.compress(raw, 6)) + chunk(b"IEND", b""))
+
+
 def generar_pdf(symbol: str, periodo_label: str, data: pd.DataFrame,
                 info: dict, news: Any, indicators: pd.DataFrame,
                 metrics: dict, use_ai: bool = False,
@@ -311,19 +376,18 @@ def generar_pdf(symbol: str, periodo_label: str, data: pd.DataFrame,
         ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
     ]))
     status_colors = {"green": "#15803d", "red": "#b91c1c", "yellow": "#a16207", "gray": "#64748b"}
-    checks = semaforo.get("checks", [])
+    story.append(Paragraph("Semáforo del algoritmo Alura Quant", section_style))
+    overall_color = status_colors.get(semaforo.get("status"), "#64748b")
     eligible = semaforo.get("eligible")
     decision = "CUMPLE FILTROS DE ENTRADA" if eligible is True else (
         "NO CUMPLE FILTROS DE ENTRADA" if eligible is False else "NO EVALUABLE")
-    overall_color = status_colors["green"] if eligible is True else (
-        status_colors["red"] if eligible is False else status_colors["gray"])
     decision_style = ParagraphStyle("AQDecision", parent=body_style, fontName="Helvetica-Bold",
-                                    fontSize=14, leading=17, textColor=colors.HexColor("#0b1220"))
+                                    fontSize=14, leading=17, textColor=colors.HexColor(overall_color))
     decision_banner = Table([
         [Paragraph("ALURA QUANT  |  LECTURA DEL ALGORITMO", ParagraphStyle(
             "AQBannerEyebrow", parent=body_style, fontName="Helvetica-Bold", fontSize=7,
             leading=9, textColor=colors.HexColor("#2563eb")))],
-        [Paragraph(f'<font color="{overall_color}">{_ascii(decision)}</font>', decision_style)],
+        [Paragraph(_ascii(decision), decision_style)],
     ], colWidths=[172 * mm])
     decision_banner.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), colors.white),
@@ -333,7 +397,6 @@ def generar_pdf(symbol: str, periodo_label: str, data: pd.DataFrame,
         ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
     ]))
     story.append(decision_banner)
-    story.append(Spacer(1, 3 * mm))
     commentary = commentary or {}
     card_title_style = ParagraphStyle("AQCardTitle", parent=body_style, fontName="Helvetica-Bold", fontSize=8, leading=10)
     card_body_style = ParagraphStyle("AQCardBody", parent=body_style, fontSize=7.5, leading=10)
@@ -376,8 +439,11 @@ def generar_pdf(symbol: str, periodo_label: str, data: pd.DataFrame,
     story.append(Paragraph("Métricas de mercado", section_style))
     story.append(table)
 
-    story.append(Paragraph("Lectura técnica", section_style))
-    story.append(Paragraph(_ascii(commentary.get("lectura_tecnica") or "No disponible."), body_style))
+    for title, text in [
+        ("Lectura técnica", commentary.get("lectura_tecnica")),
+    ]:
+        story.append(Paragraph(title, section_style))
+        story.append(Paragraph(_ascii(text or "No disponible."), body_style))
     risks = commentary.get("riesgos", [])
     if isinstance(risks, str):
         risks = [line.strip(" •-\t") for line in risks.splitlines() if line.strip(" •-\t")]
@@ -395,8 +461,8 @@ def generar_pdf(symbol: str, periodo_label: str, data: pd.DataFrame,
 
 def enviar_analisis_email(email: str, symbol: str,
                           semaforo: dict | None = None, commentary: dict | None = None,
-                          metrics: dict | None = None):
-    """Envía por Resend el análisis completo en el cuerpo HTML del correo."""
+                          metrics: dict | None = None, history: pd.DataFrame | None = None):
+    """Envía el análisis y su gráfica inline con Resend, sin adjuntar el PDF."""
     api_key = os.getenv("RESEND_API_KEY", "").strip()
     sender = os.getenv("RESEND_FROM", "Alura Quant <updates@aluraquant.es>").strip()
     if not api_key:
@@ -408,7 +474,6 @@ def enviar_analisis_email(email: str, symbol: str,
         metrics = metrics or {}
         semaforo = semaforo or {}
         colors_by_status = {"green": "#16834a", "red": "#c43d45", "yellow": "#d49426", "gray": "#8792a2"}
-        checks = semaforo.get("checks", [])
         eligible = semaforo.get("eligible")
         decision = "CUMPLE FILTROS DE ENTRADA" if eligible is True else (
             "NO CUMPLE FILTROS DE ENTRADA" if eligible is False else "NO EVALUABLE")
@@ -417,13 +482,12 @@ def enviar_analisis_email(email: str, symbol: str,
         check_cards = []
         for check in semaforo.get("checks", []):
             color = colors_by_status.get(check.get("status"), "#8792a2")
-            label = {"green": "VERDE", "yellow": "ÁMBAR", "red": "ROJO", "gray": "N/D"}.get(check.get("status"), "N/D")
-            pill_bg = {"green": "#edf8f1", "yellow": "#fff7e8", "red": "#fff0f0", "gray": "#f5f7fa"}.get(check.get("status"), "#f5f7fa")
+            label = {"green": "OK", "yellow": "PARCIAL", "red": "NO", "gray": "N/D"}.get(check.get("status"), "N/D")
             check_cards.append(
                 "<td width='50%' valign='top' style='padding:5px'>"
                 f"<div style='background:#fff;border:1px solid #e5eaf1;border-top:3px solid {color};border-radius:10px;padding:12px'>"
                 f"<div style='font-size:12px;font-weight:700;color:#15243a'>{html.escape(str(check.get('category', '')))}</div>"
-                f"<div style='display:inline-block;font-size:10px;font-weight:800;color:{color};background:{pill_bg};padding:4px 8px;border-radius:20px;margin:6px 0'>{html.escape(label)}</div>"
+                f"<div style='font-size:10px;font-weight:800;color:{color};margin:5px 0'>{html.escape(label)}</div>"
                 f"<div style='font-size:11px;line-height:1.5;color:#64748b'>{html.escape(str(check.get('detail', '')))}</div></div></td>"
             )
         check_rows = []
@@ -433,11 +497,17 @@ def enviar_analisis_email(email: str, symbol: str,
                 pair.append("<td width='50%'></td>")
             check_rows.append("<tr>" + "".join(pair) + "</tr>")
         semaforo_html = (
-            f"<div style='margin:0 0 22px;padding:18px 20px;background:#fff;border:1px solid #e5eaf1;border-left:4px solid {overall};border-radius:13px;box-shadow:0 6px 18px rgba(15,23,42,.04)'>"
-            "<div style='font-size:10px;letter-spacing:.15em;font-weight:800;color:#2563eb'>ALURA QUANT · FILTROS DE ENTRADA</div>"
-            f"<div style='font-size:20px;line-height:1.25;font-weight:800;color:{overall};margin:8px 0 0'>{html.escape(decision)}</div>"
-            f"<table role='presentation' width='100%' cellspacing='0' cellpadding='0'>{''.join(check_rows)}</table>"
-            "</div>"
+            f"<div style='margin:0 0 22px;padding:18px;background:#fff;border:1px solid #e5eaf1;border-left:4px solid {overall};border-radius:14px'>"
+            "<div style='font-size:10px;letter-spacing:.14em;font-weight:800;color:#2563eb'>ALURA QUANT · SEMÁFORO</div>"
+            f"<div style='font-size:19px;font-weight:800;color:{overall};margin:8px 0 12px'>{html.escape(decision)}</div>"
+            f"<table role='presentation' width='100%' cellspacing='0' cellpadding='0'>{''.join(check_rows)}</table></div>"
+        )
+        chart_png = _sparkline_png(history)
+        chart_html = (
+            "<div style='margin:18px 0 22px;padding:16px;background:#fff;border:1px solid #e5eaf1;border-radius:12px'>"
+            "<div style='font-size:10px;letter-spacing:.13em;color:#2563eb;font-weight:800;margin-bottom:10px'>EVOLUCIÓN DEL VALOR</div>"
+            "<img src='cid:alura-price-chart' alt='Evolución del precio' style='display:block;width:100%;height:auto;border:0'>"
+            "</div>" if chart_png else ""
         )
         summary = commentary.get("resumen_ejecutivo") or commentary.get("resumen") or "No disponible."
         profile = commentary.get("perfil_compania") or "No disponible."
@@ -476,6 +546,7 @@ def enviar_analisis_email(email: str, symbol: str,
             "<div style='font-size:10px;letter-spacing:.16em;color:#9bbcff;font-weight:bold'>ALURA QUANT · RESEARCH</div>"
             f"<h1 style='margin:9px 0 0;font-size:24px'>Informe de {html.escape(symbol)}</h1></div>"
             + semaforo_html
+            + chart_html
             + email_section("Resumen ejecutivo", summary)
             + email_section("Perfil de la compañía", profile)
             + "<div style='margin-top:22px'><div style='font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;font-weight:800;margin-bottom:8px'>Métricas de mercado</div>"
@@ -491,6 +562,13 @@ def enviar_analisis_email(email: str, symbol: str,
             "subject": f"Alura Quant | Informe de {symbol}",
             "html": email_body,
         }
+        if chart_png:
+            params["attachments"] = [{
+                "filename": f"AluraQuant_{symbol}_evolucion.png",
+                "content": base64.b64encode(chart_png).decode("ascii"),
+                "content_type": "image/png",
+                "content_id": "alura-price-chart",
+            }]
         resend.Emails.send(params)
         return True, f"Informe enviado a {email}."
     except Exception as exc:
