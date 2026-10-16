@@ -2,7 +2,6 @@
 
 import os
 import html
-import base64
 import unicodedata
 from io import BytesIO
 from typing import Any
@@ -394,10 +393,10 @@ def generar_pdf(symbol: str, periodo_label: str, data: pd.DataFrame,
     return output.getvalue()
 
 
-def enviar_pdf_email(email: str, symbol: str, pdf: bytes,
-                     semaforo: dict | None = None, commentary: dict | None = None,
-                     metrics: dict | None = None):
-    """Envía el informe con Resend, siguiendo el flujo de la newsletter."""
+def enviar_analisis_email(email: str, symbol: str,
+                          semaforo: dict | None = None, commentary: dict | None = None,
+                          metrics: dict | None = None):
+    """Envía por Resend el análisis completo en el cuerpo HTML del correo."""
     api_key = os.getenv("RESEND_API_KEY", "").strip()
     sender = os.getenv("RESEND_FROM", "Alura Quant <updates@aluraquant.es>").strip()
     if not api_key:
@@ -491,9 +490,6 @@ def enviar_pdf_email(email: str, symbol: str, pdf: bytes,
             "to": [email],
             "subject": f"Alura Quant | Informe de {symbol}",
             "html": email_body,
-            "attachments": [{"filename": f"AluraQuant_{symbol}.pdf",
-                             "content": base64.b64encode(pdf).decode("ascii"),
-                             "content_type": "application/pdf"}],
         }
         resend.Emails.send(params)
         return True, f"Informe enviado a {email}."
