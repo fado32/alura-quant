@@ -3,6 +3,11 @@ import re
 import html
 import math
 from datetime import datetime, timedelta
+from typing import Anyimport os
+import re
+import html
+import math
+from datetime import datetime, timedelta
 from typing import Any
 import gspread
 import pandas as pd
@@ -4380,7 +4385,6 @@ def _normalize_commentary(raw: Any) -> dict:
         "resumen_ejecutivo": raw.get("resumen_ejecutivo") or raw.get("resumen") or raw.get("executive_summary"),
         "perfil_compania": raw.get("perfil_compania") or raw.get("perfil_de_la_compania") or raw.get("company_profile"),
         "lectura_tecnica": raw.get("lectura_tecnica") or raw.get("analisis_tecnico") or raw.get("technical_reading"),
-        "contexto_fundamental": raw.get("contexto_fundamental") or raw.get("analisis_fundamental") or raw.get("fundamental_context"),
         "riesgos": raw.get("riesgos") or raw.get("riesgos_y_limitaciones") or raw.get("risks") or [],
         "conclusion": raw.get("conclusion") or raw.get("conclusión"),
     }
@@ -4392,7 +4396,6 @@ def _normalize_commentary(raw: Any) -> dict:
         "resumen_ejecutivo": "No se pudo generar el resumen con la información disponible.",
         "perfil_compania": "El proveedor no facilitó información suficiente para describir la compañía.",
         "lectura_tecnica": "No se pudo generar la lectura técnica con los datos disponibles.",
-        "contexto_fundamental": "No hay datos fundamentales suficientes para elaborar esta lectura.",
         "conclusion": "La conclusión queda limitada por la cobertura de los datos disponibles.",
     }
     for key, fallback in fallbacks.items():
@@ -4434,8 +4437,9 @@ Distingue los datos observados de su interpretación. Señala las limitaciones d
 No des recomendaciones personalizadas ni instrucciones de compra o venta.
 Devuelve exclusivamente JSON válido con estas claves: resumen_ejecutivo (2-3 frases),
 perfil_compania (un párrafo que explique qué hace la empresa, usando solo el perfil de entrada),
-lectura_tecnica (un párrafo), contexto_fundamental (un párrafo), riesgos (lista de 2-4 puntos),
-conclusion (un párrafo). Describe el semáforo como cumplimiento de filtros cuantitativos, nunca como recomendación personalizada."""
+lectura_tecnica (un párrafo que interprete las métricas), riesgos (lista de 2-4 puntos),
+conclusion (un párrafo). No generes una sección fundamental. Describe el semáforo como cumplimiento
+de filtros cuantitativos, nunca como recomendación personalizada."""
     response = client.chat.completions.create(
         model=model,
         messages=[
@@ -4500,28 +4504,37 @@ def _render_report(report: dict) -> None:
     semaforo = report.get("semaforo") or {}
     with st.container():
         status_colors = {"green": "#15803d", "red": "#b91c1c", "yellow": "#a16207", "gray": "#64748b"}
-        overall_color = status_colors.get(semaforo.get("status"), "#64748b")
+        checks = semaforo.get("checks", [])
+        counts = {key: sum(1 for item in checks if item.get("status") == key)
+                  for key in ("green", "yellow", "red")}
+        eligible = semaforo.get("eligible")
+        decision = "CUMPLE FILTROS DE ENTRADA" if eligible is True else (
+            "NO CUMPLE FILTROS DE ENTRADA" if eligible is False else "NO EVALUABLE")
+        overall_color = status_colors["green"] if eligible is True else (
+            status_colors["red"] if eligible is False else status_colors["gray"])
         st.markdown("### Semáforo de Alura Quant")
         st.markdown(f"""
-        <div style="padding:18px 20px;margin:18px 0;border:1px solid #e8edf4;border-radius:16px;background:#fff">
-          <div style="font-size:11px;letter-spacing:.13em;color:#2563eb;font-weight:800">SEMAFORO DEL ALGORITMO</div>
-          <div style="font-size:21px;color:{overall_color};font-weight:800;margin:7px 0 14px">{html.escape(str(semaforo.get('label','NO EVALUABLE')))}</div>
+        <div style="padding:22px 24px;margin:18px 0 12px;border:1px solid #203d68;border-radius:18px;background:linear-gradient(120deg,#0b1220,#173a78);color:white">
+          <div style="font-size:10px;letter-spacing:.16em;color:#a9c8ff;font-weight:800">ALURA QUANT · FILTROS DE ENTRADA</div>
+          <div style="font-size:clamp(20px,3vw,28px);color:white;font-weight:850;letter-spacing:-.03em;margin:9px 0 13px"><span style="color:{overall_color}">●</span> {html.escape(decision)}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <span style="background:#173b35;color:#70e2a0;padding:7px 11px;border-radius:22px;font-size:12px;font-weight:800">● {counts['green']} VERDES</span>
+            <span style="background:#493c20;color:#ffd16a;padding:7px 11px;border-radius:22px;font-size:12px;font-weight:800">● {counts['yellow']} ÁMBAR</span>
+            <span style="background:#48292d;color:#ff8c91;padding:7px 11px;border-radius:22px;font-size:12px;font-weight:800">● {counts['red']} ROJOS</span>
+          </div>
         </div>
         """, unsafe_allow_html=True)
-        check_cols = st.columns(min(3, max(1, len(semaforo.get("checks", [])))), gap="small")
-        for i, check in enumerate(semaforo.get("checks", [])):
+        st.markdown("<div style='font-size:11px;color:#718096;margin:0 0 8px'>Verde: cumple · Ámbar: atención · Rojo: no cumple</div>", unsafe_allow_html=True)
+        check_cols = st.columns(min(3, max(1, len(checks))), gap="small")
+        for i, check in enumerate(checks):
             color = status_colors.get(check.get("status"), "#64748b")
             with check_cols[i % len(check_cols)]:
-                status_label = {"green": "OK", "yellow": "PARCIAL", "red": "NO", "gray": "N/D"}.get(check.get("status"), "N/D")
+                status_label = {"green": "VERDE", "yellow": "ÁMBAR", "red": "ROJO", "gray": "N/D"}.get(check.get("status"), "N/D")
                 st.markdown(f"<div style='height:100%;padding:14px;border:1px solid #e5eaf1;border-top:3px solid {color};border-radius:12px;background:#f8fafc;margin:0 0 8px'><div style='display:flex;justify-content:space-between;gap:8px;align-items:center'><div style='font-size:12px;font-weight:700;color:#172033'>{html.escape(str(check.get('category','')))}</div><span style='font-size:10px;font-weight:800;color:{color};background:#fff;padding:4px 7px;border-radius:20px'>{status_label}</span></div><div style='font-size:12px;line-height:1.5;color:#64748b;margin-top:8px'>{html.escape(str(check.get('detail','')))}</div></div>", unsafe_allow_html=True)
         st.markdown("### Lectura de Alura Quant")
         _section("Resumen ejecutivo", commentary.get("resumen_ejecutivo") or commentary.get("resumen"))
         _section("Perfil de la compañía", commentary.get("perfil_compania"))
-        left, right = st.columns(2, gap="large")
-        with left:
-            _section("Lectura técnica", commentary.get("lectura_tecnica"))
-        with right:
-            _section("Contexto fundamental", commentary.get("contexto_fundamental"))
+        _section("Lectura técnica", commentary.get("lectura_tecnica"))
         _section("Riesgos y limitaciones", "\n".join(
             f"- {item}" for item in commentary.get("riesgos", [])
         ))
@@ -4613,7 +4626,7 @@ def render_analysis_pro() -> None:
                                       indicators, metrics, use_ai=True,
                                       commentary=commentary, semaforo=semaforo)
                     report = {
-                        "report_version": 3,
+                        "report_version": 4,
                         "symbol": symbol,
                         "period_label": period_label,
                         "history": history,
@@ -4631,8 +4644,8 @@ def render_analysis_pro() -> None:
                 st.caption("Comprueba el ticker, la conectividad y la cobertura de datos del proveedor.")
 
     report = st.session_state.get(REPORT_KEY)
-    if report and report.get("report_version") != 3:
-        # Descarta informes guardados antes del nuevo orden y diseño del semáforo.
+    if report and report.get("report_version") != 4:
+        # Descarta informes guardados antes de los últimos cambios de lectura y semáforo.
         st.session_state.pop(REPORT_KEY, None)
         report = None
     if report:
