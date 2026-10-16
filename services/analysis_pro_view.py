@@ -87,7 +87,7 @@ def _gemini_commentary(symbol: str, period: str, info: dict,
         "metricas": _clean(metrics),
         "noticias_disponibles": _clean(_news_for_prompt(news)),
     }
-    system_prompt = """Eres analista cuantitativo de Alura Quant. Escribe en español, con tono sobrio y claro.
+    system_prompt = """Eres analista cuantitativo de Alura Quant. Escribe en español (castellano), con tono sobrio y claro.
 Usa únicamente los datos entregados; no inventes hechos, cifras, catalizadores ni noticias.
 Distingue los datos observados de su interpretación. Señala las limitaciones de cobertura.
 No des recomendaciones personalizadas ni instrucciones de compra o venta.
