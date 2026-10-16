@@ -4550,16 +4550,16 @@ def _render_report(report: dict) -> None:
         mime="application/pdf",
         type="primary",
     )
-    with st.expander("Enviar el PDF por email"):
+    with st.expander("Enviar análisis por email"):
         email = st.text_input("Email destinatario", key="analysis_pro_email",
                               placeholder="nombre@dominio.com")
-        if st.button("Enviar informe", key="send_analysis_pro_email"):
+        if st.button("Enviar análisis", key="send_analysis_pro_email"):
             if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email.strip()):
                 st.error("Introduce un email válido.")
             else:
-                ok, message = enviar_pdf_email(email.strip(), report["symbol"], report["pdf"],
-                                               report.get("semaforo"), report.get("commentary"),
-                                               report.get("metrics"))
+                ok, message = enviar_analisis_email(email.strip(), report["symbol"],
+                                                    report.get("semaforo"), report.get("commentary"),
+                                                    report.get("metrics"))
                 st.success(message) if ok else st.warning(message)
 
     st.caption("Datos de proveedores externos, sujetos a retrasos y omisiones. Este informe es informativo y no constituye asesoramiento financiero.")
@@ -4653,7 +4653,7 @@ if active_page == "Análisis Pro":
     from openai import OpenAI
     from services.analysis_pro import (
         PERIODOS, calcular_metricas, calcular_semaforo_alura, descargar_datos,
-        enviar_pdf_email, generar_pdf,
+        enviar_analisis_email, generar_pdf,
     )
     render_analysis_pro()
 
