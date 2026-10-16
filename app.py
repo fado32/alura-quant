@@ -4517,7 +4517,7 @@ def _render_report(report: dict) -> None:
             color = status_colors.get(check.get("status"), "#64748b")
             with check_cols[i % len(check_cols)]:
                 status_label = {"green": "VERDE", "yellow": "ÁMBAR", "red": "ROJO", "gray": "N/D"}.get(check.get("status"), "N/D")
-                st.markdown(f"<div style='height:100%;padding:14px;border:1px solid #e5eaf1;border-top:3px solid {color};border-radius:12px;background:#fff;box-shadow:0 5px 16px rgba(15,23,42,.035);margin:0 0 8px'><div style='display:flex;justify-content:space-between;gap:8px;align-items:center'><div style='font-size:12px;font-weight:700;color:#172033'>{html.escape(str(check.get('category','')))}</div><span style='font-size:10px;font-weight:800;color:{color};background:#f7f9fc;border:1px solid #edf1f6;padding:4px 7px;border-radius:20px'>{status_label}</span></div><div style='font-size:12px;line-height:1.5;color:#64748b;margin-top:8px'>{html.escape(str(check.get('detail','')))}</div></div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='height:100%;padding:14px;border:1px solid #e5eaf1;border-top:3px solid {color};border-radius:12px;background:#fff;box-shadow:0 5px 16px rgba(15,23,42,.035);margin:0 0 8px'><div style='display:flex;justify-content:space-between;gap:8px;align-items:center'><div style='flex:1 1 auto;min-width:0;font-size:12px;font-weight:700;color:#172033'>{html.escape(str(check.get('category','')))}</div><span style='flex:0 0 64px;width:64px;min-width:64px;box-sizing:border-box;text-align:center;font-size:10px;font-weight:800;color:{color};background:#f7f9fc;border:1px solid #edf1f6;padding:4px 3px;border-radius:20px'>{status_label}</span></div><div style='font-size:12px;line-height:1.5;color:#64748b;margin-top:8px'>{html.escape(str(check.get('detail','')))}</div></div>", unsafe_allow_html=True)
         st.markdown("### Lectura de Alura Quant")
         _section("Resumen ejecutivo", commentary.get("resumen_ejecutivo") or commentary.get("resumen"))
         _section("Perfil de la compañía", commentary.get("perfil_compania"))
@@ -4557,7 +4557,7 @@ def render_analysis_pro() -> None:
     """Pinta Análisis Pro dentro de app.py sin crear una página de sidebar."""
     _load_secrets()
     saved_report = st.session_state.get(REPORT_KEY)
-    if saved_report and saved_report.get("report_version") != 7:
+    if saved_report and saved_report.get("report_version") != 8:
         st.session_state.pop(REPORT_KEY, None)
     st.markdown("""
     <style>
@@ -4613,7 +4613,7 @@ def render_analysis_pro() -> None:
                                       indicators, metrics, use_ai=True,
                                       commentary=commentary, semaforo=semaforo)
                     report = {
-                        "report_version": 7,
+                        "report_version": 8,
                         "symbol": symbol,
                         "period_label": period_label,
                         "history": history,
@@ -4632,7 +4632,7 @@ def render_analysis_pro() -> None:
 
     if send_analysis:
         report_to_send = st.session_state.get(REPORT_KEY)
-        if not report_to_send or report_to_send.get("report_version") != 7:
+        if not report_to_send or report_to_send.get("report_version") != 8:
             st.warning("Genera primero un análisis para poder enviarlo.")
         elif not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email.strip()):
             st.error("Introduce un email válido.")
@@ -4640,6 +4640,7 @@ def render_analysis_pro() -> None:
             ok, message = enviar_analisis_email(
                 email.strip(), report_to_send["symbol"], report_to_send.get("semaforo"),
                 report_to_send.get("commentary"), report_to_send.get("metrics"),
+                report_to_send.get("history"),
             )
             if ok:
                 st.toast("Correo enviado correctamente.", icon="✅")
@@ -4647,7 +4648,7 @@ def render_analysis_pro() -> None:
                 st.error(message)
 
     report = st.session_state.get(REPORT_KEY)
-    if report and report.get("report_version") != 7:
+    if report and report.get("report_version") != 8:
         # Descarta informes guardados antes de los últimos cambios de lectura y semáforo.
         st.session_state.pop(REPORT_KEY, None)
         report = None
