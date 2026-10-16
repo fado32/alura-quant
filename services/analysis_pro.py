@@ -312,9 +312,36 @@ def generar_pdf(symbol: str, periodo_label: str, data: pd.DataFrame,
         ("BOTTOMPADDING", (0, 0), (-1, -1), 7),
     ]))
     status_colors = {"green": "#15803d", "red": "#b91c1c", "yellow": "#a16207", "gray": "#64748b"}
-    story.append(Paragraph("Semáforo del algoritmo Alura Quant", section_style))
-    overall_color = status_colors.get(semaforo.get("status"), "#64748b")
-    story.append(Paragraph(f'<font color="{overall_color}"><b>{_ascii(semaforo.get("label", "NO EVALUABLE"))}</b></font>', body_style))
+    checks = semaforo.get("checks", [])
+    counts = {key: sum(1 for item in checks if item.get("status") == key)
+              for key in ("green", "yellow", "red")}
+    eligible = semaforo.get("eligible")
+    decision = "CUMPLE FILTROS DE ENTRADA" if eligible is True else (
+        "NO CUMPLE FILTROS DE ENTRADA" if eligible is False else "NO EVALUABLE")
+    overall_color = status_colors["green"] if eligible is True else (
+        status_colors["red"] if eligible is False else status_colors["gray"])
+    decision_style = ParagraphStyle("AQDecision", parent=body_style, fontName="Helvetica-Bold",
+                                    fontSize=13, leading=16, textColor=colors.white)
+    count_style = ParagraphStyle("AQCount", parent=body_style, fontName="Helvetica-Bold",
+                                 fontSize=9, leading=12, textColor=colors.white)
+    decision_banner = Table([
+        [Paragraph("ALURA QUANT  |  LECTURA DEL ALGORITMO", ParagraphStyle(
+            "AQBannerEyebrow", parent=body_style, fontName="Helvetica-Bold", fontSize=7,
+            leading=9, textColor=colors.HexColor("#a9c8ff")))],
+        [Paragraph(f'<font color="{overall_color}">{_ascii(decision)}</font>', decision_style)],
+        [Paragraph(
+            f'<font color="#36c275">● {counts["green"]} VERDES</font>  '
+            f'<font color="#f2b84b">● {counts["yellow"]} ÁMBAR</font>  '
+            f'<font color="#ff7777">● {counts["red"]} ROJOS</font>', count_style)],
+    ], colWidths=[172 * mm])
+    decision_banner.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#102344")),
+        ("BOX", (0, 0), (-1, -1), .5, colors.HexColor("#203d68")),
+        ("LEFTPADDING", (0, 0), (-1, -1), 12), ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+        ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.append(decision_banner)
+    story.append(Spacer(1, 3 * mm))
     commentary = commentary or {}
     card_title_style = ParagraphStyle("AQCardTitle", parent=body_style, fontName="Helvetica-Bold", fontSize=8, leading=10)
     card_body_style = ParagraphStyle("AQCardBody", parent=body_style, fontSize=7.5, leading=10)
@@ -322,7 +349,7 @@ def generar_pdf(symbol: str, periodo_label: str, data: pd.DataFrame,
     for check in semaforo.get("checks", []):
         check_status = check.get("status", "gray")
         check_color = status_colors.get(check_status, "#64748b")
-        check_label = {"green": "OK", "yellow": "PARCIAL", "red": "NO", "gray": "N/D"}.get(check_status, "N/D")
+        check_label = {"green": "VERDE", "yellow": "ÁMBAR", "red": "ROJO", "gray": "N/D"}.get(check_status, "N/D")
         card = Table([
             [Paragraph(f'<font color="{check_color}"><b>{_ascii(check.get("category", ""))}</b></font>', card_title_style),
              Paragraph(f'<font color="{check_color}"><b>● {check_label}</b></font>', card_title_style)],
@@ -357,12 +384,8 @@ def generar_pdf(symbol: str, periodo_label: str, data: pd.DataFrame,
     story.append(Paragraph("Métricas de mercado", section_style))
     story.append(table)
 
-    for title, text in [
-        ("Lectura técnica", commentary.get("lectura_tecnica")),
-        ("Contexto fundamental", commentary.get("contexto_fundamental")),
-    ]:
-        story.append(Paragraph(title, section_style))
-        story.append(Paragraph(_ascii(text or "No disponible."), body_style))
+    story.append(Paragraph("Lectura técnica", section_style))
+    story.append(Paragraph(_ascii(commentary.get("lectura_tecnica") or "No disponible."), body_style))
     risks = commentary.get("riesgos", [])
     if isinstance(risks, str):
         risks = [line.strip(" •-\t") for line in risks.splitlines() if line.strip(" •-\t")]
@@ -393,11 +416,18 @@ def enviar_pdf_email(email: str, symbol: str, pdf: bytes,
         metrics = metrics or {}
         semaforo = semaforo or {}
         colors_by_status = {"green": "#16834a", "red": "#c43d45", "yellow": "#d49426", "gray": "#8792a2"}
-        overall = colors_by_status.get(semaforo.get("status"), "#8792a2")
+        checks = semaforo.get("checks", [])
+        counts = {key: sum(1 for item in checks if item.get("status") == key)
+                  for key in ("green", "yellow", "red")}
+        eligible = semaforo.get("eligible")
+        decision = "CUMPLE FILTROS DE ENTRADA" if eligible is True else (
+            "NO CUMPLE FILTROS DE ENTRADA" if eligible is False else "NO EVALUABLE")
+        overall = colors_by_status["green"] if eligible is True else (
+            colors_by_status["red"] if eligible is False else colors_by_status["gray"])
         check_cards = []
         for check in semaforo.get("checks", []):
             color = colors_by_status.get(check.get("status"), "#8792a2")
-            label = {"green": "OK", "yellow": "PARCIAL", "red": "NO", "gray": "N/D"}.get(check.get("status"), "N/D")
+            label = {"green": "VERDE", "yellow": "ÁMBAR", "red": "ROJO", "gray": "N/D"}.get(check.get("status"), "N/D")
             check_cards.append(
                 "<td width='50%' valign='top' style='padding:5px'>"
                 f"<div style='background:#f7f9fc;border:1px solid #e5eaf1;border-top:3px solid {color};border-radius:10px;padding:12px'>"
@@ -412,10 +442,16 @@ def enviar_pdf_email(email: str, symbol: str, pdf: bytes,
                 pair.append("<td width='50%'></td>")
             check_rows.append("<tr>" + "".join(pair) + "</tr>")
         semaforo_html = (
-            "<div style='margin:0 0 22px;padding:18px;background:#f7f9fc;border:1px solid #e5eaf1;border-radius:14px'>"
-            "<div style='font-size:10px;letter-spacing:.14em;font-weight:800;color:#2563eb'>ALURA QUANT · SEMÁFORO</div>"
-            f"<div style='font-size:19px;font-weight:800;color:{overall};margin:8px 0 12px'>{html.escape(str(semaforo.get('label', 'NO EVALUABLE')))}</div>"
-            f"<table role='presentation' width='100%' cellspacing='0' cellpadding='0'>{''.join(check_rows)}</table></div>"
+            "<div style='margin:0 0 22px;padding:20px;background:#102344;border:1px solid #203d68;border-radius:14px'>"
+            "<div style='font-size:10px;letter-spacing:.15em;font-weight:800;color:#a9c8ff'>ALURA QUANT · FILTROS DE ENTRADA</div>"
+            f"<div style='font-size:21px;line-height:1.25;font-weight:800;color:{overall};margin:9px 0 13px'>{html.escape(decision)}</div>"
+            "<div style='margin-bottom:14px'>"
+            f"<span style='display:inline-block;background:#173b35;color:#70e2a0;padding:6px 9px;border-radius:20px;font-size:11px;font-weight:800;margin:0 5px 5px 0'>● {counts['green']} VERDES</span>"
+            f"<span style='display:inline-block;background:#493c20;color:#ffd16a;padding:6px 9px;border-radius:20px;font-size:11px;font-weight:800;margin:0 5px 5px 0'>● {counts['yellow']} ÁMBAR</span>"
+            f"<span style='display:inline-block;background:#48292d;color:#ff8c91;padding:6px 9px;border-radius:20px;font-size:11px;font-weight:800;margin:0 5px 5px 0'>● {counts['red']} ROJOS</span>"
+            "</div>"
+            f"<table role='presentation' width='100%' cellspacing='0' cellpadding='0'>{''.join(check_rows)}</table>"
+            "<div style='margin-top:12px;color:#b9c7d9;font-size:10px;line-height:1.5'>Verde: cumple · Ámbar: atención · Rojo: no cumple. Lectura del algoritmo, no recomendación personalizada.</div></div>"
         )
         summary = commentary.get("resumen_ejecutivo") or commentary.get("resumen") or "No disponible."
         profile = commentary.get("perfil_compania") or "No disponible."
@@ -459,7 +495,6 @@ def enviar_pdf_email(email: str, symbol: str, pdf: bytes,
             + "<div style='margin-top:22px'><div style='font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;font-weight:800;margin-bottom:8px'>Métricas de mercado</div>"
               f"<table role='presentation' width='100%' cellspacing='0' cellpadding='0' style='border-collapse:collapse'>{metric_rows}</table></div>"
             + email_section("Lectura técnica", commentary.get("lectura_tecnica"))
-            + email_section("Contexto fundamental", commentary.get("contexto_fundamental"))
             + "<div style='margin:22px 0 0'><div style='font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;font-weight:800;margin-bottom:7px'>Riesgos y limitaciones</div>" + risks_html + "</div>"
             + email_section("Conclusión", commentary.get("conclusion"))
             + "<div style='margin-top:24px;padding-top:12px;border-top:1px solid #e5eaf1;font-size:11px;color:#8792a2'>ALURA QUANT · Informe informativo; no constituye asesoramiento financiero.</div></div>"
