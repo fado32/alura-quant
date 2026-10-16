@@ -3938,14 +3938,24 @@ div[class*="st-key-nav_"] button[kind="primary"]{background:#fff!important;color
 </style>
 """)
 
-render_html(f"""
-<div class="aq-wrap">
-  <div class="aq-topbar">
-    <div class="aq-brand">ALURA <span>QUANT</span></div>
-    <div class="aq-topmeta">INVESTMENT INTELLIGENCE · ACTUALIZADO {html.escape(fecha_actualizacion_sistema)}</div>
-  </div>
-</div>
-""")
+st.markdown("""
+<style>
+div[data-testid="stHorizontalBlock"]:has(.st-key-open_analysis_pro){
+  max-width:1080px;margin:0 auto!important;align-items:center!important;
+  border-bottom:1px solid var(--aq-border);min-height:62px;padding-bottom:8px
+}
+.st-key-open_analysis_pro button{border-radius:10px!important;font-weight:700!important}
+</style>
+""", unsafe_allow_html=True)
+def _abrir_analisis_pro():
+    st.session_state["active_page"] = "Análisis Pro"
+
+_topbar_cols = st.columns([5, 1], gap="small")
+with _topbar_cols[0]:
+    render_html('<div class="aq-brand" style="padding:16px 0 10px">ALURA <span>QUANT</span></div>')
+with _topbar_cols[1]:
+    st.button("✦ Análisis Pro", key="open_analysis_pro", type="primary",
+              on_click=_abrir_analisis_pro)
 
 PAGINAS = ["Inicio", "Oportunidades", "Planes", "Cartera", "Performance"]
 
@@ -4270,6 +4280,10 @@ def render_equity_chart_svg(fechas, valores):
 # ============================================================
 # 01. INICIO
 # ============================================================
+
+if active_page == "Análisis Pro":
+    from analysis_pro_view import render_analysis_pro
+    render_analysis_pro()
 
 if active_page == "Inicio":
     render_html(f"""
