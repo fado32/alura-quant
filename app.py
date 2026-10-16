@@ -3,11 +3,6 @@ import re
 import html
 import math
 from datetime import datetime, timedelta
-from typing import Anyimport os
-import re
-import html
-import math
-from datetime import datetime, timedelta
 from typing import Any
 import gspread
 import pandas as pd
