@@ -4304,10 +4304,40 @@ REPORT_KEY = "_alura_analysis_pro_report"
 def _load_secrets() -> None:
     """Carga secretos de Streamlit a entorno sin mostrarlos en pantalla."""
     try:
-        for key in ("GEMINI_API_KEY", "GEMINI_MODEL", "SMTP_HOST", "SMTP_PORT",
-                    "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM"):
-            if key in st.secrets and not os.getenv(key):
-                os.environ[key] = str(st.secrets[key])
+        secrets = st.secrets
+        for key in ("GEMINI_API_KEY", "GEMINI_MODEL", "RESEND_API_KEY", "RESEND_FROM"):
+            if os.getenv(key):
+                continue
+            value = secrets.get(key)
+            aliases = {
+                "GEMINI_API_KEY": ("GOOGLE_API_KEY",),
+                "RESEND_API_KEY": ("api_key",),
+                "RESEND_FROM": ("from",),
+                "GEMINI_MODEL": ("model",),
+            }
+            if not value:
+                if key == "GEMINI_API_KEY":
+                    value = secrets.get("GOOGLE_API_KEY") or os.getenv("GOOGLE_API_KEY")
+                section_names = ("gemini", "google") if key.startswith("GEMINI") else ("resend",)
+                for section_name in section_names:
+                    section = secrets.get(section_name, {})
+                    if hasattr(section, "get"):
+                        value = value or section.get(key)
+                        for alias in aliases.get(key, ()):
+                            value = value or section.get(alias)
+            if not value and key == "GEMINI_API_KEY":
+                # Permite recuperarla si se pegó dentro de otra sección TOML.
+                if not value:
+                    try:
+                        for section in secrets.values():
+                            if hasattr(section, "get"):
+                                value = section.get("GEMINI_API_KEY") or section.get("GOOGLE_API_KEY")
+                                if value:
+                                    break
+                    except Exception:
+                        pass
+            if value:
+                os.environ[key] = str(value).strip()
     except Exception:
         pass
 
@@ -4343,11 +4373,44 @@ def _news_for_prompt(news: Any) -> list:
     return [str(news)[:1200]]
 
 
+def _normalize_commentary(raw: Any) -> dict:
+    """Normaliza variantes del JSON de Gemini para pantalla, email y PDF."""
+    raw = raw if isinstance(raw, dict) else {}
+    normalized = {
+        "resumen_ejecutivo": raw.get("resumen_ejecutivo") or raw.get("resumen") or raw.get("executive_summary"),
+        "perfil_compania": raw.get("perfil_compania") or raw.get("perfil_de_la_compania") or raw.get("company_profile"),
+        "lectura_tecnica": raw.get("lectura_tecnica") or raw.get("analisis_tecnico") or raw.get("technical_reading"),
+        "contexto_fundamental": raw.get("contexto_fundamental") or raw.get("analisis_fundamental") or raw.get("fundamental_context"),
+        "riesgos": raw.get("riesgos") or raw.get("riesgos_y_limitaciones") or raw.get("risks") or [],
+        "conclusion": raw.get("conclusion") or raw.get("conclusión"),
+    }
+    if isinstance(normalized["riesgos"], str):
+        normalized["riesgos"] = [line.strip(" •-\t") for line in normalized["riesgos"].splitlines() if line.strip(" •-\t")]
+    elif not isinstance(normalized["riesgos"], (list, tuple)):
+        normalized["riesgos"] = [str(normalized["riesgos"])] if normalized["riesgos"] else []
+    fallbacks = {
+        "resumen_ejecutivo": "No se pudo generar el resumen con la información disponible.",
+        "perfil_compania": "El proveedor no facilitó información suficiente para describir la compañía.",
+        "lectura_tecnica": "No se pudo generar la lectura técnica con los datos disponibles.",
+        "contexto_fundamental": "No hay datos fundamentales suficientes para elaborar esta lectura.",
+        "conclusion": "La conclusión queda limitada por la cobertura de los datos disponibles.",
+    }
+    for key, fallback in fallbacks.items():
+        if not normalized.get(key):
+            normalized[key] = fallback
+    if not normalized["riesgos"]:
+        normalized["riesgos"] = ["Cobertura y calidad de los datos disponibles para este activo."]
+    return normalized
+
+
 def _gemini_commentary(symbol: str, period: str, info: dict,
-                       metrics: dict, news: Any) -> dict:
-    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+                       metrics: dict, news: Any, semaforo: dict | None = None) -> dict:
+    api_key = (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or "").strip()
     if not api_key:
-        raise RuntimeError("Falta GEMINI_API_KEY en Streamlit Secrets o en el entorno.")
+        raise RuntimeError(
+            'No encuentro la clave. En Streamlit Secrets, añade GEMINI_API_KEY = "tu_clave" '
+            'como valor TOML de nivel superior, o usa [gemini] seguido de api_key = "tu_clave".'
+        )
 
     model = os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite").strip()
     client = OpenAI(api_key=api_key, base_url=GEMINI_BASE_URL)
@@ -4362,15 +4425,17 @@ def _gemini_commentary(symbol: str, period: str, info: dict,
         "periodo": period,
         "perfil_empresa": company,
         "metricas": _clean(metrics),
+        "semaforo_algoritmo": _clean(semaforo or {}),
         "noticias_disponibles": _clean(_news_for_prompt(news)),
     }
     system_prompt = """Eres analista cuantitativo de Alura Quant. Escribe en español, con tono sobrio y claro.
 Usa únicamente los datos entregados; no inventes hechos, cifras, catalizadores ni noticias.
 Distingue los datos observados de su interpretación. Señala las limitaciones de cobertura.
 No des recomendaciones personalizadas ni instrucciones de compra o venta.
-Devuelve exclusivamente JSON válido con estas claves: resumen (2-3 frases),
+Devuelve exclusivamente JSON válido con estas claves: resumen_ejecutivo (2-3 frases),
+perfil_compania (un párrafo que explique qué hace la empresa, usando solo el perfil de entrada),
 lectura_tecnica (un párrafo), contexto_fundamental (un párrafo), riesgos (lista de 2-4 puntos),
-conclusion (un párrafo)."""
+conclusion (un párrafo). Describe el semáforo como cumplimiento de filtros cuantitativos, nunca como recomendación personalizada."""
     response = client.chat.completions.create(
         model=model,
         messages=[
@@ -4382,10 +4447,10 @@ conclusion (un párrafo)."""
     )
     content = response.choices[0].message.content or "{}"
     try:
-        return json.loads(content)
+        return _normalize_commentary(json.loads(content))
     except json.JSONDecodeError:
         content = content.replace("```json", "").replace("```", "").strip()
-        return json.loads(content)
+        return _normalize_commentary(json.loads(content))
 
 
 def _fmt(value: Any, suffix: str = "", decimals: int = 2) -> str:
@@ -4432,35 +4497,40 @@ def _render_report(report: dict) -> None:
             st.metric(label, _fmt(metrics.get(key), suffix, decimals))
 
     commentary = report.get("commentary") or {}
-    if commentary:
-        with st.container():
-            st.markdown("### Lectura de Alura Quant")
-            _section("Resumen ejecutivo", commentary.get("resumen"))
-            left, right = st.columns(2, gap="large")
-            with left:
-                _section("Lectura técnica", commentary.get("lectura_tecnica"))
-            with right:
-                _section("Contexto fundamental", commentary.get("contexto_fundamental"))
-            _section("Riesgos y limitaciones", "\n".join(
-                f"- {item}" for item in commentary.get("riesgos", [])
-            ))
-            _section("Conclusión", commentary.get("conclusion"))
-    elif report.get("ai_error"):
-        st.info(f"No se generó el comentario de Gemini: {report['ai_error']}")
+    semaforo = report.get("semaforo") or {}
+    with st.container():
+        status_colors = {"green": "#15803d", "red": "#b91c1c", "yellow": "#a16207", "gray": "#64748b"}
+        overall_color = status_colors.get(semaforo.get("status"), "#64748b")
+        st.markdown("### Semáforo de Alura Quant")
+        st.markdown(f"""
+        <div style="padding:18px 20px;margin:18px 0;border:1px solid #e8edf4;border-radius:16px;background:#fff">
+          <div style="font-size:11px;letter-spacing:.13em;color:#2563eb;font-weight:800">SEMAFORO DEL ALGORITMO</div>
+          <div style="font-size:21px;color:{overall_color};font-weight:800;margin:7px 0 14px">{html.escape(str(semaforo.get('label','NO EVALUABLE')))}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        check_cols = st.columns(min(3, max(1, len(semaforo.get("checks", [])))), gap="small")
+        for i, check in enumerate(semaforo.get("checks", [])):
+            color = status_colors.get(check.get("status"), "#64748b")
+            with check_cols[i % len(check_cols)]:
+                st.markdown(f"<div style='height:100%;padding:12px;border:1px solid #e8edf4;border-radius:12px;margin:0 0 8px'><div style='font-size:12px;color:#64748b'>{html.escape(str(check.get('category','')))}</div><b style='color:{color}'>{html.escape(str(check.get('detail','')))}</b></div>", unsafe_allow_html=True)
+        st.markdown("### Lectura de Alura Quant")
+        _section("Resumen ejecutivo", commentary.get("resumen_ejecutivo") or commentary.get("resumen"))
+        _section("Perfil de la compañía", commentary.get("perfil_compania"))
+        left, right = st.columns(2, gap="large")
+        with left:
+            _section("Lectura técnica", commentary.get("lectura_tecnica"))
+        with right:
+            _section("Contexto fundamental", commentary.get("contexto_fundamental"))
+        _section("Riesgos y limitaciones", "\n".join(
+            f"- {item}" for item in commentary.get("riesgos", [])
+        ))
+        _section("Conclusión", commentary.get("conclusion"))
 
     history = report.get("history")
     if isinstance(history, pd.DataFrame) and not history.empty and "Close" in history:
         with st.container():
             st.markdown("### Evolución del precio")
             st.line_chart(history[["Close"]], use_container_width=True)
-
-    info = report["info"]
-    summary = info.get("longBusinessSummary")
-    if summary:
-        with st.expander("Perfil de la compañía"):
-            st.write(summary)
-            st.caption("Sector: " + str(info.get("sector") or "N/D") +
-                       " · Industria: " + str(info.get("industry") or "N/D"))
 
     news = report.get("news")
     if news:
@@ -4486,7 +4556,8 @@ def _render_report(report: dict) -> None:
             if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email.strip()):
                 st.error("Introduce un email válido.")
             else:
-                ok, message = enviar_pdf_email(email.strip(), report["symbol"], report["pdf"])
+                ok, message = enviar_pdf_email(email.strip(), report["symbol"], report["pdf"],
+                                               report.get("semaforo"), report.get("commentary"))
                 st.success(message) if ok else st.warning(message)
 
     st.caption("Datos de proveedores externos, sujetos a retrasos y omisiones. Este informe es informativo y no constituye asesoramiento financiero.")
@@ -4520,7 +4591,7 @@ def render_analysis_pro() -> None:
         with c2:
             period_label = st.selectbox("Periodo", list(PERIODOS.keys()), index=min(2, len(PERIODOS)-1))
         with c3:
-            include_ai = st.checkbox("Comentario de Gemini", value=bool(os.getenv("GEMINI_API_KEY")))
+            st.markdown("<div style='padding-top:8px;color:#64748b;font-size:13px'>Lectura de Alura Quant con Gemini incluida</div>", unsafe_allow_html=True)
         generate = st.button("Generar análisis", key="analysis_pro_generate", type="primary")
 
     if generate:
@@ -4532,32 +4603,37 @@ def render_analysis_pro() -> None:
                 with st.spinner(f"Preparando el informe de {symbol}…"):
                     history, info, news = descargar_datos(symbol, PERIODOS[period_label])
                     dates, metrics, indicators = calcular_metricas(history)
+                    semaforo = calcular_semaforo_alura(history)
+                    commentary = _gemini_commentary(
+                        symbol, period_label, info, metrics, news, semaforo
+                    )
                     pdf = generar_pdf(symbol, period_label, dates, info, news,
-                                      indicators, metrics, use_ai=False)
+                                      indicators, metrics, use_ai=True,
+                                      commentary=commentary, semaforo=semaforo)
                     report = {
+                        "report_version": 2,
                         "symbol": symbol,
                         "period_label": period_label,
                         "history": history,
                         "info": info,
                         "news": news,
                         "metrics": metrics,
+                        "semaforo": semaforo,
                         "pdf": pdf,
-                        "commentary": None,
+                        "commentary": commentary,
                         "ai_error": None,
                     }
-                    if include_ai:
-                        try:
-                            report["commentary"] = _gemini_commentary(
-                                symbol, period_label, info, metrics, news
-                            )
-                        except Exception as exc:
-                            report["ai_error"] = str(exc)
                     st.session_state[REPORT_KEY] = report
             except Exception as exc:
                 st.error(f"No se pudo generar el informe: {exc}")
                 st.caption("Comprueba el ticker, la conectividad y la cobertura de datos del proveedor.")
 
     report = st.session_state.get(REPORT_KEY)
+    if report and report.get("report_version") != 2:
+        # Descarta informes guardados por versiones anteriores que no incluían
+        # todos los bloques de análisis dentro del PDF.
+        st.session_state.pop(REPORT_KEY, None)
+        report = None
     if report:
         _render_report(report)
     else:
@@ -4575,7 +4651,8 @@ if active_page == "Análisis Pro":
     import json
     from openai import OpenAI
     from services.analysis_pro import (
-        PERIODOS, calcular_metricas, descargar_datos, enviar_pdf_email, generar_pdf,
+        PERIODOS, calcular_metricas, calcular_semaforo_alura, descargar_datos,
+        enviar_pdf_email, generar_pdf,
     )
     render_analysis_pro()
 
