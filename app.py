@@ -4512,7 +4512,8 @@ def _render_report(report: dict) -> None:
         for i, check in enumerate(semaforo.get("checks", [])):
             color = status_colors.get(check.get("status"), "#64748b")
             with check_cols[i % len(check_cols)]:
-                st.markdown(f"<div style='height:100%;padding:12px;border:1px solid #e8edf4;border-radius:12px;margin:0 0 8px'><div style='font-size:12px;color:#64748b'>{html.escape(str(check.get('category','')))}</div><b style='color:{color}'>{html.escape(str(check.get('detail','')))}</b></div>", unsafe_allow_html=True)
+                status_label = {"green": "OK", "yellow": "PARCIAL", "red": "NO", "gray": "N/D"}.get(check.get("status"), "N/D")
+                st.markdown(f"<div style='height:100%;padding:14px;border:1px solid #e5eaf1;border-top:3px solid {color};border-radius:12px;background:#f8fafc;margin:0 0 8px'><div style='display:flex;justify-content:space-between;gap:8px;align-items:center'><div style='font-size:12px;font-weight:700;color:#172033'>{html.escape(str(check.get('category','')))}</div><span style='font-size:10px;font-weight:800;color:{color};background:#fff;padding:4px 7px;border-radius:20px'>{status_label}</span></div><div style='font-size:12px;line-height:1.5;color:#64748b;margin-top:8px'>{html.escape(str(check.get('detail','')))}</div></div>", unsafe_allow_html=True)
         st.markdown("### Lectura de Alura Quant")
         _section("Resumen ejecutivo", commentary.get("resumen_ejecutivo") or commentary.get("resumen"))
         _section("Perfil de la compañía", commentary.get("perfil_compania"))
@@ -4557,7 +4558,8 @@ def _render_report(report: dict) -> None:
                 st.error("Introduce un email válido.")
             else:
                 ok, message = enviar_pdf_email(email.strip(), report["symbol"], report["pdf"],
-                                               report.get("semaforo"), report.get("commentary"))
+                                               report.get("semaforo"), report.get("commentary"),
+                                               report.get("metrics"))
                 st.success(message) if ok else st.warning(message)
 
     st.caption("Datos de proveedores externos, sujetos a retrasos y omisiones. Este informe es informativo y no constituye asesoramiento financiero.")
@@ -4611,7 +4613,7 @@ def render_analysis_pro() -> None:
                                       indicators, metrics, use_ai=True,
                                       commentary=commentary, semaforo=semaforo)
                     report = {
-                        "report_version": 2,
+                        "report_version": 3,
                         "symbol": symbol,
                         "period_label": period_label,
                         "history": history,
@@ -4629,9 +4631,8 @@ def render_analysis_pro() -> None:
                 st.caption("Comprueba el ticker, la conectividad y la cobertura de datos del proveedor.")
 
     report = st.session_state.get(REPORT_KEY)
-    if report and report.get("report_version") != 2:
-        # Descarta informes guardados por versiones anteriores que no incluían
-        # todos los bloques de análisis dentro del PDF.
+    if report and report.get("report_version") != 3:
+        # Descarta informes guardados antes del nuevo orden y diseño del semáforo.
         st.session_state.pop(REPORT_KEY, None)
         report = None
     if report:
