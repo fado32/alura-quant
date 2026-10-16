@@ -3954,15 +3954,15 @@ div[data-testid="stHorizontalBlock"]:has(.st-key-open_analysis_pro) > div[data-t
 .aq-brand{white-space:nowrap!important}
 @media(max-width:650px){
   div[data-testid="stHorizontalBlock"]:has(.st-key-open_analysis_pro){
-    display:grid!important;grid-template-columns:minmax(0,1fr) max-content!important;
+    display:grid!important;grid-template-columns:minmax(0,1fr) minmax(132px,42%)!important;
     width:100%!important;max-width:100%!important;box-sizing:border-box!important;
     padding:0 12px 8px!important;column-gap:8px!important;overflow:hidden!important
   }
   div[data-testid="stHorizontalBlock"]:has(.st-key-open_analysis_pro)>div[data-testid="column"]{
     width:auto!important;min-width:0!important;max-width:100%!important;flex:none!important
   }
-  .st-key-open_analysis_pro{justify-self:end!important;max-width:100%!important}
-  .st-key-open_analysis_pro button{font-size:12px!important;padding:0 10px!important}
+  .st-key-open_analysis_pro{justify-self:stretch!important;width:100%!important;max-width:100%!important}
+  .st-key-open_analysis_pro button{width:100%!important;min-width:0!important;font-size:12px!important;padding:0 9px!important}
 }
 </style>
 """, unsafe_allow_html=True)
@@ -4550,24 +4550,15 @@ def _render_report(report: dict) -> None:
         mime="application/pdf",
         type="primary",
     )
-    with st.expander("Enviar análisis por email"):
-        email = st.text_input("Email destinatario", key="analysis_pro_email",
-                              placeholder="nombre@dominio.com")
-        if st.button("Enviar análisis", key="send_analysis_pro_email"):
-            if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email.strip()):
-                st.error("Introduce un email válido.")
-            else:
-                ok, message = enviar_analisis_email(email.strip(), report["symbol"],
-                                                    report.get("semaforo"), report.get("commentary"),
-                                                    report.get("metrics"))
-                st.success(message) if ok else st.warning(message)
-
     st.caption("Datos de proveedores externos, sujetos a retrasos y omisiones. Este informe es informativo y no constituye asesoramiento financiero.")
 
 
 def render_analysis_pro() -> None:
     """Pinta Análisis Pro dentro de app.py sin crear una página de sidebar."""
     _load_secrets()
+    saved_report = st.session_state.get(REPORT_KEY)
+    if saved_report and saved_report.get("report_version") != 7:
+        st.session_state.pop(REPORT_KEY, None)
     st.markdown("""
     <style>
       .analysis-pro-shell{max-width:1080px;margin:0 auto}
@@ -4594,7 +4585,16 @@ def render_analysis_pro() -> None:
             period_label = st.selectbox("Periodo", list(PERIODOS.keys()), index=min(2, len(PERIODOS)-1))
         with c3:
             st.markdown("<div style='padding-top:8px;color:#64748b;font-size:13px'>Lectura de Alura Quant con Gemini incluida</div>", unsafe_allow_html=True)
-        generate = st.button("Generar análisis", key="analysis_pro_generate", type="primary")
+    action_cols = st.columns([1, 1.7, 1], gap="small")
+    with action_cols[0]:
+        generate = st.button("Generar análisis", key="analysis_pro_generate", type="primary", use_container_width=True)
+    with action_cols[1]:
+        email = st.text_input("Enviar por email", key="analysis_pro_email",
+                              placeholder="nombre@dominio.com", label_visibility="visible")
+    with action_cols[2]:
+        send_analysis = st.button("Enviar análisis", key="analysis_pro_send_email",
+                                  use_container_width=True,
+                                  disabled=not bool(st.session_state.get(REPORT_KEY)))
 
     if generate:
         symbol = ticker.strip().upper()
@@ -4613,7 +4613,7 @@ def render_analysis_pro() -> None:
                                       indicators, metrics, use_ai=True,
                                       commentary=commentary, semaforo=semaforo)
                     report = {
-                        "report_version": 6,
+                        "report_version": 7,
                         "symbol": symbol,
                         "period_label": period_label,
                         "history": history,
@@ -4630,8 +4630,24 @@ def render_analysis_pro() -> None:
                 st.error(f"No se pudo generar el informe: {exc}")
                 st.caption("Comprueba el ticker, la conectividad y la cobertura de datos del proveedor.")
 
+    if send_analysis:
+        report_to_send = st.session_state.get(REPORT_KEY)
+        if not report_to_send or report_to_send.get("report_version") != 7:
+            st.warning("Genera primero un análisis para poder enviarlo.")
+        elif not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email.strip()):
+            st.error("Introduce un email válido.")
+        else:
+            ok, message = enviar_analisis_email(
+                email.strip(), report_to_send["symbol"], report_to_send.get("semaforo"),
+                report_to_send.get("commentary"), report_to_send.get("metrics"),
+            )
+            if ok:
+                st.toast("Correo enviado correctamente.", icon="✅")
+            else:
+                st.error(message)
+
     report = st.session_state.get(REPORT_KEY)
-    if report and report.get("report_version") != 6:
+    if report and report.get("report_version") != 7:
         # Descarta informes guardados antes de los últimos cambios de lectura y semáforo.
         st.session_state.pop(REPORT_KEY, None)
         report = None
