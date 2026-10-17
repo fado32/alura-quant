@@ -4426,15 +4426,18 @@ def _gemini_commentary(symbol: str, period: str, info: dict,
         "semaforo_algoritmo": _clean(semaforo or {}),
         "noticias_disponibles": _clean(_news_for_prompt(news)),
     }
-    system_prompt = """Eres analista cuantitativo de Alura Quant. Escribe en español, con tono sobrio y claro.
+    system_prompt = """Eres analista cuantitativo de Alura Quant. Escribe en español, con tono cercano, claro y accesible para una persona que no sea experta en finanzas.
 Usa únicamente los datos entregados; no inventes hechos, cifras, catalizadores ni noticias.
 Distingue los datos observados de su interpretación. Señala las limitaciones de cobertura.
 No des recomendaciones personalizadas ni instrucciones de compra o venta.
+Explica primero qué significa cada señal con palabras cotidianas y después añade el dato técnico que la respalda.
+Cuando uses una sigla o indicador técnico por primera vez, explica brevemente qué mide (por ejemplo, RSI: indicador del ritmo de las subidas y bajadas recientes).
+Evita frases telegráficas, cadenas de fórmulas y jerga sin explicar. Usa frases cortas, ejemplos solo si se deducen de los datos y aclara qué puede y qué no puede concluirse.
 Devuelve exclusivamente JSON válido con estas claves: resumen_ejecutivo (2-3 frases),
 perfil_compania (un párrafo que explique qué hace la empresa, usando solo el perfil de entrada),
-lectura_tecnica (un párrafo que interprete las métricas), riesgos (lista de 2-4 puntos),
-conclusion (un párrafo). No generes una sección fundamental. Describe el semáforo como cumplimiento
-de filtros cuantitativos, nunca como recomendación personalizada."""
+lectura_tecnica (un párrafo que explique en lenguaje sencillo qué indican las métricas y mencione sus valores relevantes), riesgos (lista de 2-4 puntos explicados con claridad),
+conclusion (un párrafo breve que resuma el balance de señales y sus límites). No generes una sección fundamental. Describe el semáforo como cumplimiento
+de filtros cuantitativos, nunca como recomendación personalizada ni como una orden para invertir."""
     response = client.chat.completions.create(
         model=model,
         messages=[
@@ -4557,7 +4560,7 @@ def render_analysis_pro() -> None:
     """Pinta Análisis Pro dentro de app.py sin crear una página de sidebar."""
     _load_secrets()
     saved_report = st.session_state.get(REPORT_KEY)
-    if saved_report and saved_report.get("report_version") != 8:
+    if saved_report and saved_report.get("report_version") != 9:
         st.session_state.pop(REPORT_KEY, None)
     st.markdown("""
     <style>
@@ -4613,7 +4616,7 @@ def render_analysis_pro() -> None:
                                       indicators, metrics, use_ai=True,
                                       commentary=commentary, semaforo=semaforo)
                     report = {
-                        "report_version": 8,
+                        "report_version": 9,
                         "symbol": symbol,
                         "period_label": period_label,
                         "history": history,
@@ -4632,7 +4635,7 @@ def render_analysis_pro() -> None:
 
     if send_analysis:
         report_to_send = st.session_state.get(REPORT_KEY)
-        if not report_to_send or report_to_send.get("report_version") != 8:
+        if not report_to_send or report_to_send.get("report_version") != 9:
             st.warning("Genera primero un análisis para poder enviarlo.")
         elif not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email.strip()):
             st.error("Introduce un email válido.")
@@ -4648,7 +4651,7 @@ def render_analysis_pro() -> None:
                 st.error(message)
 
     report = st.session_state.get(REPORT_KEY)
-    if report and report.get("report_version") != 8:
+    if report and report.get("report_version") != 9:
         # Descarta informes guardados antes de los últimos cambios de lectura y semáforo.
         st.session_state.pop(REPORT_KEY, None)
         report = None
