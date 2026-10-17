@@ -4380,6 +4380,7 @@ def _normalize_commentary(raw: Any) -> dict:
         "resumen_ejecutivo": raw.get("resumen_ejecutivo") or raw.get("resumen") or raw.get("executive_summary"),
         "perfil_compania": raw.get("perfil_compania") or raw.get("perfil_de_la_compania") or raw.get("company_profile"),
         "lectura_tecnica": raw.get("lectura_tecnica") or raw.get("analisis_tecnico") or raw.get("technical_reading"),
+        "estrategia_tecnica": raw.get("estrategia_tecnica") or raw.get("escenarios_tecnicos") or raw.get("technical_scenarios"),
         "riesgos": raw.get("riesgos") or raw.get("riesgos_y_limitaciones") or raw.get("risks") or [],
         "conclusion": raw.get("conclusion") or raw.get("conclusión"),
     }
@@ -4391,6 +4392,7 @@ def _normalize_commentary(raw: Any) -> dict:
         "resumen_ejecutivo": "No se pudo generar el resumen con la información disponible.",
         "perfil_compania": "El proveedor no facilitó información suficiente para describir la compañía.",
         "lectura_tecnica": "No se pudo generar la lectura técnica con los datos disponibles.",
+        "estrategia_tecnica": "No hay datos suficientes para plantear escenarios técnicos con confianza.",
         "conclusion": "La conclusión queda limitada por la cobertura de los datos disponibles.",
     }
     for key, fallback in fallbacks.items():
@@ -4424,6 +4426,10 @@ def _gemini_commentary(symbol: str, period: str, info: dict,
         "perfil_empresa": company,
         "metricas": _clean(metrics),
         "semaforo_algoritmo": _clean(semaforo or {}),
+        "niveles_tecnicos": _clean({
+            "soporte_estimado": (semaforo or {}).get("support"),
+            "resistencia_estimada": (semaforo or {}).get("resistance"),
+        }),
         "noticias_disponibles": _clean(_news_for_prompt(news)),
     }
     system_prompt = """Eres analista cuantitativo de Alura Quant. Escribe en español, con tono cercano, claro y accesible para una persona que no sea experta en finanzas.
@@ -4436,6 +4442,7 @@ Evita frases telegráficas, cadenas de fórmulas y jerga sin explicar. Usa frase
 Devuelve exclusivamente JSON válido con estas claves: resumen_ejecutivo (2-3 frases),
 perfil_compania (un párrafo que explique qué hace la empresa, usando solo el perfil de entrada),
 lectura_tecnica (un párrafo que explique en lenguaje sencillo qué indican las métricas y mencione sus valores relevantes), riesgos (lista de 2-4 puntos explicados con claridad),
+estrategia_tecnica (2-3 frases bajo el título “Escenarios técnicos posibles”: comenta de forma hipotética qué supondría que el precio se mantuviera sobre el soporte estimado, superase la resistencia con confirmación o perdiese el soporte; usa los niveles numéricos disponibles, explica que son referencias aproximadas y señala qué dato invalidaría cada escenario. Si faltan niveles, dilo claramente),
 conclusion (un párrafo breve que resuma el balance de señales y sus límites). No generes una sección fundamental. Describe el semáforo como cumplimiento
 de filtros cuantitativos, nunca como recomendación personalizada ni como una orden para invertir."""
     response = client.chat.completions.create(
@@ -4525,6 +4532,7 @@ def _render_report(report: dict) -> None:
         _section("Resumen ejecutivo", commentary.get("resumen_ejecutivo") or commentary.get("resumen"))
         _section("Perfil de la compañía", commentary.get("perfil_compania"))
         _section("Lectura técnica", commentary.get("lectura_tecnica"))
+        _section("Escenarios técnicos posibles", commentary.get("estrategia_tecnica"))
         _section("Riesgos y limitaciones", "\n".join(
             f"- {item}" for item in commentary.get("riesgos", [])
         ))
@@ -4560,7 +4568,7 @@ def render_analysis_pro() -> None:
     """Pinta Análisis Pro dentro de app.py sin crear una página de sidebar."""
     _load_secrets()
     saved_report = st.session_state.get(REPORT_KEY)
-    if saved_report and saved_report.get("report_version") != 9:
+    if saved_report and saved_report.get("report_version") != 10:
         st.session_state.pop(REPORT_KEY, None)
     st.markdown("""
     <style>
@@ -4616,7 +4624,7 @@ def render_analysis_pro() -> None:
                                       indicators, metrics, use_ai=True,
                                       commentary=commentary, semaforo=semaforo)
                     report = {
-                        "report_version": 9,
+                        "report_version": 10,
                         "symbol": symbol,
                         "period_label": period_label,
                         "history": history,
@@ -4635,7 +4643,7 @@ def render_analysis_pro() -> None:
 
     if send_analysis:
         report_to_send = st.session_state.get(REPORT_KEY)
-        if not report_to_send or report_to_send.get("report_version") != 9:
+        if not report_to_send or report_to_send.get("report_version") != 10:
             st.warning("Genera primero un análisis para poder enviarlo.")
         elif not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email.strip()):
             st.error("Introduce un email válido.")
@@ -4651,7 +4659,7 @@ def render_analysis_pro() -> None:
                 st.error(message)
 
     report = st.session_state.get(REPORT_KEY)
-    if report and report.get("report_version") != 9:
+    if report and report.get("report_version") != 10:
         # Descarta informes guardados antes de los últimos cambios de lectura y semáforo.
         st.session_state.pop(REPORT_KEY, None)
         report = None
