@@ -512,6 +512,7 @@ def enviar_analisis_email(email: str, symbol: str,
             },
         }
         check_cards = []
+        analysis_items = []
         for check in semaforo.get("checks", []):
             status = check.get("status", "gray")
             color = colors_by_status.get(status, "#8792a2")
@@ -522,12 +523,15 @@ def enviar_analisis_email(email: str, symbol: str,
             technical_detail = str(check.get("detail", ""))
             check_cards.append(
                 "<td width='50%' valign='top' style='padding:5px'>"
-                f"<div style='background:#fff;border:1px solid #e5eaf1;border-top:3px solid {color};border-radius:10px;padding:12px'>"
-                f"<div style='font-size:12px;font-weight:700;color:#15243a'>{html.escape(category)}</div>"
-                f"<div style='font-size:10px;font-weight:800;color:{color};margin:5px 0'>{html.escape(label)}</div>"
-                f"<div style='font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#2563eb;font-weight:800;margin:7px 0 3px'>Análisis Alura</div>"
-                f"<div style='font-size:12px;line-height:1.55;color:#334155'>{html.escape(explanation)}</div>"
-                f"<div style='font-size:10px;line-height:1.45;color:#8792a2;margin-top:7px'>Dato técnico: {html.escape(technical_detail)}</div></div></td>"
+                f"<div style='background:#fff;border:1px solid #e5eaf1;border-left:4px solid {color};border-radius:9px;padding:12px 14px'>"
+                f"<span style='font-size:12px;font-weight:700;color:#15243a'>{html.escape(category)}</span>"
+                f"<span style='display:inline-block;margin-left:8px;font-size:10px;font-weight:800;color:{color}'>{html.escape(label)}</span></div></td>"
+            )
+            analysis_items.append(
+                "<div style='padding:13px 0;border-bottom:1px solid #e5eaf1'>"
+                f"<div style='font-size:13px;font-weight:700;color:#15243a;margin-bottom:4px'>{html.escape(category)}</div>"
+                f"<div style='font-size:13px;line-height:1.6;color:#334155'>{html.escape(explanation)}</div>"
+                f"<div style='font-size:11px;line-height:1.5;color:#64748b;margin-top:5px'><b>Dato que lo respalda:</b> {html.escape(technical_detail)}</div></div>"
             )
         check_rows = []
         for index in range(0, len(check_cards), 2):
@@ -537,10 +541,17 @@ def enviar_analisis_email(email: str, symbol: str,
             check_rows.append("<tr>" + "".join(pair) + "</tr>")
         semaforo_html = (
             f"<div style='margin:0 0 22px;padding:18px;background:#fff;border:1px solid #e5eaf1;border-left:4px solid {overall};border-radius:14px'>"
-            "<div style='font-size:10px;letter-spacing:.14em;font-weight:800;color:#2563eb'>ALURA QUANT · ANÁLISIS ALURA</div>"
+            "<div style='font-size:10px;letter-spacing:.14em;font-weight:800;color:#2563eb'>ALURA QUANT · SEMÁFORO</div>"
             f"<div style='font-size:19px;font-weight:800;color:{overall};margin:8px 0 12px'>{html.escape(decision)}</div>"
             "<div style='font-size:12px;line-height:1.6;color:#64748b;margin:-3px 0 10px'>Resumen de cómo encaja el valor con los filtros cuantitativos de Alura Quant. Es una lectura del modelo, no una recomendación personal de compra o venta.</div>"
             f"<table role='presentation' width='100%' cellspacing='0' cellpadding='0'>{''.join(check_rows)}</table></div>"
+        )
+        analysis_html = (
+            "<div style='margin:22px 0;padding:18px;background:#fff;border:1px solid #e5eaf1;border-radius:14px'>"
+            "<div style='font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;font-weight:800;margin-bottom:3px'>Análisis Alura</div>"
+            "<div style='font-size:13px;line-height:1.6;color:#64748b;margin-bottom:4px'>Qué significa cada señal y qué dato técnico la respalda.</div>"
+            + "".join(analysis_items)
+            + "</div>"
         )
         chart_png = _sparkline_png(history)
         chart_html = (
@@ -587,6 +598,7 @@ def enviar_analisis_email(email: str, symbol: str,
             f"<h1 style='margin:9px 0 0;font-size:24px'>Informe de {html.escape(symbol)}</h1></div>"
             + semaforo_html
             + chart_html
+            + analysis_html
             + email_section("Lo más importante", summary)
             + email_section("A qué se dedica la compañía", profile)
             + "<div style='margin-top:22px'><div style='font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;font-weight:800;margin-bottom:8px'>Datos del mercado</div>"
