@@ -475,20 +475,59 @@ def enviar_analisis_email(email: str, symbol: str,
         semaforo = semaforo or {}
         colors_by_status = {"green": "#16834a", "red": "#c43d45", "yellow": "#d49426", "gray": "#8792a2"}
         eligible = semaforo.get("eligible")
-        decision = "CUMPLE FILTROS DE ENTRADA" if eligible is True else (
-            "NO CUMPLE FILTROS DE ENTRADA" if eligible is False else "NO EVALUABLE")
+        decision = "SEÑALES DE ENTRADA FAVORABLES" if eligible is True else (
+            "NO SUPERA TODOS LOS FILTROS" if eligible is False else "ANÁLISIS INCOMPLETO")
         overall = colors_by_status["green"] if eligible is True else (
             colors_by_status["red"] if eligible is False else colors_by_status["gray"])
+        explanations = {
+            "Tendencia": {
+                "green": "La cotización muestra una tendencia favorable frente a sus medias de corto y largo plazo.",
+                "yellow": "La tendencia presenta señales mezcladas. Conviene leerla junto con el resto del análisis.",
+                "red": "La tendencia no acompaña: el precio o sus medias reflejan debilidad según los filtros del modelo.",
+            },
+            "Score cuantitativo": {
+                "green": "La combinación de señales técnicas supera el nivel mínimo que exige el modelo.",
+                "yellow": "La puntuación se acerca al nivel requerido, pero todavía no lo alcanza.",
+                "red": "La puntuación queda por debajo del nivel que exige el modelo.",
+            },
+            "Momentum": {
+                "green": "El movimiento reciente conserva impulso positivo, sin superar el rango que el modelo considera prudente.",
+                "yellow": "El impulso ofrece señales mixtas: hay algún indicio favorable, pero no es concluyente.",
+                "red": "El movimiento reciente no muestra suficiente impulso positivo.",
+            },
+            "Volumen relativo": {
+                "green": "La actividad de negociación reciente alcanza el nivel que busca el modelo.",
+                "yellow": "La actividad está algo por debajo del nivel deseado; la señal de participación es moderada.",
+                "red": "La actividad de negociación es baja frente al mínimo que busca el modelo.",
+            },
+            "Liquidez": {
+                "green": "El valor negocia un volumen de dinero suficiente para superar el filtro de liquidez.",
+                "yellow": "La liquidez es limitada y puede dificultar entrar o salir al precio esperado.",
+                "red": "El volumen negociado no alcanza el mínimo de liquidez establecido por el modelo.",
+            },
+            "Riesgo / beneficio": {
+                "green": "La distancia entre el nivel de salida por riesgo y el objetivo potencial supera el mínimo exigido.",
+                "yellow": "La relación entre el riesgo estimado y el objetivo potencial queda cerca del mínimo.",
+                "red": "El objetivo potencial no compensa el riesgo estimado según los filtros del modelo.",
+            },
+        }
         check_cards = []
         for check in semaforo.get("checks", []):
-            color = colors_by_status.get(check.get("status"), "#8792a2")
-            label = {"green": "OK", "yellow": "PARCIAL", "red": "NO", "gray": "N/D"}.get(check.get("status"), "N/D")
+            status = check.get("status", "gray")
+            color = colors_by_status.get(status, "#8792a2")
+            label = {"green": "VERDE", "yellow": "ÁMBAR", "red": "ROJO", "gray": "N/D"}.get(status, "N/D")
+            category = str(check.get("category", ""))
+            explanation = explanations.get(category, {}).get(
+                status, "Esta señal debe interpretarse junto con el resto de los datos disponibles.")
+            technical_detail = str(check.get("detail", ""))
             check_cards.append(
                 "<td width='50%' valign='top' style='padding:5px'>"
                 f"<div style='background:#fff;border:1px solid #e5eaf1;border-top:3px solid {color};border-radius:10px;padding:12px'>"
-                f"<div style='font-size:12px;font-weight:700;color:#15243a'>{html.escape(str(check.get('category', '')))}</div>"
+                f"<div style='font-size:12px;font-weight:700;color:#15243a'>{html.escape(category)}</div>"
                 f"<div style='font-size:10px;font-weight:800;color:{color};margin:5px 0'>{html.escape(label)}</div>"
-                f"<div style='font-size:11px;line-height:1.5;color:#64748b'>{html.escape(str(check.get('detail', '')))}</div></div></td>"
+                f"<div style='font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#2563eb;font-weight:800;margin:7px 0 3px'>Análisis Alura</div>"
+                f"<div style='font-size:12px;line-height:1.55;color:#334155'>{html.escape(explanation)}</div>"
+                f"<div style='font-size:10px;line-height:1.45;color:#8792a2;margin-top:7px'>Dato técnico: {html.escape(technical_detail)}</div></div></td>"
             )
         check_rows = []
         for index in range(0, len(check_cards), 2):
@@ -498,8 +537,9 @@ def enviar_analisis_email(email: str, symbol: str,
             check_rows.append("<tr>" + "".join(pair) + "</tr>")
         semaforo_html = (
             f"<div style='margin:0 0 22px;padding:18px;background:#fff;border:1px solid #e5eaf1;border-left:4px solid {overall};border-radius:14px'>"
-            "<div style='font-size:10px;letter-spacing:.14em;font-weight:800;color:#2563eb'>ALURA QUANT · SEMÁFORO</div>"
+            "<div style='font-size:10px;letter-spacing:.14em;font-weight:800;color:#2563eb'>ALURA QUANT · ANÁLISIS ALURA</div>"
             f"<div style='font-size:19px;font-weight:800;color:{overall};margin:8px 0 12px'>{html.escape(decision)}</div>"
+            "<div style='font-size:12px;line-height:1.6;color:#64748b;margin:-3px 0 10px'>Resumen de cómo encaja el valor con los filtros cuantitativos de Alura Quant. Es una lectura del modelo, no una recomendación personal de compra o venta.</div>"
             f"<table role='presentation' width='100%' cellspacing='0' cellpadding='0'>{''.join(check_rows)}</table></div>"
         )
         chart_png = _sparkline_png(history)
@@ -547,13 +587,13 @@ def enviar_analisis_email(email: str, symbol: str,
             f"<h1 style='margin:9px 0 0;font-size:24px'>Informe de {html.escape(symbol)}</h1></div>"
             + semaforo_html
             + chart_html
-            + email_section("Resumen ejecutivo", summary)
-            + email_section("Perfil de la compañía", profile)
-            + "<div style='margin-top:22px'><div style='font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;font-weight:800;margin-bottom:8px'>Métricas de mercado</div>"
+            + email_section("Lo más importante", summary)
+            + email_section("A qué se dedica la compañía", profile)
+            + "<div style='margin-top:22px'><div style='font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;font-weight:800;margin-bottom:8px'>Datos del mercado</div>"
               f"<table role='presentation' width='100%' cellspacing='0' cellpadding='0' style='border-collapse:collapse'>{metric_rows}</table></div>"
-            + email_section("Lectura técnica", commentary.get("lectura_tecnica"))
-            + "<div style='margin:22px 0 0'><div style='font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;font-weight:800;margin-bottom:7px'>Riesgos y limitaciones</div>" + risks_html + "</div>"
-            + email_section("Conclusión", commentary.get("conclusion"))
+            + email_section("Qué nos dicen los indicadores", commentary.get("lectura_tecnica"))
+            + "<div style='margin:22px 0 0'><div style='font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;font-weight:800;margin-bottom:7px'>Aspectos a tener en cuenta</div>" + risks_html + "</div>"
+            + email_section("En pocas palabras", commentary.get("conclusion"))
             + "<div style='margin-top:24px;padding-top:12px;border-top:1px solid #e5eaf1;font-size:11px;color:#8792a2'>ALURA QUANT · Informe informativo; no constituye asesoramiento financiero.</div></div>"
         )
         params = {
