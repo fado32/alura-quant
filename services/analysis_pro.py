@@ -115,10 +115,12 @@ def calcular_metricas(history: pd.DataFrame):
 def calcular_semaforo_alura(history: pd.DataFrame):
     """Aplica el score y los filtros de entrada estructurales definidos en bot.py."""
     def result_unavailable(reason: str) -> dict:
+        support = float(pd.to_numeric(history["Low"], errors="coerce").dropna().iloc[-16:-1].min()) if history is not None and "Low" in history and len(history) > 1 else None
+        resistance = float(pd.to_numeric(history["High"], errors="coerce").dropna().iloc[-61:-1].max()) if history is not None and "High" in history and len(history) > 1 else None
         return {
             "eligible": None, "status": "gray", "label": "NO EVALUABLE",
             "score": None, "checks": [{"category": "Cobertura de datos", "status": "gray", "detail": reason}],
-            "pre_ruptura": False,
+            "pre_ruptura": False, "support": support, "resistance": resistance,
         }
 
     if history is None or history.empty or len(history) < 220:
@@ -242,6 +244,7 @@ def calcular_semaforo_alura(history: pd.DataFrame):
         "label": "CUMPLE FILTROS DEL BOT" if eligible else "NO CUMPLE TODOS LOS FILTROS",
         "score": score, "rvol": rvol, "rvol_minimum": rvol_minimum,
         "liquidity_20d": turnover20, "pre_ruptura": pre_breakout,
+        "support": support, "resistance": resistance,
         "stop": stop, "target": target, "rr": rr,
         "checks": checks,
     }
@@ -262,13 +265,26 @@ def _fmt(value: Any, suffix: str = "") -> str:
         return "N/D"
 
 
-def _sparkline_png(history: pd.DataFrame, width: int = 960, height: int = 360) -> bytes | None:
-    """Dibuja una curva de cierre PNG sin dependencias gráficas externas."""
+def _sparkline_png(history: pd.DataFrame, width: int = 960, height: int = 430,
+                   semaforo: dict | None = None) -> bytes | None:
+    """Dibuja cierres, años, escala de precios y niveles técnicos en un PNG."""
     if history is None or history.empty or "Close" not in history:
         return None
-    values = pd.to_numeric(history["Close"], errors="coerce").dropna().astype(float).tolist()
+    closes = pd.to_numeric(history["Close"], errors="coerce").dropna().astype(float)
+    values = closes.tolist()
     if len(values) < 2:
         return None
+    semaforo = semaforo or {}
+    try:
+        support = float(semaforo.get("support"))
+    except (TypeError, ValueError):
+        support = float(pd.to_numeric(history["Low"], errors="coerce").dropna().iloc[-16:-1].min()) if "Low" in history and history["Low"].notna().any() else None
+    try:
+        resistance = float(semaforo.get("resistance"))
+    except (TypeError, ValueError):
+        resistance = float(pd.to_numeric(history["High"], errors="coerce").dropna().iloc[-61:-1].max()) if "High" in history and history["High"].notna().any() else None
+    if support is not None and not pd.notna(support): support = None
+    if resistance is not None and not pd.notna(resistance): resistance = None
     pixels = bytearray([255] * (width * height * 3))
 
     def paint(x: int, y: int, color: tuple[int, int, int]) -> None:
@@ -292,18 +308,67 @@ def _sparkline_png(history: pd.DataFrame, width: int = 960, height: int = 360) -
                 error += dx
                 y0 += sy
 
-    left, right, top, bottom = 42, width - 18, 22, height - 30
+    glyphs = {
+        "0": ("111", "101", "101", "101", "111"), "1": ("010", "110", "010", "010", "111"),
+        "2": ("110", "001", "111", "100", "111"), "3": ("110", "001", "111", "001", "110"),
+        "4": ("101", "101", "111", "001", "001"), "5": ("111", "100", "110", "001", "110"),
+        "6": ("011", "100", "110", "101", "111"), "7": ("111", "001", "010", "010", "010"),
+        "8": ("111", "101", "111", "101", "111"), "9": ("111", "101", "111", "001", "110"),
+        ".": ("000", "000", "000", "000", "010"), ",": ("000", "000", "000", "010", "100"),
+        "-": ("000", "000", "111", "000", "000"), " ": ("000", "000", "000", "000", "000"),
+        "S": ("111", "100", "111", "001", "111"), "R": ("110", "101", "110", "101", "101"),
+        "A": ("010", "101", "111", "101", "101"), "N": ("101", "111", "111", "111", "101"),
+        "Ñ": ("101", "111", "101", "111", "101"), "O": ("111", "101", "101", "101", "111"),
+        "P": ("110", "101", "110", "100", "100"), "E": ("111", "100", "110", "100", "111"),
+        "C": ("011", "100", "100", "100", "011"), "I": ("111", "010", "010", "010", "111"),
+    }
+
+    def draw_text(x: int, y: int, text: str, color: tuple[int, int, int]) -> None:
+        cursor = x
+        for char in text:
+            bitmap = glyphs.get(char, glyphs[" "])
+            for row, bits in enumerate(bitmap):
+                for col, bit in enumerate(bits):
+                    if bit == "1":
+                        for scale_y in range(2):
+                            for scale_x in range(2):
+                                paint(cursor + col * 2 + scale_x, y + row * 2 + scale_y, color)
+            cursor += 8
+
+    left, right, top, bottom = 82, width - 142, 30, height - 64
     grid = (231, 237, 245)
+    candidates = values + [v for v in (support, resistance) if v is not None]
+    low, high = min(candidates), max(candidates)
+    padding = (high - low) * 0.08 or max(abs(high) * 0.01, 1.0)
+    low, high = low - padding, high + padding
+    spread = high - low
+
+    def price_y(value: float) -> int:
+        return bottom - round((value - low) / spread * (bottom - top))
+
+    text_color = (100, 116, 139)
+    draw_text(4, 10, "PRECIO", text_color)
     for step in range(5):
-        y = top + (bottom - top) * step // 4
+        fraction = step / 4
+        y = top + round((bottom - top) * fraction)
+        value = high - spread * fraction
         line(left, y, right, y, grid)
-    low, high = min(values), max(values)
-    spread = high - low or max(abs(high) * 0.01, 1.0)
+        draw_text(4, y - 2, f"{value:,.2f}", text_color)
     points = []
     for idx, value in enumerate(values):
         x = left + round(idx * (right - left) / (len(values) - 1))
-        y = bottom - round((value - low) / spread * (bottom - top))
+        y = price_y(value)
         points.append((x, y))
+
+    for value, level_color, marker in (
+        (support, (13, 148, 136), "S"), (resistance, (220, 85, 65), "R")
+    ):
+        if value is not None and low <= value <= high:
+            y = price_y(value)
+            for x in range(left, right, 12):
+                line(x, y, min(x + 6, right), y, level_color)
+            draw_text(right + 8, y - 3, f"{marker} {value:,.2f}", level_color)
+
     blue = (37, 99, 235)
     for first, second in zip(points, points[1:]):
         line(first[0], first[1], second[0], second[1], blue)
@@ -313,6 +378,24 @@ def _sparkline_png(history: pd.DataFrame, width: int = 960, height: int = 360) -
         for dx in range(-5, 6):
             if dx * dx + dy * dy <= 25:
                 paint(ex + dx, ey + dy, end_color)
+
+    try:
+        date_index = pd.to_datetime(closes.index)
+        year_values = date_index.year
+        years = sorted(set(int(year) for year in year_values))
+        if len(years) > 6:
+            stride = max(1, (len(years) - 1) // 5)
+            years = years[::stride]
+            if int(year_values[-1]) not in years:
+                years.append(int(year_values[-1]))
+        for year in years:
+            indices = [i for i, candidate_year in enumerate(year_values) if int(candidate_year) == year]
+            idx = indices[0]
+            x = left + round(idx * (right - left) / (len(values) - 1))
+            draw_text(x - 16, bottom + 11, str(year), text_color)
+        draw_text((left + right) // 2 - 12, height - 14, "AÑO", text_color)
+    except Exception:
+        pass
 
     raw = b"".join(b"\x00" + pixels[y * width * 3:(y + 1) * width * 3] for y in range(height))
 
@@ -444,6 +527,8 @@ def generar_pdf(symbol: str, periodo_label: str, data: pd.DataFrame,
     ]:
         story.append(Paragraph(title, section_style))
         story.append(Paragraph(_ascii(text or "No disponible."), body_style))
+    story.append(Paragraph("Escenarios técnicos posibles", section_style))
+    story.append(Paragraph(_ascii(commentary.get("estrategia_tecnica") or "No hay datos suficientes para plantear escenarios técnicos con confianza."), body_style))
     risks = commentary.get("riesgos", [])
     if isinstance(risks, str):
         risks = [line.strip(" •-\t") for line in risks.splitlines() if line.strip(" •-\t")]
@@ -527,7 +612,7 @@ def enviar_analisis_email(email: str, symbol: str,
                 ("green", "#16834a", "#dcefe4"),
             ]
             bar_segments = "".join(
-                f"<td width='33.33%' height='6' style='height:6px;line-height:0;font-size:0;background:{active if status == key else muted};border-radius:4px'>&nbsp;</td>"
+                f"<td width='33.33%' height='10' bgcolor='{active if status == key else muted}' style='height:10px;line-height:10px;font-size:1px;background-color:{active if status == key else muted};border-radius:5px'>&nbsp;</td>"
                 for key, active, muted in bar_palette
             )
             check_cards.append(
@@ -561,11 +646,12 @@ def enviar_analisis_email(email: str, symbol: str,
             + "".join(analysis_items)
             + "</div>"
         )
-        chart_png = _sparkline_png(history)
+        chart_png = _sparkline_png(history, semaforo=semaforo)
         chart_html = (
             "<div style='margin:18px 0 22px;padding:16px;background:#fff;border:1px solid #e5eaf1;border-radius:12px'>"
             "<div style='font-size:10px;letter-spacing:.13em;color:#2563eb;font-weight:800;margin-bottom:10px'>EVOLUCIÓN DEL VALOR</div>"
-            "<img src='cid:alura-price-chart' alt='Evolución del precio' style='display:block;width:100%;height:auto;border:0'>"
+            "<img src='cid:alura-price-chart' alt='Evolución del precio con escala anual, precios, soporte y resistencia' style='display:block;width:100%;height:auto;border:0'>"
+            "<div style='font-size:10px;line-height:1.5;color:#64748b;margin-top:7px'>Precio de cierre. S: mínimo de las 15 sesiones anteriores; R: máximo de las 60 sesiones anteriores. Son niveles históricos aproximados, no garantías.</div>"
             "</div>" if chart_png else ""
         )
         summary = commentary.get("resumen_ejecutivo") or commentary.get("resumen") or "No disponible."
@@ -612,6 +698,7 @@ def enviar_analisis_email(email: str, symbol: str,
             + "<div style='margin-top:22px'><div style='font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;font-weight:800;margin-bottom:8px'>Datos del mercado</div>"
               f"<table role='presentation' width='100%' cellspacing='0' cellpadding='0' style='border-collapse:collapse'>{metric_rows}</table></div>"
             + email_section("Qué nos dicen los indicadores", commentary.get("lectura_tecnica"))
+            + email_section("Escenarios técnicos posibles", commentary.get("estrategia_tecnica"))
             + "<div style='margin:22px 0 0'><div style='font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#2563eb;font-weight:800;margin-bottom:7px'>Aspectos a tener en cuenta</div>" + risks_html + "</div>"
             + email_section("En pocas palabras", commentary.get("conclusion"))
             + "<div style='margin-top:24px;padding-top:12px;border-top:1px solid #e5eaf1;font-size:11px;color:#8792a2'>ALURA QUANT · Informe informativo; no constituye asesoramiento financiero.</div></div>"
