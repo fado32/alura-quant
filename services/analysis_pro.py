@@ -309,18 +309,30 @@ def _sparkline_png(history: pd.DataFrame, width: int = 960, height: int = 430,
                 y0 += sy
 
     glyphs = {
-        "0": ("111", "101", "101", "101", "111"), "1": ("010", "110", "010", "010", "111"),
-        "2": ("110", "001", "111", "100", "111"), "3": ("110", "001", "111", "001", "110"),
-        "4": ("101", "101", "111", "001", "001"), "5": ("111", "100", "110", "001", "110"),
-        "6": ("011", "100", "110", "101", "111"), "7": ("111", "001", "010", "010", "010"),
-        "8": ("111", "101", "111", "101", "111"), "9": ("111", "101", "111", "001", "110"),
-        ".": ("000", "000", "000", "000", "010"), ",": ("000", "000", "000", "010", "100"),
-        "-": ("000", "000", "111", "000", "000"), " ": ("000", "000", "000", "000", "000"),
-        "S": ("111", "100", "111", "001", "111"), "R": ("110", "101", "110", "101", "101"),
-        "A": ("010", "101", "111", "101", "101"), "N": ("101", "111", "111", "111", "101"),
-        "Ñ": ("101", "111", "101", "111", "101"), "O": ("111", "101", "101", "101", "111"),
-        "P": ("110", "101", "110", "100", "100"), "E": ("111", "100", "110", "100", "111"),
-        "C": ("011", "100", "100", "100", "011"), "I": ("111", "010", "010", "010", "111"),
+        "0": ("01110", "10001", "10011", "10101", "11001", "10001", "01110"),
+        "1": ("00100", "01100", "00100", "00100", "00100", "00100", "01110"),
+        "2": ("01110", "10001", "00001", "00010", "00100", "01000", "11111"),
+        "3": ("11110", "00001", "00001", "01110", "00001", "00001", "11110"),
+        "4": ("00010", "00110", "01010", "10010", "11111", "00010", "00010"),
+        "5": ("11111", "10000", "10000", "11110", "00001", "00001", "11110"),
+        "6": ("01110", "10000", "10000", "11110", "10001", "10001", "01110"),
+        "7": ("11111", "00001", "00010", "00100", "01000", "01000", "01000"),
+        "8": ("01110", "10001", "10001", "01110", "10001", "10001", "01110"),
+        "9": ("01110", "10001", "10001", "01111", "00001", "00001", "01110"),
+        ".": ("00000", "00000", "00000", "00000", "00000", "00110", "00110"),
+        ",": ("00000", "00000", "00000", "00000", "00110", "00110", "00100"),
+        "-": ("00000", "00000", "00000", "11111", "00000", "00000", "00000"),
+        " ": ("00000", "00000", "00000", "00000", "00000", "00000", "00000"),
+        "S": ("01111", "10000", "10000", "01110", "00001", "00001", "11110"),
+        "R": ("11110", "10001", "10001", "11110", "10100", "10010", "10001"),
+        "A": ("01110", "10001", "10001", "11111", "10001", "10001", "10001"),
+        "N": ("10001", "11001", "10101", "10011", "10001", "10001", "10001"),
+        "Ñ": ("00100", "01010", "10001", "11001", "10101", "10011", "10001", "10001"),
+        "O": ("01110", "10001", "10001", "10001", "10001", "10001", "01110"),
+        "P": ("11110", "10001", "10001", "11110", "10000", "10000", "10000"),
+        "E": ("11111", "10000", "10000", "11110", "10000", "10000", "11111"),
+        "C": ("01111", "10000", "10000", "10000", "10000", "10000", "01111"),
+        "I": ("11111", "00100", "00100", "00100", "00100", "00100", "11111"),
     }
 
     def draw_text(x: int, y: int, text: str, color: tuple[int, int, int]) -> None:
@@ -333,9 +345,9 @@ def _sparkline_png(history: pd.DataFrame, width: int = 960, height: int = 430,
                         for scale_y in range(2):
                             for scale_x in range(2):
                                 paint(cursor + col * 2 + scale_x, y + row * 2 + scale_y, color)
-            cursor += 8
+            cursor += 12
 
-    left, right, top, bottom = 82, width - 142, 30, height - 64
+    left, right, top, bottom = 112, width - 184, 30, height - 64
     grid = (231, 237, 245)
     candidates = values + [v for v in (support, resistance) if v is not None]
     low, high = min(candidates), max(candidates)
@@ -353,7 +365,7 @@ def _sparkline_png(history: pd.DataFrame, width: int = 960, height: int = 430,
         y = top + round((bottom - top) * fraction)
         value = high - spread * fraction
         line(left, y, right, y, grid)
-        draw_text(4, y - 2, f"{value:,.2f}", text_color)
+        draw_text(4, y - 5, f"{value:,.2f}", text_color)
     points = []
     for idx, value in enumerate(values):
         x = left + round(idx * (right - left) / (len(values) - 1))
@@ -367,7 +379,7 @@ def _sparkline_png(history: pd.DataFrame, width: int = 960, height: int = 430,
             y = price_y(value)
             for x in range(left, right, 12):
                 line(x, y, min(x + 6, right), y, level_color)
-            draw_text(right + 8, y - 3, f"{marker} {value:,.2f}", level_color)
+            draw_text(right + 8, y - 7, f"{marker} {value:,.2f}", level_color)
 
     blue = (37, 99, 235)
     for first, second in zip(points, points[1:]):
@@ -392,8 +404,8 @@ def _sparkline_png(history: pd.DataFrame, width: int = 960, height: int = 430,
             indices = [i for i, candidate_year in enumerate(year_values) if int(candidate_year) == year]
             idx = indices[0]
             x = left + round(idx * (right - left) / (len(values) - 1))
-            draw_text(x - 16, bottom + 11, str(year), text_color)
-        draw_text((left + right) // 2 - 12, height - 14, "AÑO", text_color)
+            draw_text(x - 24, bottom + 10, str(year), text_color)
+        draw_text((left + right) // 2 - 18, height - 16, "AÑO", text_color)
     except Exception:
         pass
 
@@ -615,6 +627,10 @@ def enviar_analisis_email(email: str, symbol: str,
                 f"<td width='33.33%' height='10' bgcolor='{active if status == key else muted}' style='height:10px;line-height:10px;font-size:1px;background-color:{active if status == key else muted};border-radius:5px'>&nbsp;</td>"
                 for key, active, muted in bar_palette
             )
+            mini_bar_segments = "".join(
+                f"<td width='33.33%' height='5' bgcolor='{active if status == key else muted}' style='height:5px;line-height:5px;font-size:1px;background-color:{active if status == key else muted};border-radius:3px'>&nbsp;</td>"
+                for key, active, muted in bar_palette
+            )
             check_cards.append(
                 "<tr><td style='padding:4px 0'>"
                 "<table role='presentation' width='100%' cellspacing='0' cellpadding='0' style='background:#fff;border:1px solid #e5eaf1;border-radius:10px'>"
@@ -627,7 +643,11 @@ def enviar_analisis_email(email: str, symbol: str,
             )
             analysis_items.append(
                 "<div style='padding:13px 0;border-bottom:1px solid #e5eaf1'>"
-                f"<div style='font-size:13px;font-weight:700;color:#15243a;margin-bottom:4px'>{html.escape(category)}</div>"
+                "<table role='presentation' width='100%' cellspacing='0' cellpadding='0'><tr>"
+                f"<td style='font-size:13px;font-weight:700;color:{color}'>{html.escape(category)}</td>"
+                f"<td align='right' style='font-size:10px;font-weight:800;color:{color}'>{html.escape(label)}</td></tr></table>"
+                "<table role='presentation' width='72' cellspacing='0' cellpadding='0' style='margin:5px 0 8px'><tr>"
+                f"{mini_bar_segments}</tr></table>"
                 f"<div style='font-size:13px;line-height:1.6;color:#334155'>{html.escape(explanation)}</div>"
                 f"<div style='font-size:11px;line-height:1.5;color:#64748b;margin-top:5px'><b>Dato que lo respalda:</b> {html.escape(technical_detail)}</div></div>"
             )
@@ -636,7 +656,6 @@ def enviar_analisis_email(email: str, symbol: str,
             f"<div style='margin:0 0 22px;padding:18px;background:#fff;border:1px solid #e5eaf1;border-left:4px solid {overall};border-radius:14px'>"
             "<div style='font-size:10px;letter-spacing:.14em;font-weight:800;color:#2563eb'>ALURA QUANT · SEMÁFORO</div>"
             f"<div style='font-size:19px;font-weight:800;color:{overall};margin:8px 0 12px'>{html.escape(decision)}</div>"
-            "<div style='font-size:12px;line-height:1.6;color:#64748b;margin:-3px 0 10px'>Resumen de cómo encaja el valor con los filtros cuantitativos de Alura Quant. Es una lectura del modelo, no una recomendación personal de compra o venta.</div>"
             f"<table role='presentation' width='100%' cellspacing='0' cellpadding='0'>{check_rows}</table></div>"
         )
         analysis_html = (
@@ -651,7 +670,12 @@ def enviar_analisis_email(email: str, symbol: str,
             "<div style='margin:18px 0 22px;padding:16px;background:#fff;border:1px solid #e5eaf1;border-radius:12px'>"
             "<div style='font-size:10px;letter-spacing:.13em;color:#2563eb;font-weight:800;margin-bottom:10px'>EVOLUCIÓN DEL VALOR</div>"
             "<img src='cid:alura-price-chart' alt='Evolución del precio con escala anual, precios, soporte y resistencia' style='display:block;width:100%;height:auto;border:0'>"
-            "<div style='font-size:10px;line-height:1.5;color:#64748b;margin-top:7px'>Precio de cierre. S: mínimo de las 15 sesiones anteriores; R: máximo de las 60 sesiones anteriores. Son niveles históricos aproximados, no garantías.</div>"
+            "<table role='presentation' cellspacing='0' cellpadding='0' style='margin-top:9px;font-size:10px;color:#475569'><tr>"
+            "<td style='padding-right:16px'><span style='display:inline-block;width:18px;border-top:3px solid #2563eb;vertical-align:middle;margin-right:5px'></span>Precio</td>"
+            "<td style='padding-right:16px'><span style='display:inline-block;width:18px;border-top:3px dashed #0d9488;vertical-align:middle;margin-right:5px'></span>Soporte (S)</td>"
+            "<td><span style='display:inline-block;width:18px;border-top:3px dashed #dc5541;vertical-align:middle;margin-right:5px'></span>Resistencia (R)</td>"
+            "</tr></table>"
+            "<div style='font-size:10px;line-height:1.5;color:#64748b;margin-top:5px'>Soporte: mínimo de las 15 sesiones anteriores. Resistencia: máximo de las 60 sesiones anteriores. Son referencias históricas aproximadas.</div>"
             "</div>" if chart_png else ""
         )
         summary = commentary.get("resumen_ejecutivo") or commentary.get("resumen") or "No disponible."
@@ -687,9 +711,9 @@ def enviar_analisis_email(email: str, symbol: str,
         ) + "</ul>"
         email_body = (
             "<div style='max-width:680px;margin:auto;padding:20px;font-family:Arial,sans-serif;color:#172033'>"
-            "<div style='padding:22px 24px;background:#0b1220;border-radius:14px;color:white;margin-bottom:22px'>"
-            "<div style='font-size:10px;letter-spacing:.16em;color:#9bbcff;font-weight:bold'>ALURA QUANT · RESEARCH</div>"
-            f"<h1 style='margin:9px 0 0;font-size:24px'>Informe de {html.escape(symbol)}</h1></div>"
+            "<div style='padding:22px 24px;background:#eef4ff;border:1px solid #dbe7fb;border-radius:14px;color:#173a78;margin-bottom:22px'>"
+            "<div style='font-size:10px;letter-spacing:.16em;color:#2563eb;font-weight:bold'>ALURA QUANT · RESEARCH</div>"
+            f"<h1 style='margin:9px 0 0;font-size:24px;color:#12213a'>Informe de {html.escape(symbol)}</h1></div>"
             + semaforo_html
             + chart_html
             + analysis_html
