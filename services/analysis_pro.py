@@ -521,11 +521,24 @@ def enviar_analisis_email(email: str, symbol: str,
             explanation = explanations.get(category, {}).get(
                 status, "Esta señal debe interpretarse junto con el resto de los datos disponibles.")
             technical_detail = str(check.get("detail", ""))
+            bar_palette = [
+                ("red", "#d84b4b", "#f8dddd"),
+                ("yellow", "#d49426", "#fbefcf"),
+                ("green", "#16834a", "#dcefe4"),
+            ]
+            bar_segments = "".join(
+                f"<td width='33.33%' height='6' style='height:6px;line-height:0;font-size:0;background:{active if status == key else muted};border-radius:4px'>&nbsp;</td>"
+                for key, active, muted in bar_palette
+            )
             check_cards.append(
-                "<td width='50%' valign='top' style='padding:5px'>"
-                f"<div style='background:#fff;border:1px solid #e5eaf1;border-left:4px solid {color};border-radius:9px;padding:12px 14px'>"
-                f"<span style='font-size:12px;font-weight:700;color:#15243a'>{html.escape(category)}</span>"
-                f"<span style='display:inline-block;margin-left:8px;font-size:10px;font-weight:800;color:{color}'>{html.escape(label)}</span></div></td>"
+                "<tr><td style='padding:4px 0'>"
+                "<table role='presentation' width='100%' cellspacing='0' cellpadding='0' style='background:#fff;border:1px solid #e5eaf1;border-radius:10px'>"
+                "<tr>"
+                f"<td style='padding:11px 12px 4px;font-size:13px;font-weight:700;color:#15243a'>{html.escape(category)}</td>"
+                f"<td align='right' style='padding:11px 12px 4px;font-size:10px;font-weight:800;color:{color}'>{html.escape(label)}</td>"
+                "</tr><tr><td colspan='2' style='padding:3px 12px 11px'>"
+                f"<table role='presentation' width='100%' cellspacing='0' cellpadding='0'><tr>{bar_segments}</tr></table>"
+                "</td></tr></table></td></tr>"
             )
             analysis_items.append(
                 "<div style='padding:13px 0;border-bottom:1px solid #e5eaf1'>"
@@ -533,18 +546,13 @@ def enviar_analisis_email(email: str, symbol: str,
                 f"<div style='font-size:13px;line-height:1.6;color:#334155'>{html.escape(explanation)}</div>"
                 f"<div style='font-size:11px;line-height:1.5;color:#64748b;margin-top:5px'><b>Dato que lo respalda:</b> {html.escape(technical_detail)}</div></div>"
             )
-        check_rows = []
-        for index in range(0, len(check_cards), 2):
-            pair = check_cards[index:index + 2]
-            if len(pair) == 1:
-                pair.append("<td width='50%'></td>")
-            check_rows.append("<tr>" + "".join(pair) + "</tr>")
+        check_rows = "".join(check_cards)
         semaforo_html = (
             f"<div style='margin:0 0 22px;padding:18px;background:#fff;border:1px solid #e5eaf1;border-left:4px solid {overall};border-radius:14px'>"
             "<div style='font-size:10px;letter-spacing:.14em;font-weight:800;color:#2563eb'>ALURA QUANT · SEMÁFORO</div>"
             f"<div style='font-size:19px;font-weight:800;color:{overall};margin:8px 0 12px'>{html.escape(decision)}</div>"
             "<div style='font-size:12px;line-height:1.6;color:#64748b;margin:-3px 0 10px'>Resumen de cómo encaja el valor con los filtros cuantitativos de Alura Quant. Es una lectura del modelo, no una recomendación personal de compra o venta.</div>"
-            f"<table role='presentation' width='100%' cellspacing='0' cellpadding='0'>{''.join(check_rows)}</table></div>"
+            f"<table role='presentation' width='100%' cellspacing='0' cellpadding='0'>{check_rows}</table></div>"
         )
         analysis_html = (
             "<div style='margin:22px 0;padding:18px;background:#fff;border:1px solid #e5eaf1;border-radius:14px'>"
