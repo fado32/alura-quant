@@ -4514,6 +4514,17 @@ def _analysis_check_copy(check: dict) -> tuple[str, str, str]:
             explanations.get(category, {}).get(status, "Esta señal debe interpretarse junto con el resto de los datos disponibles."))
 
 
+def _report_text_card(title: str, text: Any, accent: str = "#2563eb", background: str = "#ffffff") -> None:
+    body = html.escape(str(text or "No disponible.")).replace("\n", "<br>")
+    st.markdown(f"""
+    <div style="padding:17px 19px;margin:8px 0 12px;background:{background};border:1px solid #e7edf5;
+      border-left:3px solid {accent};border-radius:13px;box-shadow:0 4px 16px rgba(15,23,42,.025)">
+      <div style="font-size:10px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;color:{accent};margin-bottom:8px">{html.escape(title)}</div>
+      <div style="font-size:14px;line-height:1.75;color:#334155">{body}</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
 def _render_report(report: dict) -> None:
     symbol = html.escape(report["symbol"])
     commentary = report.get("commentary") or {}
@@ -4534,12 +4545,7 @@ def _render_report(report: dict) -> None:
         "NO SUPERA TODOS LOS FILTROS" if eligible is False else "ANÁLISIS INCOMPLETO")
     overall = status_colors["green"] if eligible is True else (
         status_colors["red"] if eligible is False else status_colors["gray"])
-    st.markdown(f"""
-    <div style="padding:18px 20px;margin:10px 0 12px;border:1px solid #e5eaf1;border-left:4px solid {overall};border-radius:14px;background:#fff">
-      <div style="font-size:10px;letter-spacing:.14em;color:#2563eb;font-weight:800">ALURA QUANT · SEMÁFORO</div>
-      <div style="font-size:21px;color:{overall};font-weight:800;letter-spacing:-.02em;margin:7px 0 0">{html.escape(decision)}</div>
-    </div>
-    """, unsafe_allow_html=True)
+    check_rows = []
     for check in semaforo.get("checks", []):
         status = check.get("status", "gray")
         label, color, _ = _analysis_check_copy(check)
@@ -4547,19 +4553,30 @@ def _render_report(report: dict) -> None:
             f"<td width='33.33%' height='10' bgcolor='{active if status == key else muted}' style='height:10px;line-height:10px;font-size:1px;background-color:{active if status == key else muted};border-radius:5px'>&nbsp;</td>"
             for key, active, muted in (("red", "#d84b4b", "#f8dddd"), ("yellow", "#d49426", "#fbefcf"), ("green", "#16834a", "#dcefe4"))
         )
-        st.markdown(f"""
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:5px 0;border:1px solid #e5eaf1;border-radius:10px;background:#fff">
-          <tr><td style="padding:11px 12px 5px;font-size:13px;font-weight:700;color:#15243a">{html.escape(str(check.get('category','')))}</td>
-              <td align="right" style="padding:11px 12px 5px;font-size:10px;font-weight:800;color:{color}">{label}</td></tr>
-          <tr><td colspan="2" style="padding:3px 12px 11px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>{bars}</tr></table></td></tr>
-        </table>
-        """, unsafe_allow_html=True)
+        check_rows.append(
+            "<tr>"
+            f"<td style='padding:11px 4px 5px;font-size:13px;font-weight:700;color:#172033'>{html.escape(str(check.get('category','')))}</td>"
+            f"<td align='right' style='padding:11px 4px 5px;font-size:10px;font-weight:800;color:{color}'>{label}</td></tr>"
+            f"<tr><td colspan='2' style='padding:2px 4px 11px;border-bottom:1px solid #edf1f6'><table role='presentation' width='100%' cellspacing='0' cellpadding='0'><tr>{bars}</tr></table></td></tr>"
+        )
+    st.markdown(f"""
+    <div style="padding:20px 22px;margin:10px 0 18px;background:#fff;border:1px solid #e5eaf1;
+      border-radius:16px;box-shadow:0 8px 24px rgba(15,23,42,.035)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">
+        <div style="font-size:10px;letter-spacing:.14em;color:#2563eb;font-weight:800">ALURA QUANT · SEMÁFORO</div>
+        <div style="font-size:10px;color:#708097;background:#f5f8fc;border:1px solid #e8edf4;border-radius:30px;padding:5px 9px">{len(semaforo.get('checks', []))} {'criterio' if len(semaforo.get('checks', [])) == 1 else 'criterios'}</div>
+      </div>
+      <div style="font-size:clamp(19px,2.6vw,25px);color:{overall};font-weight:800;letter-spacing:-.025em;line-height:1.2;margin:4px 0 12px">{html.escape(decision)}</div>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0">{''.join(check_rows)}</table>
+    </div>
+    """, unsafe_allow_html=True)
 
     st.markdown("### Evolución del valor")
     chart_png = _sparkline_png(history, semaforo=semaforo) if isinstance(history, pd.DataFrame) else None
     if chart_png:
-        st.image(chart_png, use_container_width=True)
-        st.markdown("""
+        with st.container(border=True):
+            st.image(chart_png, use_container_width=True)
+            st.markdown("""
         <table role="presentation" cellspacing="0" cellpadding="0" style="font-size:11px;color:#475569;margin:-5px 0 2px"><tr>
           <td style="padding-right:18px"><span style="display:inline-block;width:18px;border-top:3px solid #2563eb;vertical-align:middle;margin-right:5px"></span>Precio</td>
           <td style="padding-right:18px"><span style="display:inline-block;width:18px;border-top:3px dashed #0d9488;vertical-align:middle;margin-right:5px"></span>Soporte (S)</td>
@@ -4568,8 +4585,7 @@ def _render_report(report: dict) -> None:
         <div style="font-size:10px;color:#64748b;margin-top:5px">Soporte: mínimo de las 15 sesiones anteriores. Resistencia: máximo de las 60 sesiones anteriores. Referencias históricas aproximadas.</div>
         """, unsafe_allow_html=True)
 
-    st.markdown("### Análisis Alura")
-    st.caption("Qué significa cada señal y qué dato técnico la respalda.")
+    analysis_rows = []
     for check in semaforo.get("checks", []):
         label, color, explanation = _analysis_check_copy(check)
         status = check.get("status", "gray")
@@ -4577,21 +4593,27 @@ def _render_report(report: dict) -> None:
             f"<td width='33.33%' height='5' bgcolor='{active if status == key else muted}' style='height:5px;line-height:5px;font-size:1px;background-color:{active if status == key else muted};border-radius:3px'>&nbsp;</td>"
             for key, active, muted in (("red", "#d84b4b", "#f8dddd"), ("yellow", "#d49426", "#fbefcf"), ("green", "#16834a", "#dcefe4"))
         )
-        st.markdown(f"""
-        <div style="padding:13px 0;border-bottom:1px solid #e5eaf1">
+        analysis_rows.append(f"""
+        <div style="padding:13px 0;border-bottom:1px solid #edf1f6">
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>
-            <td style="font-size:13px;font-weight:700;color:{color}">{html.escape(str(check.get('category','')))}</td>
+            <td style="font-size:13px;font-weight:750;color:{color}">{html.escape(str(check.get('category','')))}</td>
             <td align="right" style="font-size:10px;font-weight:800;color:{color}">{label}</td></tr></table>
           <table role="presentation" width="72" cellspacing="0" cellpadding="0" style="margin:5px 0 8px"><tr>{mini_bars}</tr></table>
-          <div style="font-size:13px;line-height:1.6;color:#334155">{html.escape(explanation)}</div>
-          <div style="font-size:11px;line-height:1.5;color:#64748b;margin-top:5px"><b>Dato que lo respalda:</b> {html.escape(str(check.get('detail','')))}</div>
+          <div style="font-size:13px;line-height:1.65;color:#334155">{html.escape(explanation)}</div>
+          <div style="font-size:11px;line-height:1.55;color:#64748b;margin-top:6px"><b>Dato que lo respalda:</b> {html.escape(str(check.get('detail','')))}</div>
         </div>
-        """, unsafe_allow_html=True)
+        """)
+    st.markdown(f"""
+    <div style="padding:20px 22px;margin:18px 0;background:#fff;border:1px solid #e5eaf1;border-radius:16px;
+      box-shadow:0 8px 24px rgba(15,23,42,.03)">
+      <div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#2563eb;font-weight:800">Análisis Alura</div>
+      <div style="font-size:13px;color:#718096;margin:5px 0 3px">Qué significa cada señal y qué dato técnico la respalda.</div>
+      {''.join(analysis_rows)}
+    </div>
+    """, unsafe_allow_html=True)
 
-    st.markdown("### Lo más importante")
-    st.markdown(str(commentary.get("resumen_ejecutivo") or commentary.get("resumen") or "No disponible."))
-    st.markdown("### A qué se dedica la compañía")
-    st.markdown(str(commentary.get("perfil_compania") or "No disponible."))
+    _report_text_card("Lo más importante", commentary.get("resumen_ejecutivo") or commentary.get("resumen"))
+    _report_text_card("A qué se dedica la compañía", commentary.get("perfil_compania"))
 
     st.markdown("### Datos del mercado")
     metric_pairs = [
@@ -4610,20 +4632,21 @@ def _render_report(report: dict) -> None:
             with col:
                 st.metric(label, value)
 
-    st.markdown("### Qué nos dicen los indicadores")
-    st.markdown(str(commentary.get("lectura_tecnica") or "No disponible."))
-    st.markdown("### Escenarios técnicos posibles")
-    st.markdown(str(commentary.get("estrategia_tecnica") or "No hay datos suficientes para plantear escenarios técnicos con confianza."))
-    st.markdown("### Aspectos a tener en cuenta")
+    _report_text_card("Qué nos dicen los indicadores", commentary.get("lectura_tecnica"), accent="#2563eb")
+    _report_text_card("Escenarios técnicos posibles", commentary.get("estrategia_tecnica"), accent="#0d9488", background="#f5fbfa")
     risks = commentary.get("riesgos", [])
     if isinstance(risks, str):
         risks = [line.strip(" •-\t") for line in risks.splitlines() if line.strip(" •-\t")]
-    if risks:
-        st.markdown("\n".join(f"- {item}" for item in risks))
-    else:
-        st.markdown("No se han identificado riesgos adicionales con los datos disponibles.")
-    st.markdown("### En pocas palabras")
-    st.markdown(str(commentary.get("conclusion") or "No disponible."))
+    risks_html = "<ul style='padding-left:20px;margin:0;color:#334155;line-height:1.7'>" + "".join(
+        f"<li style='margin:5px 0'>{html.escape(str(item))}</li>" for item in risks
+    ) + "</ul>" if risks else "<div style='color:#334155'>No se han identificado riesgos adicionales con los datos disponibles.</div>"
+    st.markdown(f"""
+    <div style="padding:17px 19px;margin:8px 0 12px;background:#fff;border:1px solid #e7edf5;border-left:3px solid #d49426;border-radius:13px">
+      <div style="font-size:10px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;color:#a66c11;margin-bottom:8px">Aspectos a tener en cuenta</div>
+      {risks_html}
+    </div>
+    """, unsafe_allow_html=True)
+    _report_text_card("En pocas palabras", commentary.get("conclusion"), accent="#173a78", background="#f5f8ff")
 
     st.download_button(
         "⬇ Descargar informe PDF",
@@ -4656,10 +4679,6 @@ def render_analysis_pro() -> None:
       <p style="margin:0;color:#64748b">Un informe claro del comportamiento del mercado, con métricas cuantitativas y lectura de Gemini.</p>
     </div>
     """, unsafe_allow_html=True)
-
-    if st.button("← Volver a Alura Quant", key="analysis_pro_back"):
-        st.session_state["active_page"] = "Inicio"
-        st.rerun()
 
     with st.container(border=True):
         st.markdown("#### Configura tu informe")
