@@ -4545,31 +4545,32 @@ def _render_report(report: dict) -> None:
         "NO SUPERA TODOS LOS FILTROS" if eligible is False else "ANÁLISIS INCOMPLETO")
     overall = status_colors["green"] if eligible is True else (
         status_colors["red"] if eligible is False else status_colors["gray"])
-    check_rows = []
-    for check in semaforo.get("checks", []):
-        status = check.get("status", "gray")
-        label, color, _ = _analysis_check_copy(check)
-        bars = "".join(
-            f"<td width='33.33%' height='10' bgcolor='{active if status == key else muted}' style='height:10px;line-height:10px;font-size:1px;background-color:{active if status == key else muted};border-radius:5px'>&nbsp;</td>"
-            for key, active, muted in (("red", "#d84b4b", "#f8dddd"), ("yellow", "#d49426", "#fbefcf"), ("green", "#16834a", "#dcefe4"))
-        )
-        check_rows.append(
-            "<tr>"
-            f"<td style='padding:11px 4px 5px;font-size:13px;font-weight:700;color:#172033'>{html.escape(str(check.get('category','')))}</td>"
-            f"<td align='right' style='padding:11px 4px 5px;font-size:10px;font-weight:800;color:{color}'>{label}</td></tr>"
-            f"<tr><td colspan='2' style='padding:2px 4px 11px;border-bottom:1px solid #edf1f6'><table role='presentation' width='100%' cellspacing='0' cellpadding='0'><tr>{bars}</tr></table></td></tr>"
-        )
-    st.markdown(f"""
-    <div style="padding:20px 22px;margin:10px 0 18px;background:#fff;border:1px solid #e5eaf1;
-      border-radius:16px;box-shadow:0 8px 24px rgba(15,23,42,.035)">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px">
-        <div style="font-size:10px;letter-spacing:.14em;color:#2563eb;font-weight:800">ALURA QUANT · SEMÁFORO</div>
-        <div style="font-size:10px;color:#708097;background:#f5f8fc;border:1px solid #e8edf4;border-radius:30px;padding:5px 9px">{len(semaforo.get('checks', []))} {'criterio' if len(semaforo.get('checks', [])) == 1 else 'criterios'}</div>
-      </div>
-      <div style="font-size:clamp(19px,2.6vw,25px);color:{overall};font-weight:800;letter-spacing:-.025em;line-height:1.2;margin:4px 0 12px">{html.escape(decision)}</div>
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0">{''.join(check_rows)}</table>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("### Semáforo Alura")
+    st.markdown(
+        f"<div style='display:inline-flex;align-items:center;gap:8px;padding:8px 12px;"
+        f"margin:0 0 12px;border:1px solid #e5eaf1;border-left:3px solid {overall};"
+        f"border-radius:9px;background:#fff;color:{overall};font-size:13px;font-weight:750'>"
+        f"{html.escape(decision)}</div>",
+        unsafe_allow_html=True,
+    )
+    checks = semaforo.get("checks", [])
+    for row_start in range(0, len(checks), 3):
+        cols = st.columns(3, gap="small")
+        for col, check in zip(cols, checks[row_start:row_start + 3]):
+            status = check.get("status", "gray")
+            label, color, _ = _analysis_check_copy(check)
+            category = html.escape(str(check.get("category", "")))
+            with col:
+                st.markdown(
+                    f"<div style='min-height:76px;padding:11px 12px;border:1px solid #e7edf4;"
+                    f"border-top:2px solid {color};border-radius:11px;background:#fff'>"
+                    f"<div style='font-size:12px;line-height:1.3;font-weight:700;color:#243247;"
+                    f"overflow-wrap:anywhere'>{category}</div>"
+                    f"<div style='margin-top:8px;font-size:10px;letter-spacing:.04em;"
+                    f"font-weight:800;color:{color}'>{label}</div></div>",
+                    unsafe_allow_html=True,
+                )
+    st.markdown("")
 
     st.markdown("### Evolución del valor")
     chart_png = _sparkline_png(history, semaforo=semaforo) if isinstance(history, pd.DataFrame) else None
@@ -4604,20 +4605,20 @@ def _render_report(report: dict) -> None:
                     f"{label}</div>",
                     unsafe_allow_html=True,
                 )
-            bar_cols = st.columns(3, gap="small")
             bar_colors = {
                 "red": ("#d84b4b", "#f8dddd"),
                 "yellow": ("#d49426", "#fbefcf"),
                 "green": ("#16834a", "#dcefe4"),
             }
-            for col, key in zip(bar_cols, ("red", "yellow", "green")):
-                active, muted = bar_colors[key]
-                with col:
-                    st.markdown(
-                        f"<div style='height:6px;border-radius:6px;background:"
-                        f"{active if status == key else muted}'></div>",
-                        unsafe_allow_html=True,
-                    )
+            bar_segments = "".join(
+                f"<span style='display:block;width:19px;height:5px;border-radius:5px;"
+                f"background:{bar_colors[key][0] if status == key else bar_colors[key][1]}'></span>"
+                for key in ("red", "yellow", "green")
+            )
+            st.markdown(
+                f"<div style='display:flex;gap:3px;width:63px;margin:3px 0 8px'>{bar_segments}</div>",
+                unsafe_allow_html=True,
+            )
             st.markdown(explanation)
             detail = str(check.get("detail", "")).strip()
             if detail:
