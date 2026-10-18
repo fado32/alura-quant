@@ -4585,32 +4585,43 @@ def _render_report(report: dict) -> None:
         <div style="font-size:10px;color:#64748b;margin-top:5px">Soporte: mínimo de las 15 sesiones anteriores. Resistencia: máximo de las 60 sesiones anteriores. Referencias históricas aproximadas.</div>
         """, unsafe_allow_html=True)
 
-    analysis_rows = []
+    st.markdown("### Análisis Alura")
+    st.caption("Qué significa cada señal y qué dato técnico la respalda.")
     for check in semaforo.get("checks", []):
         label, color, explanation = _analysis_check_copy(check)
         status = check.get("status", "gray")
-        mini_bars = "".join(
-            f"<td width='33.33%' height='5' bgcolor='{active if status == key else muted}' style='height:5px;line-height:5px;font-size:1px;background-color:{active if status == key else muted};border-radius:3px'>&nbsp;</td>"
-            for key, active, muted in (("red", "#d84b4b", "#f8dddd"), ("yellow", "#d49426", "#fbefcf"), ("green", "#16834a", "#dcefe4"))
-        )
-        analysis_rows.append(f"""
-        <div style="padding:13px 0;border-bottom:1px solid #edf1f6">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>
-            <td style="font-size:13px;font-weight:750;color:{color}">{html.escape(str(check.get('category','')))}</td>
-            <td align="right" style="font-size:10px;font-weight:800;color:{color}">{label}</td></tr></table>
-          <table role="presentation" width="72" cellspacing="0" cellpadding="0" style="margin:5px 0 8px"><tr>{mini_bars}</tr></table>
-          <div style="font-size:13px;line-height:1.65;color:#334155">{html.escape(explanation)}</div>
-          <div style="font-size:11px;line-height:1.55;color:#64748b;margin-top:6px"><b>Dato que lo respalda:</b> {html.escape(str(check.get('detail','')))}</div>
-        </div>
-        """)
-    st.markdown(f"""
-    <div style="padding:20px 22px;margin:18px 0;background:#fff;border:1px solid #e5eaf1;border-radius:16px;
-      box-shadow:0 8px 24px rgba(15,23,42,.03)">
-      <div style="font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#2563eb;font-weight:800">Análisis Alura</div>
-      <div style="font-size:13px;color:#718096;margin:5px 0 3px">Qué significa cada señal y qué dato técnico la respalda.</div>
-      {''.join(analysis_rows)}
-    </div>
-    """, unsafe_allow_html=True)
+        with st.container(border=True):
+            title_col, status_col = st.columns([4, 1], vertical_alignment="center")
+            with title_col:
+                st.markdown(
+                    f"<span style='font-weight:750;color:{color}'>"
+                    f"{html.escape(str(check.get('category', '')))}</span>",
+                    unsafe_allow_html=True,
+                )
+            with status_col:
+                st.markdown(
+                    f"<div style='text-align:right;font-size:10px;font-weight:800;color:{color}'>"
+                    f"{label}</div>",
+                    unsafe_allow_html=True,
+                )
+            bar_cols = st.columns(3, gap="small")
+            bar_colors = {
+                "red": ("#d84b4b", "#f8dddd"),
+                "yellow": ("#d49426", "#fbefcf"),
+                "green": ("#16834a", "#dcefe4"),
+            }
+            for col, key in zip(bar_cols, ("red", "yellow", "green")):
+                active, muted = bar_colors[key]
+                with col:
+                    st.markdown(
+                        f"<div style='height:6px;border-radius:6px;background:"
+                        f"{active if status == key else muted}'></div>",
+                        unsafe_allow_html=True,
+                    )
+            st.markdown(explanation)
+            detail = str(check.get("detail", "")).strip()
+            if detail:
+                st.caption(f"Dato que lo respalda: {detail}")
 
     _report_text_card("Lo más importante", commentary.get("resumen_ejecutivo") or commentary.get("resumen"))
     _report_text_card("A qué se dedica la compañía", commentary.get("perfil_compania"))
