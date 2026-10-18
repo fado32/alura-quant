@@ -4472,87 +4472,158 @@ def _fmt(value: Any, suffix: str = "", decimals: int = 2) -> str:
         return "N/D"
 
 
-def _section(title: str, text: Any) -> None:
-    if text:
-        st.markdown(f"#### {title}")
-        st.markdown(str(text))
+def _analysis_check_copy(check: dict) -> tuple[str, str, str]:
+    """Devuelve estado, color y explicación humana para cada señal del semáforo."""
+    status = check.get("status", "gray")
+    colors = {"green": "#16834a", "yellow": "#d49426", "red": "#c43d45", "gray": "#8792a2"}
+    labels = {"green": "VERDE", "yellow": "ÁMBAR", "red": "ROJO", "gray": "N/D"}
+    explanations = {
+        "Tendencia": {
+            "green": "La cotización muestra una tendencia favorable frente a sus medias de corto y largo plazo.",
+            "yellow": "La tendencia presenta señales mezcladas. Conviene leerla junto con el resto del análisis.",
+            "red": "La tendencia no acompaña: el precio o sus medias reflejan debilidad según los filtros del modelo.",
+        },
+        "Score cuantitativo": {
+            "green": "La combinación de señales técnicas supera el nivel mínimo que exige el modelo.",
+            "yellow": "La puntuación se acerca al nivel requerido, pero todavía no lo alcanza.",
+            "red": "La puntuación queda por debajo del nivel que exige el modelo.",
+        },
+        "Momentum": {
+            "green": "El movimiento reciente conserva impulso positivo, sin superar el rango que el modelo considera prudente.",
+            "yellow": "El impulso ofrece señales mixtas: hay algún indicio favorable, pero no es concluyente.",
+            "red": "El movimiento reciente no muestra suficiente impulso positivo.",
+        },
+        "Volumen relativo": {
+            "green": "La actividad de negociación reciente alcanza el nivel que busca el modelo.",
+            "yellow": "La actividad está algo por debajo del nivel deseado; la señal de participación es moderada.",
+            "red": "La actividad de negociación es baja frente al mínimo que busca el modelo.",
+        },
+        "Liquidez": {
+            "green": "El valor negocia un volumen de dinero suficiente para superar el filtro de liquidez.",
+            "yellow": "La liquidez es limitada y puede dificultar entrar o salir al precio esperado.",
+            "red": "El volumen negociado no alcanza el mínimo de liquidez establecido por el modelo.",
+        },
+        "Riesgo / beneficio": {
+            "green": "La distancia entre el nivel de salida por riesgo y el objetivo potencial supera el mínimo exigido.",
+            "yellow": "La relación entre el riesgo estimado y el objetivo potencial queda cerca del mínimo.",
+            "red": "El objetivo potencial no compensa el riesgo estimado según los filtros del modelo.",
+        },
+    }
+    category = str(check.get("category", ""))
+    return (labels.get(status, "N/D"), colors.get(status, colors["gray"]),
+            explanations.get(category, {}).get(status, "Esta señal debe interpretarse junto con el resto de los datos disponibles."))
 
 
 def _render_report(report: dict) -> None:
     symbol = html.escape(report["symbol"])
-    company = html.escape(str(report["info"].get("longName") or
-                              report["info"].get("shortName") or report["symbol"]))
+    commentary = report.get("commentary") or {}
+    semaforo = report.get("semaforo") or {}
+    metrics = report.get("metrics") or {}
+    history = report.get("history")
     st.markdown(f"""
-    <div style="background:linear-gradient(120deg,#0b1220,#173a78);padding:28px 32px;
-      border-radius:20px;color:#fff;margin:14px 0 20px">
-      <div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#9bbcff;font-weight:700">
-        ALURA QUANT · INFORME DE ANÁLISIS
-      </div>
-      <div style="font-size:30px;font-weight:800;letter-spacing:-.04em;margin-top:8px">{company}</div>
-      <div style="color:#cbd5e1;margin-top:5px">{symbol} · {html.escape(report['period_label'])}</div>
+    <div style="background:#eef4ff;border:1px solid #dbe7fb;padding:24px 28px;
+      border-radius:18px;color:#173a78;margin:14px 0 20px">
+      <div style="font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:#2563eb;font-weight:800">ALURA QUANT · RESEARCH</div>
+      <div style="font-size:28px;font-weight:800;letter-spacing:-.04em;margin-top:8px;color:#12213a">Informe de {symbol}</div>
     </div>
     """, unsafe_allow_html=True)
 
-    metrics = report["metrics"]
-    metric_keys = [
-        ("Último precio", "precio", "", 2),
-        ("Retorno 1 año", "retorno_1y_pct", "%", 2),
-        ("RSI (14)", "rsi14", "", 1),
-        ("Drawdown máximo", "max_drawdown_pct", "%", 2),
-    ]
-    cols = st.columns(4, gap="small")
-    for col, (label, key, suffix, decimals) in zip(cols, metric_keys):
-        with col:
-            st.metric(label, _fmt(metrics.get(key), suffix, decimals))
-
-    commentary = report.get("commentary") or {}
-    semaforo = report.get("semaforo") or {}
-    with st.container():
-        status_colors = {"green": "#15803d", "red": "#b91c1c", "yellow": "#a16207", "gray": "#64748b"}
-        checks = semaforo.get("checks", [])
-        eligible = semaforo.get("eligible")
-        decision = "CUMPLE FILTROS DE ENTRADA" if eligible is True else (
-            "NO CUMPLE FILTROS DE ENTRADA" if eligible is False else "NO EVALUABLE")
-        overall_color = status_colors["green"] if eligible is True else (
-            status_colors["red"] if eligible is False else status_colors["gray"])
-        st.markdown("### Semáforo de Alura Quant")
+    status_colors = {"green": "#16834a", "red": "#c43d45", "yellow": "#d49426", "gray": "#8792a2"}
+    eligible = semaforo.get("eligible")
+    decision = "SEÑALES DE ENTRADA FAVORABLES" if eligible is True else (
+        "NO SUPERA TODOS LOS FILTROS" if eligible is False else "ANÁLISIS INCOMPLETO")
+    overall = status_colors["green"] if eligible is True else (
+        status_colors["red"] if eligible is False else status_colors["gray"])
+    st.markdown(f"""
+    <div style="padding:18px 20px;margin:10px 0 12px;border:1px solid #e5eaf1;border-left:4px solid {overall};border-radius:14px;background:#fff">
+      <div style="font-size:10px;letter-spacing:.14em;color:#2563eb;font-weight:800">ALURA QUANT · SEMÁFORO</div>
+      <div style="font-size:21px;color:{overall};font-weight:800;letter-spacing:-.02em;margin:7px 0 0">{html.escape(decision)}</div>
+    </div>
+    """, unsafe_allow_html=True)
+    for check in semaforo.get("checks", []):
+        status = check.get("status", "gray")
+        label, color, _ = _analysis_check_copy(check)
+        bars = "".join(
+            f"<td width='33.33%' height='10' bgcolor='{active if status == key else muted}' style='height:10px;line-height:10px;font-size:1px;background-color:{active if status == key else muted};border-radius:5px'>&nbsp;</td>"
+            for key, active, muted in (("red", "#d84b4b", "#f8dddd"), ("yellow", "#d49426", "#fbefcf"), ("green", "#16834a", "#dcefe4"))
+        )
         st.markdown(f"""
-        <div style="padding:20px 22px;margin:18px 0 12px;border:1px solid #e5eaf1;border-left:5px solid {overall_color};border-radius:15px;background:#fff;box-shadow:0 8px 24px rgba(15,23,42,.04)">
-          <div style="font-size:10px;letter-spacing:.15em;color:#2563eb;font-weight:800">ALURA QUANT · FILTROS DE ENTRADA</div>
-          <div style="font-size:clamp(20px,3vw,27px);color:{overall_color};font-weight:850;letter-spacing:-.03em;margin:9px 0 2px">{html.escape(decision)}</div>
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:5px 0;border:1px solid #e5eaf1;border-radius:10px;background:#fff">
+          <tr><td style="padding:11px 12px 5px;font-size:13px;font-weight:700;color:#15243a">{html.escape(str(check.get('category','')))}</td>
+              <td align="right" style="padding:11px 12px 5px;font-size:10px;font-weight:800;color:{color}">{label}</td></tr>
+          <tr><td colspan="2" style="padding:3px 12px 11px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>{bars}</tr></table></td></tr>
+        </table>
+        """, unsafe_allow_html=True)
+
+    st.markdown("### Evolución del valor")
+    chart_png = _sparkline_png(history, semaforo=semaforo) if isinstance(history, pd.DataFrame) else None
+    if chart_png:
+        st.image(chart_png, use_container_width=True)
+        st.markdown("""
+        <table role="presentation" cellspacing="0" cellpadding="0" style="font-size:11px;color:#475569;margin:-5px 0 2px"><tr>
+          <td style="padding-right:18px"><span style="display:inline-block;width:18px;border-top:3px solid #2563eb;vertical-align:middle;margin-right:5px"></span>Precio</td>
+          <td style="padding-right:18px"><span style="display:inline-block;width:18px;border-top:3px dashed #0d9488;vertical-align:middle;margin-right:5px"></span>Soporte (S)</td>
+          <td><span style="display:inline-block;width:18px;border-top:3px dashed #dc5541;vertical-align:middle;margin-right:5px"></span>Resistencia (R)</td>
+        </tr></table>
+        <div style="font-size:10px;color:#64748b;margin-top:5px">Soporte: mínimo de las 15 sesiones anteriores. Resistencia: máximo de las 60 sesiones anteriores. Referencias históricas aproximadas.</div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("### Análisis Alura")
+    st.caption("Qué significa cada señal y qué dato técnico la respalda.")
+    for check in semaforo.get("checks", []):
+        label, color, explanation = _analysis_check_copy(check)
+        status = check.get("status", "gray")
+        mini_bars = "".join(
+            f"<td width='33.33%' height='5' bgcolor='{active if status == key else muted}' style='height:5px;line-height:5px;font-size:1px;background-color:{active if status == key else muted};border-radius:3px'>&nbsp;</td>"
+            for key, active, muted in (("red", "#d84b4b", "#f8dddd"), ("yellow", "#d49426", "#fbefcf"), ("green", "#16834a", "#dcefe4"))
+        )
+        st.markdown(f"""
+        <div style="padding:13px 0;border-bottom:1px solid #e5eaf1">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>
+            <td style="font-size:13px;font-weight:700;color:{color}">{html.escape(str(check.get('category','')))}</td>
+            <td align="right" style="font-size:10px;font-weight:800;color:{color}">{label}</td></tr></table>
+          <table role="presentation" width="72" cellspacing="0" cellpadding="0" style="margin:5px 0 8px"><tr>{mini_bars}</tr></table>
+          <div style="font-size:13px;line-height:1.6;color:#334155">{html.escape(explanation)}</div>
+          <div style="font-size:11px;line-height:1.5;color:#64748b;margin-top:5px"><b>Dato que lo respalda:</b> {html.escape(str(check.get('detail','')))}</div>
         </div>
         """, unsafe_allow_html=True)
-        check_cols = st.columns(min(3, max(1, len(checks))), gap="small")
-        for i, check in enumerate(checks):
-            color = status_colors.get(check.get("status"), "#64748b")
-            with check_cols[i % len(check_cols)]:
-                status_label = {"green": "VERDE", "yellow": "ÁMBAR", "red": "ROJO", "gray": "N/D"}.get(check.get("status"), "N/D")
-                st.markdown(f"<div style='height:100%;padding:14px;border:1px solid #e5eaf1;border-top:3px solid {color};border-radius:12px;background:#fff;box-shadow:0 5px 16px rgba(15,23,42,.035);margin:0 0 8px'><div style='display:flex;justify-content:space-between;gap:8px;align-items:center'><div style='flex:1 1 auto;min-width:0;font-size:12px;font-weight:700;color:#172033'>{html.escape(str(check.get('category','')))}</div><span style='flex:0 0 64px;width:64px;min-width:64px;box-sizing:border-box;text-align:center;font-size:10px;font-weight:800;color:{color};background:#f7f9fc;border:1px solid #edf1f6;padding:4px 3px;border-radius:20px'>{status_label}</span></div><div style='font-size:12px;line-height:1.5;color:#64748b;margin-top:8px'>{html.escape(str(check.get('detail','')))}</div></div>", unsafe_allow_html=True)
-        st.markdown("### Lectura de Alura Quant")
-        _section("Resumen ejecutivo", commentary.get("resumen_ejecutivo") or commentary.get("resumen"))
-        _section("Perfil de la compañía", commentary.get("perfil_compania"))
-        _section("Lectura técnica", commentary.get("lectura_tecnica"))
-        _section("Escenarios técnicos posibles", commentary.get("estrategia_tecnica"))
-        _section("Riesgos y limitaciones", "\n".join(
-            f"- {item}" for item in commentary.get("riesgos", [])
-        ))
-        _section("Conclusión", commentary.get("conclusion"))
 
-    history = report.get("history")
-    if isinstance(history, pd.DataFrame) and not history.empty and "Close" in history:
-        with st.container():
-            st.markdown("### Evolución del precio")
-            st.line_chart(history[["Close"]], use_container_width=True)
+    st.markdown("### Lo más importante")
+    st.markdown(str(commentary.get("resumen_ejecutivo") or commentary.get("resumen") or "No disponible."))
+    st.markdown("### A qué se dedica la compañía")
+    st.markdown(str(commentary.get("perfil_compania") or "No disponible."))
 
-    news = report.get("news")
-    if news:
-        with st.expander("Noticias y datos incluidos"):
-            if isinstance(news, pd.DataFrame):
-                st.dataframe(news, use_container_width=True, hide_index=True)
-            elif isinstance(news, (list, dict)):
-                st.json(_clean(news))
-            else:
-                st.write(news)
+    st.markdown("### Datos del mercado")
+    metric_pairs = [
+        ("Precio", _fmt(metrics.get("precio"))),
+        ("Retorno 1 año", _fmt(metrics.get("retorno_1y_pct"), "%")),
+        ("RSI (14)", _fmt(metrics.get("rsi14"))),
+        ("Drawdown máx.", _fmt(metrics.get("max_drawdown_pct"), "%")),
+        ("Volatilidad anual", _fmt(metrics.get("volatilidad_anualizada_pct"), "%")),
+        ("ATR (14)", _fmt(metrics.get("atr14"))),
+        ("ROC (20)", _fmt(metrics.get("roc20_pct"), "%")),
+        ("RVOL (20)", _fmt(metrics.get("rvol20"))),
+    ]
+    for start in range(0, len(metric_pairs), 4):
+        metric_cols = st.columns(4, gap="small")
+        for col, (label, value) in zip(metric_cols, metric_pairs[start:start + 4]):
+            with col:
+                st.metric(label, value)
+
+    st.markdown("### Qué nos dicen los indicadores")
+    st.markdown(str(commentary.get("lectura_tecnica") or "No disponible."))
+    st.markdown("### Escenarios técnicos posibles")
+    st.markdown(str(commentary.get("estrategia_tecnica") or "No hay datos suficientes para plantear escenarios técnicos con confianza."))
+    st.markdown("### Aspectos a tener en cuenta")
+    risks = commentary.get("riesgos", [])
+    if isinstance(risks, str):
+        risks = [line.strip(" •-\t") for line in risks.splitlines() if line.strip(" •-\t")]
+    if risks:
+        st.markdown("\n".join(f"- {item}" for item in risks))
+    else:
+        st.markdown("No se han identificado riesgos adicionales con los datos disponibles.")
+    st.markdown("### En pocas palabras")
+    st.markdown(str(commentary.get("conclusion") or "No disponible."))
 
     st.download_button(
         "⬇ Descargar informe PDF",
@@ -4561,7 +4632,7 @@ def _render_report(report: dict) -> None:
         mime="application/pdf",
         type="primary",
     )
-    st.caption("Datos de proveedores externos, sujetos a retrasos y omisiones. Este informe es informativo y no constituye asesoramiento financiero.")
+    st.caption("ALURA QUANT · Informe informativo; no constituye asesoramiento financiero.")
 
 
 def render_analysis_pro() -> None:
@@ -4573,13 +4644,16 @@ def render_analysis_pro() -> None:
     st.markdown("""
     <style>
       .analysis-pro-shell{max-width:1080px;margin:0 auto}
-      div[class*="st-key-analysis_pro_generate"] button{border-radius:10px!important;font-weight:700!important}
-      div[data-testid="stMetric"]{background:#fff;border:1px solid #e8edf4;border-radius:15px;padding:16px 18px;box-shadow:0 8px 24px rgba(15,23,42,.04)}
+      div[class*="st-key-analysis_pro_ticker"] input,div[class*="st-key-analysis_pro_email"] input{min-height:44px!important;border-radius:10px!important;border-color:#d6e1ef!important;background:#fff!important}
+      div[class*="st-key-analysis_pro_period"] div[data-baseweb="select"]>div{min-height:44px!important;border-radius:10px!important;border-color:#d6e1ef!important}
+      div[class*="st-key-analysis_pro_generate"] button,div[class*="st-key-analysis_pro_send_email"] button{min-height:44px!important;border-radius:10px!important;font-weight:750!important}
+      div[class*="st-key-analysis_pro_send_email"] button{border-color:#cdd9ea!important;color:#173a78!important;background:#fff!important}
+      div[data-testid="stMetric"]{background:#fff;border:1px solid #e8edf4;border-radius:14px;padding:14px 15px;box-shadow:0 5px 18px rgba(15,23,42,.035)}
     </style>
     <div style="max-width:1080px;margin:28px auto 8px">
       <div style="color:#2563eb;font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase">RESEARCH · QUANTITATIVE INTELLIGENCE</div>
       <h1 style="margin:7px 0 5px;color:#0b1220;letter-spacing:-.045em">Análisis Pro</h1>
-      <p style="margin:0;color:#64748b">Un informe claro y accionable en pantalla, basado en datos de mercado, fundamentales y Gemini.</p>
+      <p style="margin:0;color:#64748b">Un informe claro del comportamiento del mercado, con métricas cuantitativas y lectura de Gemini.</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -4587,25 +4661,27 @@ def render_analysis_pro() -> None:
         st.session_state["active_page"] = "Inicio"
         st.rerun()
 
-    with st.container():
-        c1, c2, c3 = st.columns([1.2, 1.2, 1], gap="medium")
+    with st.container(border=True):
+        st.markdown("#### Configura tu informe")
+        c1, c2 = st.columns([1.2, 1], gap="medium")
         with c1:
-            ticker = st.text_input("Ticker", value="AAPL", max_chars=30,
-                                   help="Ejemplos: AAPL, SAN.MC, BMW.DE o BTC-USD")
+            ticker = st.text_input("Símbolo bursátil", value="AAPL", max_chars=30,
+                                   key="analysis_pro_ticker", placeholder="AAPL, SAN.MC, BMW.DE…",
+                                   help="Introduce el ticker del activo que quieres analizar.")
         with c2:
-            period_label = st.selectbox("Periodo", list(PERIODOS.keys()), index=min(2, len(PERIODOS)-1))
-        with c3:
-            st.markdown("<div style='padding-top:8px;color:#64748b;font-size:13px'>Lectura de Alura Quant con Gemini incluida</div>", unsafe_allow_html=True)
-    action_cols = st.columns([1, 1.7, 1], gap="small")
-    with action_cols[0]:
-        generate = st.button("Generar análisis", key="analysis_pro_generate", type="primary", use_container_width=True)
-    with action_cols[1]:
-        email = st.text_input("Enviar por email", key="analysis_pro_email",
-                              placeholder="nombre@dominio.com", label_visibility="visible")
-    with action_cols[2]:
-        send_analysis = st.button("Enviar análisis", key="analysis_pro_send_email",
-                                  use_container_width=True,
-                                  disabled=not bool(st.session_state.get(REPORT_KEY)))
+            period_label = st.selectbox("Periodo del análisis", list(PERIODOS.keys()),
+                                        index=min(2, len(PERIODOS)-1), key="analysis_pro_period")
+        email = st.text_input("Correo de destino (opcional)", key="analysis_pro_email",
+                              placeholder="nombre@dominio.com",
+                              help="Si lo completas, podrás enviarte el informe por correo.")
+        st.caption("El análisis, el gráfico y las explicaciones se mostrarán aquí en el mismo orden que en el correo.")
+        action_cols = st.columns([1, 1, 2], gap="small")
+        with action_cols[0]:
+            generate = st.button("Generar informe", key="analysis_pro_generate", type="primary", use_container_width=True)
+        with action_cols[1]:
+            send_analysis = st.button("Enviar por email", key="analysis_pro_send_email",
+                                      use_container_width=True,
+                                      disabled=not bool(st.session_state.get(REPORT_KEY)))
 
     if generate:
         symbol = ticker.strip().upper()
@@ -4680,7 +4756,7 @@ if active_page == "Análisis Pro":
     import json
     from openai import OpenAI
     from services.analysis_pro import (
-        PERIODOS, calcular_metricas, calcular_semaforo_alura, descargar_datos,
+        PERIODOS, _sparkline_png, calcular_metricas, calcular_semaforo_alura, descargar_datos,
         enviar_analisis_email, generar_pdf,
     )
     render_analysis_pro()
