@@ -25,7 +25,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
 
 # Activar para enviar únicamente al correo de pruebas. Cambiar a False para
 # volver al envío a todos los suscriptores de Supabase.
-MODO_PRUEBAS = True
+MODO_PRUEBAS = False
 CORREO_PRUEBAS = "adelgadosanz@gmail.com"
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
