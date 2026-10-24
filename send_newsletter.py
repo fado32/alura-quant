@@ -86,21 +86,12 @@ def cliente_ia() -> OpenAI:
 
 def semana_referencia(hoy: Optional[date] = None) -> Tuple[date, date]:
     """
-    Devuelve la semana bursátil de referencia:
-    - Si se ejecuta sábado/domingo, toma el lunes-viernes anterior.
-    - Si se ejecuta lunes-viernes, toma desde el lunes hasta hoy.
+    Devuelve el periodo de la semana en curso, desde el lunes hasta hoy,
+    incluyendo el sábado o domingo si se ejecuta durante el fin de semana.
     """
     hoy = hoy or datetime.now().date()
     lunes = hoy - timedelta(days=hoy.weekday())
-
-    if hoy.weekday() >= 5:
-        inicio = lunes 
-        fin = lunes + timedelta(days=4)
-    else:
-        inicio = lunes
-        fin = hoy
-
-    return inicio, fin
+    return lunes, hoy
 
 
 def limpiar_numero(value: Any, decimals: int = 2) -> Optional[float]:
@@ -288,23 +279,37 @@ def construir_metricas_cartera(
 
     df = df.sort_values(["alerta_id", "fecha_snapshot"]).copy()
 
-    df["estado_anterior"] = df.groupby("alerta_id")["estado"].shift(1)
-
-    terminales_semana = df[
+    # La semana se analiza con snapshots del lunes al fin del periodo.
+    # Para cada alerta se conserva el primer snapshot no activo del periodo;
+    # si no aparece un estado no activo, se conserva su último snapshot ACTIVA
+    # disponible hasta el viernes de esa semana.
+    snapshots_semana = df[
         (df["fecha_snapshot"] >= inicio)
         & (df["fecha_snapshot"] <= fin)
-        & (df["estado"].isin(estados_terminales))
-        & (~df["estado_anterior"].isin(estados_terminales))
     ].copy()
 
-    terminales_semana.loc[
-        terminales_semana["estado_anterior"].isna(),
-        "estado_anterior"
-    ] = ""
+    snapshots_no_activos = snapshots_semana[
+        snapshots_semana["estado"].ne("ACTIVA")
+        & snapshots_semana["estado"].ne("")
+    ].sort_values(["fecha_snapshot", "alerta_id"])
+    primer_no_activo = snapshots_no_activos.drop_duplicates(
+        subset=["alerta_id"], keep="first"
+    ).copy()
+    cerradas = primer_no_activo[
+        primer_no_activo["estado"].isin(estados_terminales)
+    ].copy()
 
-    cerradas = terminales_semana.drop_duplicates(
-        subset=["alerta_id"],
-        keep="first"
+    viernes_referencia = fin - timedelta(days=max(0, fin.weekday() - 4))
+    snapshots_activos = df[
+        (df["fecha_snapshot"] >= inicio)
+        & (df["fecha_snapshot"] <= viernes_referencia)
+        & (df["estado"].eq("ACTIVA"))
+    ].sort_values(["fecha_snapshot", "alerta_id"])
+    activos_elegibles = snapshots_activos[
+        ~snapshots_activos["alerta_id"].isin(primer_no_activo["alerta_id"])
+    ]
+    activas = activos_elegibles.drop_duplicates(
+        subset=["alerta_id"], keep="last"
     ).copy()
 
     resultado_r = pd.to_numeric(
@@ -357,12 +362,6 @@ def construir_metricas_cartera(
     )
 
     expectancy = pnl_medio
-
-    snapshot_fin = ultimo_snapshot_por_alerta(df, fin)
-
-    activas = snapshot_fin[
-        snapshot_fin["estado"].eq("ACTIVA")
-    ].copy()
 
     pnl_activas = pd.to_numeric(
         activas.get("pnl_actual_pct", pd.Series(dtype=float)),
@@ -446,8 +445,11 @@ def construir_metricas_cartera(
         .copy()
     )
 
+    snapshots_seleccionados = pd.concat(
+        [cerradas, activas], ignore_index=True
+    )
     estado_counts = (
-        snapshot_fin["estado"]
+        snapshots_seleccionados["estado"]
         .replace("", "SIN_ESTADO")
         .value_counts()
         .to_dict()
