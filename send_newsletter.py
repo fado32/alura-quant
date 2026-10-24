@@ -174,22 +174,37 @@ def obtener_backtesting(
         hasta
     )
 
-    response = (
-        supabase
-        .table("backtesting_diario_alertas")
-        .select(
-            "id,fecha_snapshot,alerta_id,ticker,estado,"
-            "precio_alerta,precio_actual,pnl_actual_pct,"
-            "score_actual,rsi_actual,atr_actual,"
-            "distancia_sl_pct,distancia_tp_pct,ultima_actualizacion"
+    page_size = 1000
+    offset = 0
+    snapshot_rows = []
+    while True:
+        response = (
+            supabase
+            .table("backtesting_diario_alertas")
+            .select(
+                "id,fecha_snapshot,alerta_id,ticker,estado,"
+                "precio_alerta,precio_actual,pnl_actual_pct,"
+                "score_actual,rsi_actual,atr_actual,"
+                "distancia_sl_pct,distancia_tp_pct,ultima_actualizacion"
+            )
+            .gte("fecha_snapshot", desde.isoformat())
+            .lte("fecha_snapshot", hasta.isoformat())
+            .order("fecha_snapshot", desc=False)
+            .order("id", desc=False)
+            .range(offset, offset + page_size - 1)
+            .execute()
         )
-        .gte("fecha_snapshot", desde.isoformat())
-        .lte("fecha_snapshot", hasta.isoformat())
-        .order("fecha_snapshot", desc=False)
-        .execute()
-    )
+        page = response.data or []
+        snapshot_rows.extend(page)
+        if len(page) < page_size:
+            break
+        offset += page_size
 
-    df = pd.DataFrame(response.data or [])
+    logger.info(
+        "Snapshots recuperados: %s filas, desde %s hasta %s.",
+        len(snapshot_rows), desde, hasta
+    )
+    df = pd.DataFrame(snapshot_rows)
 
     if df.empty:
         raise RuntimeError(
@@ -679,9 +694,6 @@ def construir_contexto_ia(
             "profit_factor": limpiar_numero(metricas["profit_factor"]),
             "expectancy_pct": limpiar_numero(metricas["expectancy"]),
             "posiciones_activas_al_cierre": metricas["posiciones_activas"],
-            "pnl_medio_posiciones_activas_pct": limpiar_numero(
-                metricas["pnl_medio_activas"]
-            ),
             "pnl_medio_posiciones_activas_pct": limpiar_numero(
                 metricas["pnl_medio_activas"]
             ),
@@ -1292,6 +1304,15 @@ def main() -> None:
 
     df_backtest = obtener_backtesting(inicio, fin)
     metricas = construir_metricas_cartera(df_backtest, inicio, fin)
+    viernes_referencia = fin - timedelta(days=max(0, fin.weekday() - 4))
+    logger.info(
+        "Resumen snapshots %s-%s: no ACTIVAS=%s; ACTIVAS el %s=%s.",
+        inicio,
+        viernes_referencia,
+        metricas["total_operaciones_cerradas"],
+        viernes_referencia,
+        metricas["posiciones_activas"],
+    )
     mercado = descargar_mercado_yfinance(inicio, fin)
     noticias = obtener_noticias_semana(inicio, fin)
     contexto = construir_contexto_ia(metricas, mercado, noticias)
