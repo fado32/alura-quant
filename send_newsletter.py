@@ -109,12 +109,49 @@ def fmt_pct(value: Any, decimals: int = 1) -> str:
     if number is None:
         return "N/D"
     sign = "+" if number > 0 else ""
-    return f"{sign}{number:.{decimals}f}%"
+    return f"{sign}{number:.{decimals}f}".replace(".", ",") + " %"
 
 
 def fmt_num(value: Any, decimals: int = 2) -> str:
     number = limpiar_numero(value, decimals)
-    return "N/D" if number is None else f"{number:.{decimals}f}"
+    return "N/D" if number is None else f"{number:,.{decimals}f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def fmt_eur(value: Any, decimals: int = 2) -> str:
+    number = limpiar_numero(value, decimals)
+    if number is None:
+        return "N/D"
+    sign = "+" if number > 0 else ""
+    formatted = f"{abs(number):,.{decimals}f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    if number < 0:
+        sign = "−"
+    return f"{sign}{formatted} €"
+
+
+def formato_texto_es(text: Any) -> str:
+    """Ajusta cifras porcentuales generadas por IA al formato español y a un decimal."""
+    value = safe_str(text)
+    replacements = [
+        (r"\bPnL\b", "resultado"),
+        (r"\bwin\s*rate\b", "tasa de acierto"),
+        (r"\bprofit\s*factor\b", "factor de beneficio"),
+        (r"\bexpectancy\b", "resultado medio"),
+        (r"\bbreak\s*even\b|\bbreakeven\b", "equilibrio"),
+        (r"\bscore\b", "puntuación interna"),
+    ]
+    for pattern, replacement in replacements:
+        value = re.sub(pattern, replacement, value, flags=re.IGNORECASE)
+    value = re.sub(
+        r"(?<![\w/])([+-]?\d{1,3}(?:[.,]\d+)?)(\s*%)",
+        lambda match: f"{float(match.group(1).replace(',', '.')):.1f}".replace(".", ",") + " %",
+        value,
+    )
+    return re.sub(
+        r"(?<![\w/])([+-]?\d{1,3}(?:[.,]\d{1,2})?)\s*(€|euros?)(?!\w)",
+        lambda match: fmt_eur(float(match.group(1).replace(',', '.'))),
+        value,
+        flags=re.IGNORECASE,
+    )
 
 
 def safe_str(value: Any) -> str:
@@ -236,7 +273,7 @@ def obtener_backtesting(
 
     df = df.dropna(subset=["fecha_snapshot", "alerta_id"])
 
-    # Datos financieros de la operación: riesgo realizado y nominal asignado.
+    # Carga nominal, riesgo y resultado R para calcular el PnL monetario real.
     df["resultado_r"] = float("nan")
     df["riesgo_euros"] = float("nan")
     df["nominal"] = float("nan")
@@ -273,7 +310,7 @@ def obtener_backtesting(
         )
     except Exception as e:
         logger.warning(
-            "No se pudieron recuperar Nominal, Riesgo_Euros y Resultado_R de historial_alertas: %s",
+            "No se pudieron recuperar nominal, riesgo_euros y resultado_r de historial_alertas: %s",
             e
         )
 
@@ -397,6 +434,10 @@ def construir_metricas_cartera(
     ).dropna()
     combined = pd.concat([cerradas_validas, activas_validas], ignore_index=True)
     pnl_medio_combinado = rendimiento_ponderado(combined)
+    pnl_cerradas_eur = float(cerradas_validas["pnl_euros"].sum()) if not cerradas_validas.empty else 0.0
+    pnl_activas_eur = float(activas_validas["pnl_euros"].sum()) if not activas_validas.empty else 0.0
+    pnl_total_eur = pnl_cerradas_eur + pnl_activas_eur
+    nominal_total_eur = float(combined["nominal"].sum()) if not combined.empty else 0.0
 
     snapshot_inicio = (
         df[df["fecha_snapshot"] < inicio]
@@ -502,6 +543,10 @@ def construir_metricas_cartera(
         "posiciones_activas": len(activas),
         "pnl_medio_activas": rendimiento_ponderado(activas_validas),
         "pnl_medio_combinado": pnl_medio_combinado,
+        "pnl_cerradas_eur": pnl_cerradas_eur,
+        "pnl_activas_eur": pnl_activas_eur,
+        "pnl_total_eur": pnl_total_eur,
+        "nominal_total_eur": nominal_total_eur,
         "delta_pnl_medio_activas": delta_pnl_activos,
         "score_medio_activas": score_actual.mean() if not score_actual.empty else None,
         "rsi_medio_activas": rsi_actual.mean() if not rsi_actual.empty else None,
@@ -726,31 +771,31 @@ def construir_contexto_ia(
             "wins": metricas["wins"],
             "losses": metricas["losses"],
             "breakeven": metricas["break_even"],
-            "win_rate_pct": limpiar_numero(metricas["win_rate"]),
-            "pnl_medio_operacion_cerrada_pct": limpiar_numero(
-                metricas["pnl_medio_cerradas"]
-            ),
-            "pnl_medio_operaciones_cerradas_pct": limpiar_numero(
+            "tasa_acierto_operaciones_cerradas_pct": limpiar_numero(metricas["win_rate"], 1),
+            "rendimiento_ponderado_operaciones_cerradas_pct": limpiar_numero(
                 metricas["pnl_medio_cerradas"]
             ),
             "pnl_mediana_operacion_cerrada_pct": limpiar_numero(
                 metricas["pnl_mediana_cerradas"]
             ),
-            "average_win_pct": limpiar_numero(metricas["avg_win"]),
-            "average_loss_pct": limpiar_numero(metricas["avg_loss"]),
-            "profit_factor": limpiar_numero(metricas["profit_factor"]),
-            "expectancy_pct": limpiar_numero(metricas["expectancy"]),
+            "rendimiento_ponderado_ganadoras_pct": limpiar_numero(metricas["avg_win"], 1),
+            "rendimiento_ponderado_perdedoras_pct": limpiar_numero(metricas["avg_loss"], 1),
+            "factor_beneficio": limpiar_numero(metricas["profit_factor"]),
+        "resultado_cerrado_eur": limpiar_numero(metricas["pnl_cerradas_eur"]),
+        "resultado_abierto_no_realizado_eur": limpiar_numero(metricas["pnl_activas_eur"]),
+        "resultado_conjunto_eur": limpiar_numero(metricas["pnl_total_eur"]),
+        "nominal_conjunto_eur": limpiar_numero(metricas["nominal_total_eur"]),
             "posiciones_activas_al_cierre": metricas["posiciones_activas"],
-            "pnl_medio_posiciones_activas_pct": limpiar_numero(
+            "rendimiento_ponderado_posiciones_abiertas_pct": limpiar_numero(
                 metricas["pnl_medio_activas"]
             ),
-            "resultado_alura_quant_pnl_medio_por_posicion_pct": limpiar_numero(
+            "rendimiento_ponderado_conjunto_pct": limpiar_numero(
                 metricas["pnl_medio_combinado"]
             ),
             "pnl_medio_combinado_cerrado_y_abierto_pct": limpiar_numero(
                 metricas["pnl_medio_combinado"]
             ),
-            "cambio_medio_pnl_posiciones_activas_pct": limpiar_numero(
+            "cambio_ponderado_posiciones_abiertas_pct": limpiar_numero(
                 metricas["delta_pnl_medio_activas"]
             ),
             "score_medio_posiciones_activas": limpiar_numero(
@@ -771,7 +816,7 @@ def construir_contexto_ia(
             "La tabla backtesting_diario_alertas no contiene ROC20.",
             "La tabla backtesting_diario_alertas no contiene Estado_Estrategia.",
             "No se utilizan MAE ni MFE en el newsletter.",
-            "No se infiere una rentabilidad monetaria de cartera porque no se proporciona tamaño/peso de posición."
+            "El resultado de posiciones abiertas es provisional y puede cambiar mientras sigan abiertas."
         ],
     }
 
@@ -809,12 +854,16 @@ REGLAS:
     como malas: explica si el deterioro se observa en PnL, RSI, Score,
     distancia a SL/TP u otros datos disponibles.
 13. No inventes un Estado_Estrategia porque no existe en esta tabla.
-14. Escribe en español, con tono financiero profesional, claro y sobrio.
+14. Escribe en español de España, con tono claro, cercano y profesional para lectores con conocimientos financieros básicos.
+15. Evita las siglas PnL, win rate, breakeven y expectancy. Usa resultado en euros, tasa de acierto, equilibrio y resultado medio.
+16. No repitas ni recalcules en el texto el resultado cerrado, abierto, conjunto ni los porcentajes de cartera: se muestran en tarjetas y pueden cambiar por redondeo.
+17. Cuando menciones porcentajes de mercado, usa como máximo un decimal. Usa coma decimal y añade espacio antes de %.
+18. Explica términos como stop, score o RSI con palabras sencillas cuando sean necesarios.
 
 Devuelve exclusivamente JSON válido con esta estructura:
 
 {
-  "executive_summary": "3-5 frases",
+        "executive_summary": "2-3 frases, sin repetir cifras monetarias ni porcentajes de la cartera",
   "market_context": "2-4 párrafos breves",
   "portfolio_analysis": "2-4 párrafos breves",
   "best_positions_analysis": [
@@ -945,8 +994,9 @@ def render_market_table(
         </tbody>
     </table>
     <p style="font-size:12px;color:#64748b;margin-top:4px;">
-        HYGH se utiliza como referencia del segmento high yield/crédito y de las
-        condiciones de riesgo, no como medida directa y aislada de liquidez.
+        HYGH sirve de referencia para bonos de alto rendimiento; no mide por sí solo la liquidez.
+        El rendimiento Alura Quant pondera cada posición por su importe nominal.
+        Las posiciones abiertas siguen en curso, así que su resultado puede cambiar.
     </p>
     """
 
@@ -961,60 +1011,43 @@ def render_positions_table(
         <p style="color:#64748b;">No hay posiciones disponibles para este apartado.</p>
         """
 
-    rows = []
+    cards = []
     for p in positions:
         pnl = p.get("pnl_pct")
         pnl_display = fmt_pct(pnl)
-
-        score = fmt_num(p.get("score"))
-        rsi = fmt_num(p.get("rsi"))
+        score = fmt_num(p.get("score"), 0)
+        rsi = fmt_num(p.get("rsi"), 1)
         sl = fmt_pct(p.get("distancia_sl_pct"))
         tp = fmt_pct(p.get("distancia_tp_pct"))
-
-        rows.append(
+        pnl_color = "#16845b" if isinstance(pnl, (int, float)) and pnl >= 0 else "#b54747"
+        cards.append(
             f"""
-            <tr>
-                <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;font-weight:700;">
-                    {esc(p.get("ticker"))}
-                </td>
-                <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:right;">
-                    {esc(pnl_display)}
-                </td>
-                <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:right;">
-                    {esc(score)}
-                </td>
-                <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:right;">
-                    {esc(rsi)}
-                </td>
-                <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:right;">
-                    {esc(sl)}
-                </td>
-                <td style="padding:10px 8px;border-bottom:1px solid #e2e8f0;text-align:right;">
-                    {esc(tp)}
-                </td>
-            </tr>
+            <div style="margin:10px 0;padding:14px 15px;border:1px solid #e5eaf0;border-radius:10px;background:#ffffff;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;">
+                    <tr>
+                        <td style="font-size:16px;font-weight:700;color:#1e293b;">{esc(p.get("ticker"))}</td>
+                        <td align="right" style="font-size:17px;font-weight:700;color:{pnl_color};">{esc(pnl_display)}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding-top:12px;font-size:12px;line-height:1.45;color:#64748b;">Puntuación interna<br><strong style="color:#334155;">{esc(score)}</strong></td>
+                        <td align="right" style="padding-top:12px;font-size:12px;line-height:1.45;color:#64748b;">RSI<br><strong style="color:#334155;">{esc(rsi)}</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding-top:8px;font-size:12px;line-height:1.45;color:#64748b;">Distancia al stop<br><strong style="color:#334155;">{esc(sl)}</strong></td>
+                        <td align="right" style="padding-top:8px;font-size:12px;line-height:1.45;color:#64748b;">Distancia al objetivo<br><strong style="color:#334155;">{esc(tp)}</strong></td>
+                    </tr>
+                </table>
+            </div>
             """
         )
 
     return f"""
     <h3 style="margin:20px 0 8px;color:#1e293b;">{esc(title)}</h3>
-
-    <table width="100%" cellpadding="0" cellspacing="0"
-           style="border-collapse:collapse;">
-        <thead>
-            <tr>
-                <th align="left" style="padding:8px;color:#64748b;font-size:11px;text-transform:uppercase;">Activo</th>
-                <th align="right" style="padding:8px;color:#64748b;font-size:11px;text-transform:uppercase;">PnL</th>
-                <th align="right" style="padding:8px;color:#64748b;font-size:11px;text-transform:uppercase;">Score</th>
-                <th align="right" style="padding:8px;color:#64748b;font-size:11px;text-transform:uppercase;">RSI</th>
-                <th align="right" style="padding:8px;color:#64748b;font-size:11px;text-transform:uppercase;">Dist. SL vigente</th>
-                <th align="right" style="padding:8px;color:#64748b;font-size:11px;text-transform:uppercase;">TP</th>
-            </tr>
-        </thead>
-        <tbody>
-            {''.join(rows)}
-        </tbody>
-    </table>
+    <p style="font-size:12px;color:#64748b;line-height:1.5;margin:0 0 8px;">
+        La puntuación interna resume varios criterios del análisis. El RSI es un indicador de impulso del precio.
+        El stop es un nivel de salida definido para limitar pérdidas. Las distancias indican cuánto falta hasta los niveles actuales de stop y objetivo; no son una garantía.
+    </p>
+    {''.join(cards)}
     """
 
 
@@ -1028,7 +1061,7 @@ def render_analysis_list(
     blocks = []
     for item in analyses:
         ticker = esc(item.get("ticker"))
-        analysis = esc(item.get("analysis")).replace("\n", "<br>")
+        analysis = esc(formato_texto_es(item.get("analysis"))).replace("\n", "<br>")
 
         blocks.append(
             f"""
@@ -1056,26 +1089,38 @@ def generar_html_newsletter(
     inicio: date,
     fin: date
 ) -> str:
-    summary = esc(analisis.get("executive_summary", ""))
-    market_context = esc(analisis.get("market_context", "")).replace("\n", "<br><br>")
-    portfolio_analysis = esc(analisis.get("portfolio_analysis", "")).replace("\n", "<br><br>")
-    risk_monitor = esc(analisis.get("risk_monitor", "")).replace("\n", "<br><br>")
-    next_week = esc(analisis.get("next_week_outlook", "")).replace("\n", "<br><br>")
+    cierre = metricas["pnl_cerradas_eur"]
+    abierto = metricas["pnl_activas_eur"]
+    total = metricas["pnl_total_eur"]
+    estado_cierre = "positivo" if cierre > 0 else "negativo" if cierre < 0 else "en equilibrio"
+    estado_abierto = "positivo" if abierto > 0 else "negativo" if abierto < 0 else "en equilibrio"
+    estado_total = "positivo" if total > 0 else "negativo" if total < 0 else "en equilibrio"
+    summary_text = (
+        f"Las operaciones cerradas terminan en {estado_cierre}, mientras que las abiertas "
+        f"muestran por ahora un resultado {estado_abierto}. El balance conjunto queda "
+        f"{estado_total}; el saldo de las abiertas puede cambiar mientras sigan en cartera."
+    )
+    summary = esc(summary_text)
+    market_context = esc(formato_texto_es(analisis.get("market_context", ""))).replace("\n", "<br><br>")
+    portfolio_analysis = esc(formato_texto_es(analisis.get("portfolio_analysis", ""))).replace("\n", "<br><br>")
+    risk_monitor = esc(formato_texto_es(analisis.get("risk_monitor", ""))).replace("\n", "<br><br>")
+    next_week = esc(formato_texto_es(analisis.get("next_week_outlook", ""))).replace("\n", "<br><br>")
 
     active = metricas["posiciones_activas"]
     closed = metricas["total_operaciones_cerradas"]
     win_rate = metricas["win_rate"]
 
-    pnl_mean = metricas["pnl_medio_combinado"]
-    pnl_closed = metricas["pnl_medio_cerradas"]
     pnl_active = metricas["pnl_medio_activas"]
     pnl_combined = metricas["pnl_medio_combinado"]
     pf = metricas["profit_factor"]
-    expectancy = metricas["expectancy"]
+    factor_explicado = (
+        f"{fmt_num(pf, 2)} € de ganancia bruta por cada 1 € de pérdida bruta"
+        if pf is not None else "no disponible"
+    )
 
     key_takeaways = analisis.get("key_takeaways", []) or []
     takeaway_html = "".join(
-        f"<li style='margin-bottom:7px;'>{esc(item)}</li>"
+        f"<li style='margin-bottom:7px;'>{esc(formato_texto_es(item))}</li>"
         for item in key_takeaways[:5]
     )
 
@@ -1099,26 +1144,37 @@ def generar_html_newsletter(
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Alura Quant — Weekly Intelligence</title>
+<title>Alura Quant — Informe semanal</title>
+<style type="text/css">
+@media only screen and (max-width:600px) {{
+  .outer-pad {{ padding:12px 6px !important; }}
+  .content-pad {{ padding-left:17px !important;padding-right:17px !important; }}
+  .header-pad {{ padding:24px 19px !important; }}
+  .hero-number {{ font-size:30px !important; }}
+  .mobile-small {{ font-size:11px !important; }}
+  .stack-table {{ border-spacing:0 !important; }}
+  .stack-mobile {{ display:block !important;width:100% !important;max-width:100% !important;box-sizing:border-box !important;margin-bottom:8px !important; }}
+}}
+</style>
 </head>
 
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;color:#1e293b;">
 
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;">
 <tr>
-<td align="center" style="padding:28px 12px;">
+<td align="center" class="outer-pad" style="padding:24px 12px;">
 
 <table width="680" cellpadding="0" cellspacing="0"
        style="max-width:680px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;">
 
 <!-- HEADER -->
 <tr>
-<td style="background:#1e293b;padding:30px 32px;color:#ffffff;">
+<td class="header-pad" style="background:#1e293b;padding:30px 32px;color:#ffffff;">
     <div style="font-size:12px;letter-spacing:1.5px;text-transform:uppercase;color:#cbd5e1;">
         Alura Quant
     </div>
     <div style="font-size:27px;font-weight:700;margin-top:7px;">
-        Weekly Intelligence
+        Informe semanal
     </div>
     <div style="font-size:13px;color:#cbd5e1;margin-top:8px;">
         {esc(inicio.strftime("%d/%m/%Y"))} — {esc(fin.strftime("%d/%m/%Y"))}
@@ -1128,9 +1184,9 @@ def generar_html_newsletter(
 
 <!-- EXECUTIVE SUMMARY -->
 <tr>
-<td style="padding:28px 32px 10px;">
+<td class="content-pad" style="padding:24px 32px 10px;">
     <div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#64748b;font-weight:700;">
-        Resumen ejecutivo
+        Lectura rápida
     </div>
 
     <p style="font-size:16px;line-height:1.65;color:#334155;margin:12px 0 0;">
@@ -1141,37 +1197,32 @@ def generar_html_newsletter(
 
 <!-- KPIs -->
 <tr>
-<td style="padding:16px 32px 20px;">
+<td class="content-pad" style="padding:16px 32px 20px;">
+<div style="padding:18px 20px;background:#fff8df;border:1px solid #f0df9a;border-radius:12px;">
+    <div style="font-size:11px;letter-spacing:.7px;color:#78631b;text-transform:uppercase;font-weight:700;">Balance conjunto de la cartera</div>
+    <div class="hero-number" style="font-size:35px;line-height:1.15;font-weight:700;color:#1e293b;margin-top:7px;">{esc(fmt_eur(metricas["pnl_total_eur"]))}</div>
+    <div style="font-size:13px;line-height:1.5;color:#475569;margin-top:7px;">Rendimiento ponderado: <strong>{esc(fmt_pct(pnl_combined))}</strong> sobre {esc(fmt_eur(metricas["nominal_total_eur"]))} en posiciones. El cálculo tiene en cuenta el importe de cada posición.</div>
+</div>
 
-<table width="100%" cellpadding="0" cellspacing="0">
+<table role="presentation" class="stack-table" width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px;border-collapse:separate;border-spacing:5px 0;">
 <tr>
-<td width="25%" style="padding:12px 6px;background:#f8fafc;border-radius:8px;">
-    <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Cerradas</div>
-    <div style="font-size:23px;font-weight:700;margin-top:5px;">{closed}</div>
-    <div style="font-size:10px;color:#64748b;margin-top:3px;">PnL medio cerradas: {esc(fmt_pct(pnl_closed))} · {metricas["break_even"]} breakeven</div>
+<td class="stack-mobile" width="50%" valign="top" style="padding:13px 12px;background:#f8fafc;border:1px solid #e8edf2;border-radius:10px;">
+    <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:700;">Cerradas · {closed}</div>
+    <div style="font-size:20px;font-weight:700;margin-top:5px;color:#1e293b;">{esc(fmt_eur(metricas["pnl_cerradas_eur"]))}</div>
+    <div class="mobile-small" style="font-size:12px;line-height:1.5;color:#64748b;margin-top:4px;">Resultado cerrado · {esc(fmt_pct(metricas["pnl_medio_cerradas"]))} según el importe · {metricas["wins"]} con beneficio · {metricas["losses"]} salidas por stop · {metricas["break_even"]} en equilibrio</div>
 </td>
-<td width="25%" style="padding:12px 6px 12px 12px;">
-    <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Win Rate</div>
-    <div style="font-size:23px;font-weight:700;margin-top:5px;">{esc(fmt_pct(win_rate))}</div>
-    <div style="font-size:10px;color:#64748b;margin-top:3px;">Resultado combinado AQ: {esc(fmt_pct(pnl_combined))}</div>
-</td>
-<td width="25%" style="padding:12px 6px 12px 12px;">
-    <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Activas</div>
-    <div style="font-size:23px;font-weight:700;margin-top:5px;">{active}</div>
-    <div style="font-size:10px;color:#64748b;margin-top:3px;">PnL medio abiertas: {esc(fmt_pct(pnl_active))}</div>
-</td>
-<td width="25%" style="padding:12px 6px 12px 12px;">
-    <div style="font-size:11px;color:#64748b;text-transform:uppercase;">PnL medio</div>
-    <div style="font-size:23px;font-weight:700;margin-top:5px;">{esc(fmt_pct(pnl_mean))}</div>
-    <div style="font-size:10px;color:#64748b;margin-top:3px;">Media de abiertas y cerradas</div>
+<td class="stack-mobile" width="50%" valign="top" style="padding:13px 12px;background:#f8fafc;border:1px solid #e8edf2;border-radius:10px;">
+    <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:700;">Abiertas · {active}</div>
+    <div style="font-size:20px;font-weight:700;margin-top:5px;color:#1e293b;">{esc(fmt_eur(metricas["pnl_activas_eur"]))}</div>
+    <div class="mobile-small" style="font-size:12px;line-height:1.5;color:#64748b;margin-top:4px;">Saldo actual de operaciones abiertas · puede cambiar · {esc(fmt_pct(pnl_active))}</div>
 </td>
 </tr>
 </table>
 
-<div style="margin-top:12px;font-size:12px;color:#64748b;">
-    Profit Factor: <strong>{esc(fmt_num(pf))}</strong>
-    &nbsp;·&nbsp;
-    Expectancy media: <strong>{esc(fmt_pct(expectancy))}</strong>
+<div style="margin:10px 4px 0;font-size:12px;line-height:1.5;color:#64748b;">
+    Tasa de acierto en cerradas: <strong>{esc(fmt_pct(win_rate))}</strong>
+    &nbsp;·&nbsp; Factor de beneficio: <strong>{esc(fmt_num(pf, 2))}</strong>
+    <span>({esc(factor_explicado)})</span>
 </div>
 
 </td>
@@ -1179,7 +1230,7 @@ def generar_html_newsletter(
 
 <!-- MARKET -->
 <tr>
-<td style="padding:8px 32px 20px;">
+<td class="content-pad" style="padding:8px 32px 20px;">
     <h2 style="font-size:19px;margin:12px 0;color:#1e293b;">
         Contexto de mercado
     </h2>
@@ -1194,9 +1245,9 @@ def generar_html_newsletter(
 
 <!-- PORTFOLIO -->
 <tr>
-<td style="padding:20px 32px;">
+<td class="content-pad" style="padding:20px 32px;">
     <h2 style="font-size:19px;margin:0 0 10px;color:#1e293b;">
-        Radiografía de cartera
+        Cómo va la cartera
     </h2>
 
     <p style="font-size:14px;line-height:1.65;color:#475569;">
@@ -1207,7 +1258,7 @@ def generar_html_newsletter(
 
 <!-- POSITIONS -->
 <tr>
-<td style="padding:4px 32px 20px;">
+<td class="content-pad" style="padding:4px 32px 20px;">
     {top_html}
     {best_analysis_html}
 
@@ -1218,7 +1269,7 @@ def generar_html_newsletter(
 
 <!-- RISK -->
 <tr>
-<td style="padding:20px 32px;background:#f8fafc;">
+<td class="content-pad" style="padding:20px 32px;background:#f8fafc;">
     <h2 style="font-size:19px;margin:0 0 10px;color:#1e293b;">
         Monitor de riesgo
     </h2>
@@ -1231,7 +1282,7 @@ def generar_html_newsletter(
 
 <!-- OUTLOOK -->
 <tr>
-<td style="padding:24px 32px 20px;">
+<td class="content-pad" style="padding:24px 32px 20px;">
     <h2 style="font-size:19px;margin:0 0 10px;color:#1e293b;">
         Próxima semana
     </h2>
@@ -1288,7 +1339,7 @@ def enviar_correo(
         return
 
     asunto = (
-        f"Alura Quant | Weekly Intelligence "
+        f"Alura Quant | Informe semanal "
         f"— {inicio.strftime('%d/%m')} → {fin.strftime('%d/%m/%Y')}"
     )
 
