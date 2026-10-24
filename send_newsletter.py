@@ -266,44 +266,25 @@ def construir_metricas_cartera(
     """
     Reconstruye la evolución semanal a partir de los snapshots diarios.
     """
-    estados_terminales = {
-        "STOP_SALTADO",
-        "OBJETIVO_CUMPLIDO",
-        "WIN",
-        "LOSS",
-        "CERRADA",
-        "CLOSED",
-        "TP",
-        "SL",
-    }
-
     df = df.sort_values(["alerta_id", "fecha_snapshot"]).copy()
 
-    # Las métricas de cartera se calculan con snapshots del lunes al viernes.
-    # Las posiciones abiertas son las que aparecen ACTIVA en el snapshot del
-    # viernes; las cerradas son IDs únicos con estado no ACTIVA en la semana.
+    # Reproducir los filtros SQL de los snapshots sin deduplicar filas:
+    # cerradas = estado distinto de ACTIVA entre lunes y viernes;
+    # abiertas = estado ACTIVA en el snapshot exacto del viernes.
     viernes_referencia = fin - timedelta(days=max(0, fin.weekday() - 4))
     snapshots_semana = df[
         (df["fecha_snapshot"] >= inicio)
         & (df["fecha_snapshot"] <= viernes_referencia)
     ].copy()
 
-    snapshots_no_activos = snapshots_semana[
-        snapshots_semana["estado"].ne("ACTIVA")
+    cerradas = snapshots_semana[
+        snapshots_semana["estado"].notna()
         & snapshots_semana["estado"].ne("")
-    ].sort_values(["fecha_snapshot", "alerta_id"])
-    primer_no_activo = snapshots_no_activos.drop_duplicates(
-        subset=["alerta_id"], keep="first"
-    ).copy()
-    snapshots_activos_viernes = df[
+        & snapshots_semana["estado"].ne("ACTIVA")
+    ].copy()
+    activas = df[
         (df["fecha_snapshot"] == viernes_referencia)
         & (df["estado"].eq("ACTIVA"))
-    ].sort_values(["fecha_snapshot", "alerta_id"])
-    activas = snapshots_activos_viernes.drop_duplicates(
-        subset=["alerta_id"], keep="last"
-    ).copy()
-    cerradas = primer_no_activo[
-        ~primer_no_activo["alerta_id"].isin(activas["alerta_id"])
     ].copy()
 
     resultado_r = pd.to_numeric(
