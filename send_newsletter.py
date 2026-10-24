@@ -900,9 +900,6 @@ def render_market_table(
     <p style="font-size:12px;color:#64748b;margin-top:4px;">
         HYGH se utiliza como referencia del segmento high yield/crédito y de las
         condiciones de riesgo, no como medida directa y aislada de liquidez.
-        El resultado Alura Quant es el PnL medio por posición, combinando las
-        posiciones cerradas durante el periodo y las que seguían abiertas al
-        cierre del viernes; no suma porcentajes de operaciones.
     </p>
     """
 
