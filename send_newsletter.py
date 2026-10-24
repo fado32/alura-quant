@@ -104,7 +104,7 @@ def limpiar_numero(value: Any, decimals: int = 2) -> Optional[float]:
         return None
 
 
-def fmt_pct(value: Any, decimals: int = 2) -> str:
+def fmt_pct(value: Any, decimals: int = 1) -> str:
     number = limpiar_numero(value, decimals)
     if number is None:
         return "N/D"
@@ -838,6 +838,19 @@ def render_market_table(
     metricas: Optional[Dict[str, Any]] = None
 ) -> str:
     rows = []
+    if metricas is not None:
+        rows.append(
+            f"""
+            <tr style="background:#fff3bf;">
+                <td style="padding:10px 9px;border-bottom:1px solid #f1df91;font-weight:700;color:#1e293b;">
+                    Resultado Alura Quant
+                </td>
+                <td style="padding:10px 9px;text-align:right;border-bottom:1px solid #f1df91;font-weight:700;color:#1e293b;">
+                    {esc(fmt_pct(metricas.get("pnl_medio_combinado")))}
+                </td>
+            </tr>
+            """
+        )
     order = [
         "S&P 500",
         "Nasdaq 100",
@@ -859,18 +872,6 @@ def render_market_table(
                 <td>{esc(nombre)}</td>
                 <td style="text-align:right;font-weight:600;">
                     {esc(fmt_pct(data.get("weekly_return_pct")))}
-                </td>
-            </tr>
-            """
-        )
-
-    if metricas is not None:
-        rows.append(
-            f"""
-            <tr>
-                <td>Resultado Alura Quant</td>
-                <td style="text-align:right;font-weight:700;color:#1e293b;">
-                    {esc(fmt_pct(metricas.get("pnl_medio_combinado")))}
                 </td>
             </tr>
             """
