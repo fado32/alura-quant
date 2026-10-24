@@ -25,7 +25,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
 
 # Activar para enviar únicamente al correo de pruebas. Cambiar a False para
 # volver al envío a todos los suscriptores de Supabase.
-MODO_PRUEBAS = False
+MODO_PRUEBAS = True
 CORREO_PRUEBAS = "adelgadosanz@gmail.com"
 
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
@@ -236,27 +236,46 @@ def obtener_backtesting(
 
     df = df.dropna(subset=["fecha_snapshot", "alerta_id"])
 
-    # Resultado R es el dato definitivo para separar los cierres a breakeven.
+    # Datos financieros de la operación: riesgo realizado y nominal asignado.
     df["resultado_r"] = float("nan")
+    df["riesgo_euros"] = float("nan")
+    df["nominal"] = float("nan")
     alerta_ids = df["alerta_id"].astype(int).unique().tolist()
     try:
-        resultados = []
+        datos_historial = []
         for inicio_lote in range(0, len(alerta_ids), 200):
             lote = alerta_ids[inicio_lote:inicio_lote + 200]
-            response_resultados = (
+            response_historial = (
                 supabase.table("historial_alertas")
-                .select("id,resultado_r")
+                .select("id,Nominal,Riesgo_Euros,Resultado_R")
                 .in_("id", lote)
                 .execute()
             )
-            resultados.extend(response_resultados.data or [])
-        resultado_por_id = {
-            int(row["id"]): pd.to_numeric(row.get("resultado_r"), errors="coerce")
-            for row in resultados if row.get("id") is not None
+            datos_historial.extend(response_historial.data or [])
+        historial_por_id = {
+            int(row["id"]): row
+            for row in datos_historial if row.get("id") is not None
         }
-        df["resultado_r"] = df["alerta_id"].astype(int).map(resultado_por_id)
+        df["resultado_r"] = df["alerta_id"].astype(int).map(
+            lambda alerta_id: pd.to_numeric(
+                historial_por_id.get(alerta_id, {}).get("Resultado_R"), errors="coerce"
+            )
+        )
+        df["riesgo_euros"] = df["alerta_id"].astype(int).map(
+            lambda alerta_id: pd.to_numeric(
+                historial_por_id.get(alerta_id, {}).get("Riesgo_Euros"), errors="coerce"
+            )
+        )
+        df["nominal"] = df["alerta_id"].astype(int).map(
+            lambda alerta_id: pd.to_numeric(
+                historial_por_id.get(alerta_id, {}).get("Nominal"), errors="coerce"
+            )
+        )
     except Exception as e:
-        logger.warning("No se pudieron recuperar los resultados R de historial_alertas: %s", e)
+        logger.warning(
+            "No se pudieron recuperar Nominal, Riesgo_Euros y Resultado_R de historial_alertas: %s",
+            e
+        )
 
     return df
 
@@ -302,66 +321,81 @@ def construir_metricas_cartera(
         & (df["estado"].eq("ACTIVA"))
     ].copy()
 
-    resultado_r = pd.to_numeric(
+    cerradas["resultado_r"] = pd.to_numeric(
         cerradas.get("resultado_r", pd.Series(index=cerradas.index, dtype=float)),
         errors="coerce"
     )
-    break_even_mask = resultado_r.eq(0)
-    break_even = int(break_even_mask.sum())
-
-    def es_win(row: pd.Series) -> bool:
-        estado = safe_str(row.get("estado")).upper()
-        pnl = row.get("pnl_actual_pct")
-        if estado in {"OBJETIVO_CUMPLIDO", "WIN", "TP"}:
-            return True
-        if estado in {"STOP_SALTADO", "LOSS", "SL"}:
-            return False
-        return bool(pd.notna(pnl) and float(pnl) > 0)
-
-    cerradas["es_win"] = cerradas.apply(es_win, axis=1)
-    cerradas.loc[break_even_mask, "pnl_actual_pct"] = 0.0
-
-    total_cerradas = len(cerradas)
-    wins = int(cerradas["es_win"].sum()) if total_cerradas else 0
-    losses = max(0, total_cerradas - wins - break_even)
-    operaciones_con_resultado = wins + losses
-    win_rate = (wins / operaciones_con_resultado * 100) if operaciones_con_resultado else None
-
-    pnl_cerradas = pd.to_numeric(
-        cerradas.get("pnl_actual_pct", pd.Series(dtype=float)),
+    cerradas["riesgo_euros"] = pd.to_numeric(
+        cerradas.get("riesgo_euros", pd.Series(index=cerradas.index, dtype=float)),
         errors="coerce"
-    ).dropna()
-    pnl_medio = pnl_cerradas.mean() if not pnl_cerradas.empty else None
-    pnl_mediana = pnl_cerradas.median() if not pnl_cerradas.empty else None
-
-    ganancias = pnl_cerradas[pnl_cerradas > 0]
-    perdidas = pnl_cerradas[pnl_cerradas < 0]
-
-    avg_win = ganancias.mean() if not ganancias.empty else None
-    avg_loss = perdidas.mean() if not perdidas.empty else None
-
-    gross_profit = ganancias.sum() if not ganancias.empty else 0.0
-    gross_loss = abs(perdidas.sum()) if not perdidas.empty else 0.0
-
-    profit_factor = (
-        gross_profit / gross_loss
-        if gross_loss > 0
-        else None
+    )
+    cerradas["nominal"] = pd.to_numeric(
+        cerradas.get("nominal", pd.Series(index=cerradas.index, dtype=float)),
+        errors="coerce"
+    )
+    cerradas["pnl_euros"] = cerradas["riesgo_euros"] * cerradas["resultado_r"]
+    cerradas["pnl_actual_pct"] = (
+        cerradas["pnl_euros"] / cerradas["nominal"].replace(0, float("nan")) * 100
     )
 
+    activas["nominal"] = pd.to_numeric(
+        activas.get("nominal", pd.Series(index=activas.index, dtype=float)),
+        errors="coerce"
+    )
+    activas["pnl_actual_pct"] = pd.to_numeric(
+        activas.get("pnl_actual_pct", pd.Series(index=activas.index, dtype=float)),
+        errors="coerce"
+    )
+    activas["pnl_euros"] = activas["nominal"] * activas["pnl_actual_pct"] / 100
+
+    # Se mantienen los conteos de snapshots solicitados (13 cerradas y 174 activas).
+    # Para rendimientos y ratios se usan solo filas con los datos monetarios necesarios.
+    cerradas_validas = cerradas.dropna(subset=["pnl_euros", "nominal"]).copy()
+    activas_validas = activas.dropna(subset=["pnl_euros", "nominal"]).copy()
+
+    def rendimiento_ponderado(frame: pd.DataFrame) -> Optional[float]:
+        if frame.empty:
+            return None
+        nominal_total = pd.to_numeric(frame["nominal"], errors="coerce").sum()
+        pnl_total = pd.to_numeric(frame["pnl_euros"], errors="coerce").sum()
+        if not nominal_total or pd.isna(nominal_total):
+            return None
+        return float(pnl_total / nominal_total * 100)
+
+    resultado_cerradas = cerradas_validas["pnl_euros"]
+    break_even_mask = resultado_cerradas.abs() <= 1e-9
+    break_even = int(break_even_mask.sum())
+    wins_mask = resultado_cerradas > 1e-9
+    losses_mask = resultado_cerradas < -1e-9
+    wins = int(wins_mask.sum())
+    losses = int(losses_mask.sum())
+    operaciones_con_resultado = wins + losses
+    win_rate = (
+        wins / operaciones_con_resultado * 100
+        if operaciones_con_resultado else None
+    )
+
+    pnl_cerradas = pd.to_numeric(
+        cerradas_validas["pnl_actual_pct"], errors="coerce"
+    ).dropna()
+    pnl_mediana = pnl_cerradas.median() if not pnl_cerradas.empty else None
+    pnl_medio = rendimiento_ponderado(cerradas_validas)
+
+    ganadoras = cerradas_validas.loc[wins_mask]
+    perdedoras = cerradas_validas.loc[losses_mask]
+    avg_win = rendimiento_ponderado(ganadoras)
+    avg_loss = rendimiento_ponderado(perdedoras)
+
+    gross_profit = float(ganadoras["pnl_euros"].sum()) if not ganadoras.empty else 0.0
+    gross_loss = abs(float(perdedoras["pnl_euros"].sum())) if not perdedoras.empty else 0.0
+    profit_factor = gross_profit / gross_loss if gross_loss > 0 else None
     expectancy = pnl_medio
 
     pnl_activas = pd.to_numeric(
-        activas.get("pnl_actual_pct", pd.Series(dtype=float)),
-        errors="coerce"
+        activas_validas["pnl_actual_pct"], errors="coerce"
     ).dropna()
-    pnl_operaciones_combinadas = pd.concat(
-        [pnl_cerradas, pnl_activas], ignore_index=True
-    ).dropna()
-    pnl_medio_combinado = (
-        pnl_operaciones_combinadas.mean()
-        if not pnl_operaciones_combinadas.empty else None
-    )
+    combined = pd.concat([cerradas_validas, activas_validas], ignore_index=True)
+    pnl_medio_combinado = rendimiento_ponderado(combined)
 
     snapshot_inicio = (
         df[df["fecha_snapshot"] < inicio]
@@ -385,11 +419,11 @@ def construir_metricas_cartera(
     if common_ids:
         ini = snapshot_inicio[
             snapshot_inicio["alerta_id"].isin(common_ids)
-        ][["alerta_id", "pnl_actual_pct"]].copy()
+        ][["alerta_id", "pnl_actual_pct", "nominal"]].copy()
 
         fin_df = activas[
             activas["alerta_id"].isin(common_ids)
-        ][["alerta_id", "pnl_actual_pct"]].copy()
+        ][["alerta_id", "pnl_actual_pct", "nominal"]].copy()
 
         merged = ini.merge(
             fin_df,
@@ -404,7 +438,19 @@ def construir_metricas_cartera(
             ).dropna()
 
             if not delta.empty:
-                delta_pnl_activos = delta.mean()
+                nominal_fin = pd.to_numeric(merged["nominal_fin"], errors="coerce")
+                delta_fin = (
+                    pd.to_numeric(merged["pnl_actual_pct_fin"], errors="coerce")
+                    - pd.to_numeric(merged["pnl_actual_pct_inicio"], errors="coerce")
+                )
+                delta_frame = pd.DataFrame({
+                    "nominal": nominal_fin,
+                    "pnl_euros": nominal_fin * delta_fin / 100,
+                }).dropna()
+                delta_pnl_activos = (
+                    rendimiento_ponderado(delta_frame)
+                    if not delta_frame.empty else None
+                )
 
     score_actual = pd.to_numeric(
         activas.get("score_actual", pd.Series(dtype=float)),
@@ -453,7 +499,7 @@ def construir_metricas_cartera(
         "profit_factor": profit_factor,
         "expectancy": expectancy,
         "posiciones_activas": len(activas),
-        "pnl_medio_activas": pnl_activas.mean() if not pnl_activas.empty else None,
+        "pnl_medio_activas": rendimiento_ponderado(activas_validas),
         "pnl_medio_combinado": pnl_medio_combinado,
         "delta_pnl_medio_activas": delta_pnl_activos,
         "score_medio_activas": score_actual.mean() if not score_actual.empty else None,
