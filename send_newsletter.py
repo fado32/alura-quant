@@ -23,6 +23,11 @@ import resend
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
 
+# Activar para enviar únicamente al correo de pruebas. Cambiar a False para
+# volver al envío a todos los suscriptores de Supabase.
+MODO_PRUEBAS = True
+CORREO_PRUEBAS = "adelgadosanz@gmail.com"
+
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "").strip()
 if not RESEND_API_KEY:
     raise RuntimeError("Falta RESEND_API_KEY en las variables de entorno o GitHub Secrets.")
@@ -331,6 +336,7 @@ def construir_metricas_cartera(
         cerradas.get("pnl_actual_pct", pd.Series(dtype=float)),
         errors="coerce"
     ).dropna()
+    pnl_total_cerradas = pnl_cerradas.sum() if not pnl_cerradas.empty else 0.0
 
     pnl_medio = pnl_cerradas.mean() if not pnl_cerradas.empty else None
     pnl_mediana = pnl_cerradas.median() if not pnl_cerradas.empty else None
@@ -362,6 +368,18 @@ def construir_metricas_cartera(
         activas.get("pnl_actual_pct", pd.Series(dtype=float)),
         errors="coerce"
     ).dropna()
+    pnl_total_activas = pnl_activas.sum() if not pnl_activas.empty else 0.0
+    pnl_operaciones_combinadas = pd.concat(
+        [pnl_cerradas, pnl_activas], ignore_index=True
+    ).dropna()
+    pnl_total_combinado = (
+        pnl_operaciones_combinadas.sum()
+        if not pnl_operaciones_combinadas.empty else 0.0
+    )
+    pnl_medio_combinado = (
+        pnl_operaciones_combinadas.mean()
+        if not pnl_operaciones_combinadas.empty else None
+    )
 
     snapshot_inicio = (
         df[df["fecha_snapshot"] < inicio]
@@ -444,6 +462,7 @@ def construir_metricas_cartera(
         "losses": losses,
         "win_rate": win_rate,
         "pnl_medio_cerradas": pnl_medio,
+        "pnl_total_cerradas": pnl_total_cerradas,
         "pnl_mediana_cerradas": pnl_mediana,
         "avg_win": avg_win,
         "avg_loss": avg_loss,
@@ -451,6 +470,9 @@ def construir_metricas_cartera(
         "expectancy": expectancy,
         "posiciones_activas": len(activas),
         "pnl_medio_activas": pnl_activas.mean() if not pnl_activas.empty else None,
+        "pnl_total_activas": pnl_total_activas,
+        "pnl_total_combinado": pnl_total_combinado,
+        "pnl_medio_combinado": pnl_medio_combinado,
         "delta_pnl_medio_activas": delta_pnl_activos,
         "score_medio_activas": score_actual.mean() if not score_actual.empty else None,
         "rsi_medio_activas": rsi_actual.mean() if not rsi_actual.empty else None,
@@ -679,6 +701,9 @@ def construir_contexto_ia(
             "pnl_medio_operacion_cerrada_pct": limpiar_numero(
                 metricas["pnl_medio_cerradas"]
             ),
+            "pnl_total_operaciones_cerradas_pct_suma_por_operacion": limpiar_numero(
+                metricas["pnl_total_cerradas"]
+            ),
             "pnl_mediana_operacion_cerrada_pct": limpiar_numero(
                 metricas["pnl_mediana_cerradas"]
             ),
@@ -689,6 +714,15 @@ def construir_contexto_ia(
             "posiciones_activas_al_cierre": metricas["posiciones_activas"],
             "pnl_medio_posiciones_activas_pct": limpiar_numero(
                 metricas["pnl_medio_activas"]
+            ),
+            "pnl_total_posiciones_activas_pct_suma_por_operacion": limpiar_numero(
+                metricas["pnl_total_activas"]
+            ),
+            "resultado_alura_quant_pct_suma_pnl_cerrado_y_abierto": limpiar_numero(
+                metricas["pnl_total_combinado"]
+            ),
+            "pnl_medio_combinado_cerrado_y_abierto_pct": limpiar_numero(
+                metricas["pnl_medio_combinado"]
             ),
             "cambio_medio_pnl_posiciones_activas_pct": limpiar_numero(
                 metricas["delta_pnl_medio_activas"]
@@ -820,7 +854,10 @@ def esc(value: Any) -> str:
     return html.escape(safe_str(value))
 
 
-def render_market_table(mercado: Dict[str, Dict[str, Any]]) -> str:
+def render_market_table(
+    mercado: Dict[str, Dict[str, Any]],
+    metricas: Optional[Dict[str, Any]] = None
+) -> str:
     rows = []
     order = [
         "S&P 500",
@@ -843,6 +880,18 @@ def render_market_table(mercado: Dict[str, Dict[str, Any]]) -> str:
                 <td>{esc(nombre)}</td>
                 <td style="text-align:right;font-weight:600;">
                     {esc(fmt_pct(data.get("weekly_return_pct")))}
+                </td>
+            </tr>
+            """
+        )
+
+    if metricas is not None:
+        rows.append(
+            f"""
+            <tr>
+                <td>Resultado Alura Quant</td>
+                <td style="text-align:right;font-weight:700;color:#1e293b;">
+                    {esc(fmt_pct(metricas.get("pnl_total_combinado")))}
                 </td>
             </tr>
             """
@@ -871,6 +920,9 @@ def render_market_table(mercado: Dict[str, Dict[str, Any]]) -> str:
     <p style="font-size:12px;color:#64748b;margin-top:4px;">
         HYGH se utiliza como referencia del segmento high yield/crédito y de las
         condiciones de riesgo, no como medida directa y aislada de liquidez.
+        El resultado Alura Quant suma el PnL porcentual de cada operación cerrada
+        durante el periodo y de cada posición abierta al cierre; no es una
+        rentabilidad ponderada de cartera.
     </p>
     """
 
@@ -990,7 +1042,10 @@ def generar_html_newsletter(
     closed = metricas["total_operaciones_cerradas"]
     win_rate = metricas["win_rate"]
 
-    pnl_mean = metricas["pnl_medio_cerradas"]
+    pnl_mean = metricas["pnl_medio_combinado"]
+    pnl_closed = metricas["pnl_total_cerradas"]
+    pnl_active = metricas["pnl_total_activas"]
+    pnl_combined = metricas["pnl_total_combinado"]
     pf = metricas["profit_factor"]
     expectancy = metricas["expectancy"]
 
@@ -1000,7 +1055,7 @@ def generar_html_newsletter(
         for item in key_takeaways[:5]
     )
 
-    market_html = render_market_table(mercado)
+    market_html = render_market_table(mercado, metricas)
     top_html = render_positions_table(metricas["top_3"], "Posiciones activas destacadas")
     watch_html = render_positions_table(metricas["worst_3"], "Posiciones a vigilar")
 
@@ -1069,19 +1124,22 @@ def generar_html_newsletter(
 <td width="25%" style="padding:12px 6px;background:#f8fafc;border-radius:8px;">
     <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Cerradas</div>
     <div style="font-size:23px;font-weight:700;margin-top:5px;">{closed}</div>
-    <div style="font-size:10px;color:#64748b;margin-top:3px;">{metricas["break_even"]} breakeven</div>
+    <div style="font-size:10px;color:#64748b;margin-top:3px;">PnL cerradas: {esc(fmt_pct(pnl_closed))} · {metricas["break_even"]} breakeven</div>
 </td>
 <td width="25%" style="padding:12px 6px 12px 12px;">
     <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Win Rate</div>
     <div style="font-size:23px;font-weight:700;margin-top:5px;">{esc(fmt_pct(win_rate))}</div>
+    <div style="font-size:10px;color:#64748b;margin-top:3px;">Resultado combinado AQ: {esc(fmt_pct(pnl_combined))}</div>
 </td>
 <td width="25%" style="padding:12px 6px 12px 12px;">
     <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Activas</div>
     <div style="font-size:23px;font-weight:700;margin-top:5px;">{active}</div>
+    <div style="font-size:10px;color:#64748b;margin-top:3px;">PnL abiertas: {esc(fmt_pct(pnl_active))}</div>
 </td>
 <td width="25%" style="padding:12px 6px 12px 12px;">
     <div style="font-size:11px;color:#64748b;text-transform:uppercase;">PnL medio</div>
     <div style="font-size:23px;font-weight:700;margin-top:5px;">{esc(fmt_pct(pnl_mean))}</div>
+    <div style="font-size:10px;color:#64748b;margin-top:3px;">Media de abiertas y cerradas</div>
 </td>
 </tr>
 </table>
@@ -1249,7 +1307,17 @@ def main() -> None:
         fin
     )
 
-    destinatarios = obtener_suscriptores()
+    destinatarios = (
+        [CORREO_PRUEBAS]
+        if MODO_PRUEBAS
+        else obtener_suscriptores()
+    )
+
+    if MODO_PRUEBAS:
+        logger.warning(
+            "MODO_PRUEBAS activo: la newsletter se enviará únicamente a %s.",
+            CORREO_PRUEBAS
+        )
 
     if not destinatarios:
         logger.info("No hay suscriptores. Proceso finalizado.")
