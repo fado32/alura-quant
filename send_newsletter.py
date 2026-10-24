@@ -279,13 +279,13 @@ def construir_metricas_cartera(
 
     df = df.sort_values(["alerta_id", "fecha_snapshot"]).copy()
 
-    # La semana se analiza con snapshots del lunes al fin del periodo.
-    # Para cada alerta se conserva el primer snapshot no activo del periodo;
-    # si no aparece un estado no activo, se conserva su último snapshot ACTIVA
-    # disponible hasta el viernes de esa semana.
+    # Las métricas de cartera se calculan con snapshots del lunes al viernes.
+    # Las posiciones abiertas son las que aparecen ACTIVA en el snapshot del
+    # viernes; las cerradas son IDs únicos con estado no ACTIVA en la semana.
+    viernes_referencia = fin - timedelta(days=max(0, fin.weekday() - 4))
     snapshots_semana = df[
         (df["fecha_snapshot"] >= inicio)
-        & (df["fecha_snapshot"] <= fin)
+        & (df["fecha_snapshot"] <= viernes_referencia)
     ].copy()
 
     snapshots_no_activos = snapshots_semana[
@@ -295,22 +295,16 @@ def construir_metricas_cartera(
     primer_no_activo = snapshots_no_activos.drop_duplicates(
         subset=["alerta_id"], keep="first"
     ).copy()
-    cerradas = primer_no_activo[
-        primer_no_activo["estado"].isin(estados_terminales)
-    ].copy()
-
-    viernes_referencia = fin - timedelta(days=max(0, fin.weekday() - 4))
-    snapshots_activos = df[
-        (df["fecha_snapshot"] >= inicio)
-        & (df["fecha_snapshot"] <= viernes_referencia)
+    snapshots_activos_viernes = df[
+        (df["fecha_snapshot"] == viernes_referencia)
         & (df["estado"].eq("ACTIVA"))
     ].sort_values(["fecha_snapshot", "alerta_id"])
-    activos_elegibles = snapshots_activos[
-        ~snapshots_activos["alerta_id"].isin(primer_no_activo["alerta_id"])
-    ]
-    activas = activos_elegibles.drop_duplicates(
+    activas = snapshots_activos_viernes.drop_duplicates(
         subset=["alerta_id"], keep="last"
     ).copy()
+    cerradas = primer_no_activo[
+        ~primer_no_activo["alerta_id"].isin(activas["alerta_id"])
+    ].copy()
 
     resultado_r = pd.to_numeric(
         cerradas.get("resultado_r", pd.Series(index=cerradas.index, dtype=float)),
@@ -341,8 +335,6 @@ def construir_metricas_cartera(
         cerradas.get("pnl_actual_pct", pd.Series(dtype=float)),
         errors="coerce"
     ).dropna()
-    pnl_total_cerradas = pnl_cerradas.sum() if not pnl_cerradas.empty else 0.0
-
     pnl_medio = pnl_cerradas.mean() if not pnl_cerradas.empty else None
     pnl_mediana = pnl_cerradas.median() if not pnl_cerradas.empty else None
 
@@ -367,14 +359,9 @@ def construir_metricas_cartera(
         activas.get("pnl_actual_pct", pd.Series(dtype=float)),
         errors="coerce"
     ).dropna()
-    pnl_total_activas = pnl_activas.sum() if not pnl_activas.empty else 0.0
     pnl_operaciones_combinadas = pd.concat(
         [pnl_cerradas, pnl_activas], ignore_index=True
     ).dropna()
-    pnl_total_combinado = (
-        pnl_operaciones_combinadas.sum()
-        if not pnl_operaciones_combinadas.empty else 0.0
-    )
     pnl_medio_combinado = (
         pnl_operaciones_combinadas.mean()
         if not pnl_operaciones_combinadas.empty else None
@@ -464,7 +451,6 @@ def construir_metricas_cartera(
         "losses": losses,
         "win_rate": win_rate,
         "pnl_medio_cerradas": pnl_medio,
-        "pnl_total_cerradas": pnl_total_cerradas,
         "pnl_mediana_cerradas": pnl_mediana,
         "avg_win": avg_win,
         "avg_loss": avg_loss,
@@ -472,8 +458,6 @@ def construir_metricas_cartera(
         "expectancy": expectancy,
         "posiciones_activas": len(activas),
         "pnl_medio_activas": pnl_activas.mean() if not pnl_activas.empty else None,
-        "pnl_total_activas": pnl_total_activas,
-        "pnl_total_combinado": pnl_total_combinado,
         "pnl_medio_combinado": pnl_medio_combinado,
         "delta_pnl_medio_activas": delta_pnl_activos,
         "score_medio_activas": score_actual.mean() if not score_actual.empty else None,
@@ -703,8 +687,8 @@ def construir_contexto_ia(
             "pnl_medio_operacion_cerrada_pct": limpiar_numero(
                 metricas["pnl_medio_cerradas"]
             ),
-            "pnl_total_operaciones_cerradas_pct_suma_por_operacion": limpiar_numero(
-                metricas["pnl_total_cerradas"]
+            "pnl_medio_operaciones_cerradas_pct": limpiar_numero(
+                metricas["pnl_medio_cerradas"]
             ),
             "pnl_mediana_operacion_cerrada_pct": limpiar_numero(
                 metricas["pnl_mediana_cerradas"]
@@ -717,11 +701,11 @@ def construir_contexto_ia(
             "pnl_medio_posiciones_activas_pct": limpiar_numero(
                 metricas["pnl_medio_activas"]
             ),
-            "pnl_total_posiciones_activas_pct_suma_por_operacion": limpiar_numero(
-                metricas["pnl_total_activas"]
+            "pnl_medio_posiciones_activas_pct": limpiar_numero(
+                metricas["pnl_medio_activas"]
             ),
-            "resultado_alura_quant_pct_suma_pnl_cerrado_y_abierto": limpiar_numero(
-                metricas["pnl_total_combinado"]
+            "resultado_alura_quant_pnl_medio_por_posicion_pct": limpiar_numero(
+                metricas["pnl_medio_combinado"]
             ),
             "pnl_medio_combinado_cerrado_y_abierto_pct": limpiar_numero(
                 metricas["pnl_medio_combinado"]
@@ -893,7 +877,7 @@ def render_market_table(
             <tr>
                 <td>Resultado Alura Quant</td>
                 <td style="text-align:right;font-weight:700;color:#1e293b;">
-                    {esc(fmt_pct(metricas.get("pnl_total_combinado")))}
+                    {esc(fmt_pct(metricas.get("pnl_medio_combinado")))}
                 </td>
             </tr>
             """
@@ -922,9 +906,9 @@ def render_market_table(
     <p style="font-size:12px;color:#64748b;margin-top:4px;">
         HYGH se utiliza como referencia del segmento high yield/crédito y de las
         condiciones de riesgo, no como medida directa y aislada de liquidez.
-        El resultado Alura Quant suma el PnL porcentual de cada operación cerrada
-        durante el periodo y de cada posición abierta al cierre; no es una
-        rentabilidad ponderada de cartera.
+        El resultado Alura Quant es el PnL medio por posición, combinando las
+        posiciones cerradas durante el periodo y las que seguían abiertas al
+        cierre del viernes; no suma porcentajes de operaciones.
     </p>
     """
 
@@ -1045,9 +1029,9 @@ def generar_html_newsletter(
     win_rate = metricas["win_rate"]
 
     pnl_mean = metricas["pnl_medio_combinado"]
-    pnl_closed = metricas["pnl_total_cerradas"]
-    pnl_active = metricas["pnl_total_activas"]
-    pnl_combined = metricas["pnl_total_combinado"]
+    pnl_closed = metricas["pnl_medio_cerradas"]
+    pnl_active = metricas["pnl_medio_activas"]
+    pnl_combined = metricas["pnl_medio_combinado"]
     pf = metricas["profit_factor"]
     expectancy = metricas["expectancy"]
 
@@ -1126,7 +1110,7 @@ def generar_html_newsletter(
 <td width="25%" style="padding:12px 6px;background:#f8fafc;border-radius:8px;">
     <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Cerradas</div>
     <div style="font-size:23px;font-weight:700;margin-top:5px;">{closed}</div>
-    <div style="font-size:10px;color:#64748b;margin-top:3px;">PnL cerradas: {esc(fmt_pct(pnl_closed))} · {metricas["break_even"]} breakeven</div>
+    <div style="font-size:10px;color:#64748b;margin-top:3px;">PnL medio cerradas: {esc(fmt_pct(pnl_closed))} · {metricas["break_even"]} breakeven</div>
 </td>
 <td width="25%" style="padding:12px 6px 12px 12px;">
     <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Win Rate</div>
@@ -1136,7 +1120,7 @@ def generar_html_newsletter(
 <td width="25%" style="padding:12px 6px 12px 12px;">
     <div style="font-size:11px;color:#64748b;text-transform:uppercase;">Activas</div>
     <div style="font-size:23px;font-weight:700;margin-top:5px;">{active}</div>
-    <div style="font-size:10px;color:#64748b;margin-top:3px;">PnL abiertas: {esc(fmt_pct(pnl_active))}</div>
+    <div style="font-size:10px;color:#64748b;margin-top:3px;">PnL medio abiertas: {esc(fmt_pct(pnl_active))}</div>
 </td>
 <td width="25%" style="padding:12px 6px 12px 12px;">
     <div style="font-size:11px;color:#64748b;text-transform:uppercase;">PnL medio</div>
