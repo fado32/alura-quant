@@ -995,8 +995,6 @@ def render_market_table(
     </table>
     <p style="font-size:12px;color:#64748b;margin-top:4px;">
         HYGH sirve de referencia para bonos de alto rendimiento; no mide por sí solo la liquidez.
-        El rendimiento Alura Quant pondera cada posición por su importe nominal.
-        Las posiciones abiertas siguen en curso, así que su resultado puede cambiar.
     </p>
     """
 
@@ -1201,7 +1199,7 @@ def generar_html_newsletter(
 <div style="padding:18px 20px;background:#fff8df;border:1px solid #f0df9a;border-radius:12px;">
     <div style="font-size:11px;letter-spacing:.7px;color:#78631b;text-transform:uppercase;font-weight:700;">Balance conjunto de la cartera</div>
     <div class="hero-number" style="font-size:35px;line-height:1.15;font-weight:700;color:#1e293b;margin-top:7px;">{esc(fmt_eur(metricas["pnl_total_eur"]))}</div>
-    <div style="font-size:13px;line-height:1.5;color:#475569;margin-top:7px;">Rendimiento ponderado: <strong>{esc(fmt_pct(pnl_combined))}</strong> sobre {esc(fmt_eur(metricas["nominal_total_eur"]))} en posiciones. El cálculo tiene en cuenta el importe de cada posición.</div>
+    <div style="font-size:13px;line-height:1.5;color:#475569;margin-top:7px;">Rendimiento ponderado: <strong>{esc(fmt_pct(pnl_combined))}</strong> sobre {esc(fmt_eur(metricas["nominal_total_eur"]))} en posiciones.</div>
 </div>
 
 <table role="presentation" class="stack-table" width="100%" cellpadding="0" cellspacing="0" style="margin-top:10px;border-collapse:separate;border-spacing:5px 0;">
@@ -1209,12 +1207,12 @@ def generar_html_newsletter(
 <td class="stack-mobile" width="50%" valign="top" style="padding:13px 12px;background:#f8fafc;border:1px solid #e8edf2;border-radius:10px;">
     <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:700;">Cerradas · {closed}</div>
     <div style="font-size:20px;font-weight:700;margin-top:5px;color:#1e293b;">{esc(fmt_eur(metricas["pnl_cerradas_eur"]))}</div>
-    <div class="mobile-small" style="font-size:12px;line-height:1.5;color:#64748b;margin-top:4px;">Resultado cerrado · {esc(fmt_pct(metricas["pnl_medio_cerradas"]))} según el importe · {metricas["wins"]} con beneficio · {metricas["losses"]} salidas por stop · {metricas["break_even"]} en equilibrio</div>
+    <div class="mobile-small" style="font-size:12px;line-height:1.5;color:#64748b;margin-top:4px;">Resultado cerrado · {esc(fmt_pct(metricas["pnl_medio_cerradas"]))}  · {metricas["wins"]} con beneficio · {metricas["losses"]} salidas por stop · {metricas["break_even"]} en equilibrio</div>
 </td>
 <td class="stack-mobile" width="50%" valign="top" style="padding:13px 12px;background:#f8fafc;border:1px solid #e8edf2;border-radius:10px;">
     <div style="font-size:11px;color:#64748b;text-transform:uppercase;font-weight:700;">Abiertas · {active}</div>
     <div style="font-size:20px;font-weight:700;margin-top:5px;color:#1e293b;">{esc(fmt_eur(metricas["pnl_activas_eur"]))}</div>
-    <div class="mobile-small" style="font-size:12px;line-height:1.5;color:#64748b;margin-top:4px;">Saldo actual de operaciones abiertas · puede cambiar · {esc(fmt_pct(pnl_active))}</div>
+    <div class="mobile-small" style="font-size:12px;line-height:1.5;color:#64748b;margin-top:4px;">Saldo actual de operaciones abiertas · {esc(fmt_pct(pnl_active))}</div>
 </td>
 </tr>
 </table>
