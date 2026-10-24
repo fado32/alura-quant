@@ -247,7 +247,7 @@ def obtener_backtesting(
             lote = alerta_ids[inicio_lote:inicio_lote + 200]
             response_historial = (
                 supabase.table("historial_alertas")
-                .select("id,Nominal,Riesgo_Euros,Resultado_R")
+                .select("id,nominal,riesgo_euros,resultado_r")
                 .in_("id", lote)
                 .execute()
             )
@@ -258,17 +258,17 @@ def obtener_backtesting(
         }
         df["resultado_r"] = df["alerta_id"].astype(int).map(
             lambda alerta_id: pd.to_numeric(
-                historial_por_id.get(alerta_id, {}).get("Resultado_R"), errors="coerce"
+                historial_por_id.get(alerta_id, {}).get("resultado_r"), errors="coerce"
             )
         )
         df["riesgo_euros"] = df["alerta_id"].astype(int).map(
             lambda alerta_id: pd.to_numeric(
-                historial_por_id.get(alerta_id, {}).get("Riesgo_Euros"), errors="coerce"
+                historial_por_id.get(alerta_id, {}).get("riesgo_euros"), errors="coerce"
             )
         )
         df["nominal"] = df["alerta_id"].astype(int).map(
             lambda alerta_id: pd.to_numeric(
-                historial_por_id.get(alerta_id, {}).get("Nominal"), errors="coerce"
+                historial_por_id.get(alerta_id, {}).get("nominal"), errors="coerce"
             )
         )
     except Exception as e:
@@ -362,6 +362,7 @@ def construir_metricas_cartera(
             return None
         return float(pnl_total / nominal_total * 100)
 
+    total_cerradas = len(cerradas)
     resultado_cerradas = cerradas_validas["pnl_euros"]
     break_even_mask = resultado_cerradas.abs() <= 1e-9
     break_even = int(break_even_mask.sum())
