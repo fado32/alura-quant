@@ -315,6 +315,8 @@ def cargar_backtesting_diario():
     """Carga todos los snapshots; Supabase entrega como máximo 1.000 filas por página."""
     cliente = globals().get("supabase") or globals().get("supabase_client")
     if cliente is None:
+        cliente = next((valor for valor in globals().values() if callable(getattr(valor, "table", None))), None)
+    if cliente is None:
         return pd.DataFrame(), "No se encontró el cliente de Supabase."
     columnas = "fecha_snapshot,alerta_id,ticker,estado,precio_alerta,precio_actual,pnl_actual_pct"
     filas = []
