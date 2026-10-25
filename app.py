@@ -314,6 +314,7 @@ fechas_backtesting, resultados_diarios, snapshots_sin_nominal = [], [], 0
 def calcular_resultado_diario(df_backtesting, df_historial):
     """Calcula la valoración diaria usando el nominal real de cada alerta."""
     if df_backtesting is None or df_backtesting.empty:
+        print("[Alura Performance] snapshots cargados: 0; historial: " + str(0 if df_historial is None else len(df_historial)))
         return [], [], 0
     df = df_backtesting.copy()
     df["fecha_snapshot"] = pd.to_datetime(df["fecha_snapshot"], errors="coerce")
@@ -387,6 +388,13 @@ def calcular_resultado_diario(df_backtesting, df_historial):
         & pd.to_numeric(df["resultado_eur"], errors="coerce").map(lambda value: pd.notna(value) and abs(float(value)) != float("inf"))
     )
     excluidos = int((~validos).sum())
+    print(
+        "[Alura Performance] snapshots cargados=" + str(len(df))
+        + "; con nominal=" + str(int(pd.to_numeric(df["nominal_real"], errors="coerce").gt(0).sum()))
+        + "; válidos=" + str(int(validos.sum()))
+        + "; historial=" + str(0 if df_historial is None else len(df_historial))
+        + "; columnas historial=" + str([] if df_historial is None else list(df_historial.columns))
+    )
     df = df[validos]
     if df.empty:
         return [], [], excluidos
