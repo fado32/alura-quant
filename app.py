@@ -3773,7 +3773,7 @@ render_html("""
 }
 .performance-chart-head{
     display:flex;justify-content:space-between;align-items:center;
-    padding:24px 25px 12px;
+    flex-wrap:wrap;gap:10px;padding:24px 25px 12px;
 }
 .performance-chart-title{
     font-family:'Plus Jakarta Sans',sans-serif;
@@ -3881,6 +3881,9 @@ render_html("""
     .aq-engine-item:nth-child(3){border-left:0;border-top:1px solid var(--aq-border)}
     .aq-engine-item:nth-child(4){border-top:1px solid var(--aq-border)}
     .performance-chart-footer{grid-template-columns:1fr}
+    .performance-chart-head{flex-direction:column;align-items:flex-start;padding:18px 16px 10px;gap:8px}
+    .performance-chart-title{font-size:15px;line-height:1.35}
+    .performance-chart-subtitle{font-size:12px;line-height:1.5}
     .performance-chart-footer span+span{border-left:0;border-top:1px solid #edf0f5}
     .equity-chart svg{height:280px}
     .aq-topmeta{display:none}
@@ -3935,7 +3938,12 @@ div[class*="st-key-nav_"] button[kind="primary"]{background:#fff!important;color
 .st-key-performance_chart_native .performance-chart-head{padding:24px 25px 12px}
 .st-key-performance_chart_native [data-testid="stVegaLiteChart"]{padding:0 15px}
 .st-key-performance_chart_native .performance-chart-footer{margin-top:8px}
-@media(max-width:650px){.st-key-home_final_cta{padding:38px 20px!important}}
+@media(max-width:650px){
+  .st-key-home_final_cta{padding:38px 20px!important}
+  .st-key-performance_chart_native .performance-chart-head{padding:18px 16px 10px}
+  .st-key-performance_chart_native .performance-chart-note{margin:0 16px 4px!important}
+  .st-key-performance_chart_native .performance-chart-footer span+span{border-left:0;border-top:1px solid #edf0f5}
+}
 </style>
 """)
 
@@ -4951,6 +4959,8 @@ if active_page == "Performance":
         else:
             _df_chart = pd.DataFrame(columns=["Fecha", "Resultado acumulado (€)"])
             _num_fechas_senal_chart = 0
+        _valor_final_chart = float(_df_chart["Resultado acumulado (€)"].iloc[-1]) if not _df_chart.empty else 0.0
+        _color_chart = "#16a34a" if _valor_final_chart >= 0 else "#dc2626"
 
         render_html(f"""
         <div class="performance-chart-head">
@@ -4958,9 +4968,9 @@ if active_page == "Performance":
             <div class="performance-chart-title">Resultado acumulado de operaciones cerradas</div>
             <div class="performance-chart-subtitle">Cada punto suma las ganancias y pérdidas ya realizadas hasta esa fecha.</div>
           </div>
-          <div class="chart-legend"><i></i> Ganancia / pérdida acumulada (€)</div>
+          <div class="chart-legend"><i style="background:{_color_chart};"></i> Ganancia / pérdida acumulada (€)</div>
         </div>
-        <div style="margin:0 25px 4px;padding:11px 14px;background:#f8fafc;border-radius:10px;color:#64748b;font-size:12px;line-height:1.55;">
+        <div class="performance-chart-note" style="margin:0 25px 4px;padding:11px 14px;background:#f8fafc;border-radius:10px;color:#64748b;font-size:12px;line-height:1.55;">
           La línea muestra solo operaciones cerradas. Las posiciones abiertas no aparecen aquí porque su valor puede cambiar; están reflejadas por separado arriba.
         </div>
         """)
@@ -4968,8 +4978,6 @@ if active_page == "Performance":
         if not _df_chart.empty:
             import plotly.graph_objects as go
 
-            _valor_final_chart = float(_df_chart["Resultado acumulado (€)"].iloc[-1])
-            _color_chart = "#16a34a" if _valor_final_chart >= 0 else "#dc2626"
             _fig_chart = go.Figure()
             _fig_chart.add_trace(go.Scatter(
                 x=_df_chart["Fecha"],
@@ -4984,18 +4992,18 @@ if active_page == "Performance":
             ))
             _fig_chart.add_hline(y=0, line_width=1, line_color="#94a3b8", line_dash="dot")
             _fig_chart.update_layout(
-                height=390,
-                margin={"l": 18, "r": 24, "t": 12, "b": 18},
+                height=360,
+                margin={"l": 12, "r": 12, "t": 8, "b": 12},
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="#ffffff",
                 showlegend=False,
                 hovermode="x unified",
                 font={"family": "Arial, sans-serif", "color": "#475569", "size": 12},
-                xaxis={"title": None, "showgrid": False, "tickformat": "%b %Y", "tickfont": {"color": "#8491a3"}, "showline": False},
-                yaxis={"title": "Euros (€)", "tickprefix": "€ ", "tickformat": ",.0f", "gridcolor": "#edf1f5", "zeroline": False, "titlefont": {"size": 12, "color": "#64748b"}, "tickfont": {"color": "#8491a3"}},
+                xaxis={"title": None, "showgrid": False, "tickformat": "%d/%m/%y", "nticks": 5, "automargin": True, "tickfont": {"color": "#8491a3", "size": 10}, "showline": False},
+                yaxis={"title": {"text": "Euros (€)", "font": {"size": 12, "color": "#64748b"}}, "tickprefix": "€ ", "tickformat": ",.0f", "nticks": 6, "automargin": True, "gridcolor": "#edf1f5", "zeroline": False, "tickfont": {"color": "#8491a3", "size": 10}},
                 hoverlabel={"bgcolor": "#172033", "font": {"color": "#ffffff", "size": 12}},
             )
-            st.plotly_chart(_fig_chart, use_container_width=True, config={"displayModeBar": False})
+            st.plotly_chart(_fig_chart, use_container_width=True, config={"displayModeBar": False, "responsive": True})
             render_html(f"""
             <div class="performance-chart-footer">
               <span>Resultado cerrado actual: <strong>{formatear_numero(beneficio_realizado,2," €",True)}</strong></span>
