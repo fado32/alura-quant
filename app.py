@@ -5048,7 +5048,7 @@ if active_page == "Performance":
       <div class="performance-page-head">
         <div>
           <div class="aq-eyebrow">RESULTADOS</div>
-          <h2>Cómo evoluciona el sistema</h2>
+          <h3>Cómo evoluciona el sistema</h3>
           <p>Resumen de operaciones cerradas y posiciones que siguen abiertas.</p>
         </div>
         <div class="performance-total">
@@ -5060,7 +5060,6 @@ if active_page == "Performance":
 
       <div style="margin:16px 0 22px;padding:14px 17px;background:#f8fafc;border:1px solid var(--aq-border);border-radius:14px;color:var(--aq-muted);font-size:13px;line-height:1.65;">
         <strong style="color:var(--aq-text);">Periodo mostrado: {_periodo_performance}.</strong>
-        El resultado total suma las operaciones cerradas y la valoración actual de las abiertas. Esta última puede cambiar mientras sigan en cartera; no es una ganancia asegurada.
       </div>
 
       <div class="performance-kpis">
