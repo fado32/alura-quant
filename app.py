@@ -5064,13 +5064,13 @@ if active_page == "Performance":
 
       <div class="performance-kpis">
         <div class="performance-kpi">
-          <span>Posiciones abiertas</span><strong>{activas}</strong><small>Siguen en seguimiento y su resultado puede variar</small>
+          <span>Posiciones abiertas</span><strong>{activas}</strong><small>Siguen en seguimiento</small>
         </div>
         <div class="performance-kpi">
-          <span>Resultado de posiciones abiertas</span><strong style="color:{'#16a34a' if beneficio_no_realizado >= 0 else '#dc2626'};">{formatear_numero(beneficio_no_realizado,2," €",True)}</strong><small>Valoración actual; aún no está cerrada</small>
+          <span>Resultado de posiciones abiertas</span><strong style="color:{'#16a34a' if beneficio_no_realizado >= 0 else '#dc2626'};">{formatear_numero(beneficio_no_realizado,2," €",True)}</strong><small>Valoración actual</small>
         </div>
         <div class="performance-kpi">
-          <span>Resultado de operaciones cerradas</span><strong style="color:{'#16a34a' if beneficio_realizado >= 0 else '#dc2626'};">{formatear_numero(beneficio_realizado,2," €",True)}</strong><small>Resultado ya realizado según el registro</small>
+          <span>Resultado de operaciones cerradas</span><strong style="color:{'#16a34a' if beneficio_realizado >= 0 else '#dc2626'};">{formatear_numero(beneficio_realizado,2," €",True)}</strong><small>Resultado ya realizado</small>
         </div>
         <div class="performance-kpi">
           <span>Operaciones cerradas con beneficio</span><strong>{exitos}</strong><small>Objetivo alcanzado</small>
@@ -5079,7 +5079,7 @@ if active_page == "Performance":
           <span>Operaciones cerradas con pérdida</span><strong>{fallos}</strong><small>{break_even} salidas sin ganancia ni pérdida</small>
         </div>
         <div class="performance-kpi">
-          <span>Porcentaje con beneficio</span><strong>{formatear_numero(win_rate,1,"%")}</strong><small>Entre las operaciones cerradas con ganancia o pérdida</small>
+          <span>Porcentaje con beneficio</span><strong>{formatear_numero(win_rate,1,"%")}</strong><small>De las operaciones cerradas</small>
         </div>
       </div>
 
