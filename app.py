@@ -356,6 +356,29 @@ def calcular_resultado_diario(df_backtesting, df_historial):
                 on="fecha_oportunidad", direction="backward",
             )
             df.loc[emparejados["_idx"], "nominal_real"] = emparejados["Nominal"].to_numpy()
+
+    # alerta_id identifica la oportunidad concreta en los snapshots. Se usa para
+    # validar ticker y fecha y evitar que otra señal del mismo ticker herede su nominal.
+    id_historial = columnas_por_clave.get("id")
+    if id_historial and "alerta_id" in df.columns and nominal_historial and ticker_historial:
+        columnas_id = [id_historial, ticker_historial, nominal_historial] + ([fecha_historial] if fecha_historial else [])
+        historial_id = df_historial[columnas_id].copy()
+        historial_id["_id_alerta"] = pd.to_numeric(historial_id[id_historial], errors="coerce")
+        historial_id["_ticker_alerta"] = historial_id[ticker_historial].astype(str).str.strip().str.upper()
+        historial_id["_nominal_alerta"] = pd.to_numeric(historial_id[nominal_historial], errors="coerce")
+        if fecha_historial:
+            historial_id["_fecha_alerta"] = pd.to_datetime(historial_id[fecha_historial], errors="coerce", utc=True).dt.tz_convert(None).dt.normalize()
+        nominal_por_id = historial_id.dropna(subset=["_id_alerta", "_nominal_alerta"]).drop_duplicates("_id_alerta", keep="last").set_index("_id_alerta")
+        ids_snapshot = pd.to_numeric(df["alerta_id"], errors="coerce")
+        nominal_snapshot = ids_snapshot.map(nominal_por_id["_nominal_alerta"])
+        ticker_snapshot_hist = ids_snapshot.map(nominal_por_id["_ticker_alerta"])
+        ticker_coincide = ticker_snapshot_hist.eq(df["ticker_clave"])
+        fecha_coincide = pd.Series(True, index=df.index)
+        if fecha_historial and "_fecha_alerta" in nominal_por_id.columns:
+            fecha_alerta_snapshot = ids_snapshot.map(nominal_por_id["_fecha_alerta"])
+            fecha_coincide = fecha_alerta_snapshot.notna() & (fecha_alerta_snapshot <= df["fecha_snapshot"].dt.normalize())
+        filas_id_validas = ticker_coincide & fecha_coincide & nominal_snapshot.notna()
+        df.loc[filas_id_validas, "nominal_real"] = nominal_snapshot[filas_id_validas]
     df["resultado_eur"] = df["pnl_actual_pct"] * pd.to_numeric(df["nominal_real"], errors="coerce") / 100
     validos = (
         df["fecha_snapshot"].notna()
