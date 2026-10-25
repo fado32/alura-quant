@@ -5048,7 +5048,7 @@ if active_page == "Performance":
       <div class="performance-page-head">
         <div>
           <div class="aq-eyebrow">RESULTADOS</div>
-          <h2>Cómo evoluciona el sistema</h2>
+          <h3>Cómo evoluciona el sistema</h3>
           <p>Resumen de operaciones cerradas y posiciones que siguen abiertas.</p>
         </div>
         <div class="performance-total">
@@ -5060,18 +5060,16 @@ if active_page == "Performance":
 
       <div style="margin:16px 0 22px;padding:14px 17px;background:#f8fafc;border:1px solid var(--aq-border);border-radius:14px;color:var(--aq-muted);font-size:13px;line-height:1.65;">
         <strong style="color:var(--aq-text);">Periodo mostrado: {_periodo_performance}.</strong>
-        El resultado total suma las operaciones cerradas y la valoración actual de las abiertas. Esta última puede cambiar mientras sigan en cartera; no es una ganancia asegurada.
       </div>
 
       <div class="performance-kpis">
         <div class="performance-kpi">
-          <span>Posiciones abiertas</span><strong>{activas}</strong><small>Siguen en seguimiento y su resultado puede variar</small>
         </div>
         <div class="performance-kpi">
-          <span>Resultado de posiciones abiertas</span><strong style="color:{'#16a34a' if beneficio_no_realizado >= 0 else '#dc2626'};">{formatear_numero(beneficio_no_realizado,2," €",True)}</strong><small>Valoración actual; aún no está cerrada</small>
+          <span>Resultado de posiciones abiertas</span><strong style="color:{'#16a34a' if beneficio_no_realizado >= 0 else '#dc2626'};">{formatear_numero(beneficio_no_realizado,2," €",True)}</strong><small>Valoración actual</small>
         </div>
         <div class="performance-kpi">
-          <span>Resultado de operaciones cerradas</span><strong style="color:{'#16a34a' if beneficio_realizado >= 0 else '#dc2626'};">{formatear_numero(beneficio_realizado,2," €",True)}</strong><small>Resultado ya realizado según el registro</small>
+          <span>Resultado de operaciones cerradas</span><strong style="color:{'#16a34a' if beneficio_realizado >= 0 else '#dc2626'};">{formatear_numero(beneficio_realizado,2," €",True)}</strong><small>Resultado ya realizado</small>
         </div>
         <div class="performance-kpi">
           <span>Operaciones cerradas con beneficio</span><strong>{exitos}</strong><small>Objetivo alcanzado</small>
@@ -5080,7 +5078,7 @@ if active_page == "Performance":
           <span>Operaciones cerradas con pérdida</span><strong>{fallos}</strong><small>{break_even} salidas sin ganancia ni pérdida</small>
         </div>
         <div class="performance-kpi">
-          <span>Porcentaje con beneficio</span><strong>{formatear_numero(win_rate,1,"%")}</strong><small>Entre las operaciones cerradas con ganancia o pérdida</small>
+          <span>Porcentaje con beneficio</span><strong>{formatear_numero(win_rate,1,"%")}</strong><small>De las operaciones cerradas</small>
         </div>
       </div>
 
