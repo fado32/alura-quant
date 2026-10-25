@@ -308,6 +308,9 @@ def cargar_backtesting_diario():
         return pd.DataFrame(columns=["fecha_snapshot", "alerta_id", "ticker", "estado", "precio_alerta", "precio_actual", "pnl_actual_pct"]), str(e)
 
 
+fechas_backtesting, resultados_diarios, snapshots_sin_nominal = [], [], 0
+
+
 def calcular_resultado_diario(df_backtesting, df_historial):
     """Calcula la valoración diaria usando el nominal real de cada alerta."""
     if df_backtesting is None or df_backtesting.empty:
@@ -321,16 +324,32 @@ def calcular_resultado_diario(df_backtesting, df_historial):
         pct_calculado = (actual - entrada) / entrada.where(entrada > 0) * 100
         df["pnl_actual_pct"] = df["pnl_actual_pct"].fillna(pct_calculado)
 
-    nominales = {}
-    if df_historial is not None and not df_historial.empty and {"id", "Nominal"}.issubset(df_historial.columns):
-        historial = df_historial[["id", "Nominal"]].copy()
-        historial["id"] = historial["id"].astype(str).str.strip()
-        historial["Nominal"] = pd.to_numeric(historial["Nominal"], errors="coerce")
-        nominales = historial.dropna(subset=["Nominal"]).set_index("id")["Nominal"].to_dict()
-
+    # Enlaza por ticker y fecha de emisión: un ticker puede tener oportunidades distintas.
+    fecha_historial = next((c for c in ("Fecha", "fecha", "fecha_alerta", "Fecha alerta", "Fecha de alerta", "fecha_oportunidad", "created_at", "createdAt") if c in df_historial.columns), None) if df_historial is not None else None
+    ticker_historial = next((c for c in ("Ticker", "ticker", "simbolo", "Symbol") if df_historial is not None and c in df_historial.columns), None)
+    nominal_historial = next((c for c in ("Nominal", "nominal") if df_historial is not None and c in df_historial.columns), None)
+    df["ticker_clave"] = df.get("ticker", pd.Series(index=df.index, dtype="object")).astype(str).str.strip().str.upper()
     df["nominal_real"] = pd.NA
-    if "alerta_id" in df.columns:
-        df["nominal_real"] = df["alerta_id"].astype(str).str.strip().map(nominales)
+    if df_historial is not None and not df_historial.empty and fecha_historial and nominal_historial and ticker_historial:
+        historial = df_historial[[ticker_historial, fecha_historial, nominal_historial]].copy()
+        historial["ticker_clave"] = historial[ticker_historial].astype(str).str.strip().str.upper()
+        historial["fecha_oportunidad"] = pd.to_datetime(historial[fecha_historial], errors="coerce", utc=True).dt.tz_convert(None).dt.normalize()
+        historial[nominal_historial] = pd.to_numeric(historial[nominal_historial], errors="coerce")
+        historial = historial.dropna(subset=["fecha_oportunidad", nominal_historial])
+        df["fecha_oportunidad"] = pd.to_datetime(df["fecha_snapshot"], errors="coerce", utc=True).dt.tz_convert(None).dt.normalize()
+        # Para cada ticker, toma la oportunidad más reciente existente en la fecha del snapshot.
+        for ticker, indices in df.groupby("ticker_clave").groups.items():
+            oportunidades = historial[historial["ticker_clave"] == ticker].sort_values("fecha_oportunidad")
+            if oportunidades.empty:
+                continue
+            snapshots = df.loc[list(indices), ["fecha_oportunidad"]].copy()
+            snapshots["_idx"] = snapshots.index
+            emparejados = pd.merge_asof(
+                snapshots.sort_values("fecha_oportunidad"),
+                oportunidades[["fecha_oportunidad", nominal_historial]].rename(columns={nominal_historial: "Nominal"}).sort_values("fecha_oportunidad"),
+                on="fecha_oportunidad", direction="backward",
+            )
+            df.loc[emparejados["_idx"], "nominal_real"] = emparejados["Nominal"].to_numpy()
     df["resultado_eur"] = df["pnl_actual_pct"] * pd.to_numeric(df["nominal_real"], errors="coerce") / 100
     validos = (
         df["fecha_snapshot"].notna()
