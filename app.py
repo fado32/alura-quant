@@ -311,37 +311,6 @@ def cargar_backtesting_diario():
 fechas_backtesting, resultados_diarios, snapshots_sin_nominal = [], [], 0
 
 
-def cargar_backtesting_diario():
-    """Carga todos los snapshots; Supabase entrega como máximo 1.000 filas por página."""
-    cliente = globals().get("supabase") or globals().get("supabase_client")
-    if cliente is None:
-        cliente = next((valor for valor in globals().values() if callable(getattr(valor, "table", None))), None)
-    if cliente is None:
-        return pd.DataFrame(), "No se encontró el cliente de Supabase."
-    columnas = "fecha_snapshot,alerta_id,ticker,estado,precio_alerta,precio_actual,pnl_actual_pct"
-    filas = []
-    inicio = 0
-    tamano_pagina = 1000
-    try:
-        while True:
-            respuesta = (
-                cliente.table("backtesting_diario_alertas")
-                .select(columnas)
-                .order("fecha_snapshot")
-                .order("alerta_id")
-                .range(inicio, inicio + tamano_pagina - 1)
-                .execute()
-            )
-            pagina = respuesta.data or []
-            filas.extend(pagina)
-            if len(pagina) < tamano_pagina:
-                break
-            inicio += tamano_pagina
-        return pd.DataFrame(filas), None
-    except Exception as exc:
-        return pd.DataFrame(), str(exc)
-
-
 def calcular_resultado_diario(df_backtesting, df_historial):
     """Calcula la valoración diaria usando el nominal real de cada alerta."""
     if df_backtesting is None or df_backtesting.empty:
