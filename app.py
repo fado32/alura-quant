@@ -308,10 +308,10 @@ def cargar_backtesting_diario():
         return pd.DataFrame(columns=["fecha_snapshot", "alerta_id", "ticker", "estado", "precio_alerta", "precio_actual", "pnl_actual_pct"]), str(e)
 
 
-def calcular_resultado_diario(df_backtesting):
-    """Suma el P&L en euros de las alertas capturadas cada día."""
+def calcular_resultado_diario(df_backtesting, df_historial):
+    """Calcula la valoración diaria usando el nominal real de cada alerta."""
     if df_backtesting is None or df_backtesting.empty:
-        return [], []
+        return [], [], 0
     df = df_backtesting.copy()
     df["fecha_snapshot"] = pd.to_datetime(df["fecha_snapshot"], errors="coerce")
     df["pnl_actual_pct"] = pd.to_numeric(df["pnl_actual_pct"], errors="coerce")
@@ -320,13 +320,30 @@ def calcular_resultado_diario(df_backtesting):
         actual = pd.to_numeric(df["precio_actual"], errors="coerce")
         pct_calculado = (actual - entrada) / entrada.where(entrada > 0) * 100
         df["pnl_actual_pct"] = df["pnl_actual_pct"].fillna(pct_calculado)
-    df = df.dropna(subset=["fecha_snapshot", "pnl_actual_pct"])
-    df = df[df["pnl_actual_pct"].map(lambda value: pd.notna(value) and abs(float(value)) != float("inf"))]
+
+    nominales = {}
+    if df_historial is not None and not df_historial.empty and {"id", "Nominal"}.issubset(df_historial.columns):
+        historial = df_historial[["id", "Nominal"]].copy()
+        historial["id"] = historial["id"].astype(str).str.strip()
+        historial["Nominal"] = pd.to_numeric(historial["Nominal"], errors="coerce")
+        nominales = historial.dropna(subset=["Nominal"]).set_index("id")["Nominal"].to_dict()
+
+    df["nominal_real"] = pd.NA
+    if "alerta_id" in df.columns:
+        df["nominal_real"] = df["alerta_id"].astype(str).str.strip().map(nominales)
+    df["resultado_eur"] = df["pnl_actual_pct"] * pd.to_numeric(df["nominal_real"], errors="coerce") / 100
+    validos = (
+        df["fecha_snapshot"].notna()
+        & df["pnl_actual_pct"].notna()
+        & pd.to_numeric(df["nominal_real"], errors="coerce").gt(0)
+        & pd.to_numeric(df["resultado_eur"], errors="coerce").map(lambda value: pd.notna(value) and abs(float(value)) != float("inf"))
+    )
+    excluidos = int((~validos).sum())
+    df = df[validos]
     if df.empty:
-        return [], []
-    df["resultado_eur"] = df["pnl_actual_pct"] * CAPITAL_POR_ALERTA / 100
+        return [], [], excluidos
     diario = df.groupby(df["fecha_snapshot"].dt.strftime("%Y-%m-%d"))["resultado_eur"].sum().sort_index()
-    return diario.index.tolist(), diario.tolist()
+    return diario.index.tolist(), diario.tolist(), excluidos
 
 @st.cache_data(ttl=300)
 def obtener_precio_actual(ticker):
@@ -3208,7 +3225,7 @@ if st.session_state.get("active_page", "Inicio") == "Performance":
 else:
     df_backtesting = pd.DataFrame()
     error_backtesting = None
-fechas_backtesting, resultados_diarios = calcular_resultado_diario(df_backtesting)
+        fechas_backtesting, resultados_diarios, snapshots_sin_nominal = calcular_resultado_diario(df_backtesting, df_hist)
 if fechas_backtesting:
     fechas_curva = fechas_backtesting
     beneficios_curva = resultados_diarios
@@ -3875,7 +3892,12 @@ render_html("""
     .aq-hero{padding:60px 0 50px}
     .aq-hero h1{font-size:43px}
     .aq-hero p{font-size:16px}
-    .aq-kpis,.performance-kpis,.aq-pricing-grid{grid-template-columns:1fr}
+    .aq-kpis,.aq-pricing-grid{grid-template-columns:1fr}
+    .performance-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .performance-kpi{min-height:116px;padding:13px 12px;border-radius:13px}
+    .performance-kpi span{font-size:9px;line-height:1.35;letter-spacing:.04em}
+    .performance-kpi strong{font-size:clamp(17px,5vw,22px);margin-top:8px;overflow-wrap:anywhere}
+    .performance-kpi small{font-size:9px;line-height:1.4;margin-top:6px}
     .aq-kpi + .aq-kpi,.aq-kpi:nth-child(2n){border-left:0;border-top:1px solid var(--aq-border)}
     .aq-engine-line{grid-template-columns:1fr 1fr}
     .aq-engine-item:nth-child(3){border-left:0;border-top:1px solid var(--aq-border)}
@@ -3943,6 +3965,8 @@ div[class*="st-key-nav_"] button[kind="primary"]{background:#fff!important;color
   .st-key-performance_chart_native .performance-chart-head{padding:18px 16px 10px}
   .st-key-performance_chart_native .performance-chart-note{margin:0 16px 4px!important}
   .st-key-performance_chart_native .performance-chart-footer span+span{border-left:0;border-top:1px solid #edf0f5}
+  .st-key-performance_chart_native [data-baseweb="tab-list"]{gap:2px}
+  .st-key-performance_chart_native [data-baseweb="tab"]{padding:10px 11px!important;font-size:11px!important}
 }
 </style>
 """)
@@ -5042,7 +5066,7 @@ if active_page == "Performance":
       </div>
 
       <div class="aq-wrap">
-        {f"<div class='performance-disclaimer'>No se han podido cargar algunos datos del gráfico. {html.escape(error_backtesting)}</div>" if error_backtesting else ("<div class='performance-disclaimer'>Aún no hay datos diarios suficientes para mostrar la evolución.</div>" if df_backtesting.empty else "")}
+        {f"<div class='performance-disclaimer'>No se han podido cargar algunos datos del gráfico. {html.escape(error_backtesting)}</div>" if error_backtesting else ""}
       </div>
     </div>
     """)
@@ -5069,59 +5093,60 @@ if active_page == "Performance":
             _num_fechas_senal_chart = 0
         _valor_final_chart = float(_df_chart["Resultado acumulado (€)"].iloc[-1]) if not _df_chart.empty else 0.0
         _color_chart = "#16a34a" if _valor_final_chart >= 0 else "#dc2626"
+        _df_agregado_chart = pd.DataFrame({
+            "Fecha": pd.to_datetime(fechas_backtesting, errors="coerce"),
+            "Resultado diario agregado (€)": [safe_float(v, 0) or 0 for v in resultados_diarios],
+        }).dropna(subset=["Fecha"]).sort_values("Fecha")
 
-        render_html(f"""
-        <div class="performance-chart-head">
-          <div>
-            <div class="performance-chart-title">Resultado acumulado de operaciones cerradas</div>
-            <div class="performance-chart-subtitle">Cada punto suma las ganancias y pérdidas ya realizadas hasta esa fecha.</div>
-          </div>
-          <div class="chart-legend"><i style="background:{_color_chart};"></i> Ganancia / pérdida acumulada (€)</div>
-        </div>
-        <div class="performance-chart-note" style="margin:0 25px 4px;padding:11px 14px;background:#f8fafc;border-radius:10px;color:#64748b;font-size:12px;line-height:1.55;">
-          La línea muestra solo operaciones cerradas. Las posiciones abiertas no aparecen aquí porque su valor puede cambiar; están reflejadas por separado arriba.
-        </div>
-        """)
-
-        if not _df_chart.empty:
+        def _mostrar_curva_resultados(_df, _columna, _titulo, _subtitulo, _nota, _pie):
+            render_html(f"""
+            <div class="performance-chart-head">
+              <div>
+                <div class="performance-chart-title">{_titulo}</div>
+                <div class="performance-chart-subtitle">{_subtitulo}</div>
+              </div>
+              <div class="chart-legend"><i style="background:#2563eb;"></i> Resultado en euros</div>
+            </div>
+            <div class="performance-chart-note" style="margin:0 25px 4px;padding:11px 14px;background:#f8fafc;border-radius:10px;color:#64748b;font-size:12px;line-height:1.55;">{_nota}</div>
+            """)
+            if _df.empty:
+                st.info(_pie)
+                return
             import plotly.graph_objects as go
 
-            _fig_chart = go.Figure()
-            _fig_chart.add_trace(go.Scatter(
-                x=_df_chart["Fecha"],
-                y=_df_chart["Resultado acumulado (€)"],
-                mode="lines+markers",
-                name="Resultado acumulado",
-                line={"color": _color_chart, "width": 3, "shape": "linear"},
-                marker={"size": 6, "color": "#ffffff", "line": {"color": _color_chart, "width": 2}},
+            _valor_final = float(_df[_columna].iloc[-1])
+            _color_linea = "#16a34a" if _valor_final >= 0 else "#dc2626"
+            _fig = go.Figure(go.Scatter(
+                x=_df["Fecha"], y=_df[_columna], mode="lines+markers", name="Resultado",
+                line={"color": _color_linea, "width": 3},
+                marker={"size": 5, "color": "#ffffff", "line": {"color": _color_linea, "width": 2}},
                 fill="tozeroy",
-                fillcolor="rgba(22,163,74,0.08)" if _valor_final_chart >= 0 else "rgba(220,38,38,0.08)",
+                fillcolor="rgba(22,163,74,0.08)" if _valor_final >= 0 else "rgba(220,38,38,0.08)",
                 hovertemplate="%{x|%d/%m/%Y}<br><b>%{y:+,.2f} €</b><extra></extra>",
             ))
-            _fig_chart.add_hline(y=0, line_width=1, line_color="#94a3b8", line_dash="dot")
-            _fig_chart.update_layout(
-                height=360,
-                margin={"l": 12, "r": 12, "t": 8, "b": 12},
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="#ffffff",
-                showlegend=False,
-                hovermode="x unified",
-                font={"family": "Arial, sans-serif", "color": "#475569", "size": 12},
+            _fig.add_hline(y=0, line_width=1, line_color="#94a3b8", line_dash="dot")
+            _fig.update_layout(
+                height=360, margin={"l": 12, "r": 12, "t": 8, "b": 12},
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="#ffffff", showlegend=False,
+                hovermode="x unified", font={"family": "Arial, sans-serif", "color": "#475569", "size": 12},
                 xaxis={"title": None, "showgrid": False, "tickformat": "%d/%m/%y", "nticks": 5, "automargin": True, "tickfont": {"color": "#8491a3", "size": 10}, "showline": False},
                 yaxis={"title": {"text": "Euros (€)", "font": {"size": 12, "color": "#64748b"}}, "tickprefix": "€ ", "tickformat": ",.0f", "nticks": 6, "automargin": True, "gridcolor": "#edf1f5", "zeroline": False, "tickfont": {"color": "#8491a3", "size": 10}},
                 hoverlabel={"bgcolor": "#172033", "font": {"color": "#ffffff", "size": 12}},
             )
-            st.plotly_chart(_fig_chart, use_container_width=True, config={"displayModeBar": False, "responsive": True})
-            render_html(f"""
-            <div class="performance-chart-footer">
-              <span>Resultado cerrado actual: <strong>{formatear_numero(beneficio_realizado,2," €",True)}</strong></span>
-              <span>Operaciones incluidas: <strong>{len(_cerradas_chart)}</strong></span>
-              <span>Última fecha del gráfico: <strong>{_df_chart["Fecha"].iloc[-1]:%d/%m/%Y}</strong></span>
-            </div>
-            {"<div style='padding:0 20px 14px;color:#8491a3;font-size:11px;'>En algunos registros falta la fecha de cierre; se ha usado la fecha de la señal como referencia.</div>" if _num_fechas_senal_chart else ""}
-            """)
-        else:
-            st.info("Todavía no hay operaciones cerradas con fecha suficiente para dibujar la evolución.")
+            st.plotly_chart(_fig, use_container_width=True, config={"displayModeBar": False, "responsive": True})
+            render_html(_pie)
+
+        with st.container(key="performance_chart_views"):
+            _tab_cerrado, _tab_agregado = st.tabs(["Operaciones cerradas", "Resultado agregado"])
+            with _tab_cerrado:
+                _pie_cerrado = f"<div class='performance-chart-footer'><span>Resultado cerrado actual: <strong>{formatear_numero(beneficio_realizado,2,' €',True)}</strong></span><span>Operaciones incluidas: <strong>{len(_cerradas_chart)}</strong></span><span>Última fecha: <strong>{_df_chart['Fecha'].iloc[-1]:%d/%m/%Y}</strong></span></div>" if not _df_chart.empty else "Todavía no hay operaciones cerradas con fecha suficiente para dibujar la evolución."
+                if _num_fechas_senal_chart:
+                    _pie_cerrado += "<div style='padding:0 20px 14px;color:#8491a3;font-size:11px;'>En algunos registros falta la fecha de cierre; se usa la fecha de la señal como referencia.</div>"
+                _mostrar_curva_resultados(_df_chart, "Resultado acumulado (€)", "Resultado acumulado de operaciones cerradas", "La línea suma el resultado realizado tras cada cierre.", "Las posiciones abiertas no aparecen en esta curva porque su valor puede cambiar; se muestran en la otra pestaña.", _pie_cerrado)
+            with _tab_agregado:
+            _nota_agregado = f"Total actual estimado: {formatear_numero(beneficio_acumulado,2,' €',True)} (cerrado + valoración abierta). La curva refleja la valoración diaria de las señales según su nominal real en Supabase." + (f" Se han omitido {snapshots_sin_nominal} registros sin nominal o datos válidos." if snapshots_sin_nominal else "")
+                _pie_agregado = f"<div class='performance-chart-footer'><span>Resultado del último día registrado: <strong>{formatear_numero(_df_agregado_chart['Resultado diario agregado (€)'].iloc[-1],2,' €',True)}</strong></span><span>Días registrados: <strong>{len(_df_agregado_chart)}</strong></span><span>Referencia: <strong>300 € por señal</strong></span></div>" if not _df_agregado_chart.empty else "Aún no hay capturas diarias para mostrar el resultado agregado."
+                _mostrar_curva_resultados(_df_agregado_chart, "Resultado diario agregado (€)", "Evolución agregada de las señales", "Resultado estimado conjunto por día de captura.", _nota_agregado, _pie_agregado)
 
     render_html("""
     <div class="aq-wrap">
