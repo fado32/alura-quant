@@ -3225,7 +3225,7 @@ if st.session_state.get("active_page", "Inicio") == "Performance":
 else:
     df_backtesting = pd.DataFrame()
     error_backtesting = None
-        fechas_backtesting, resultados_diarios, snapshots_sin_nominal = calcular_resultado_diario(df_backtesting, df_hist)
+    fechas_backtesting, resultados_diarios, snapshots_sin_nominal = calcular_resultado_diario(df_backtesting, df_hist)
 if fechas_backtesting:
     fechas_curva = fechas_backtesting
     beneficios_curva = resultados_diarios
