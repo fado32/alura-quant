@@ -3064,7 +3064,7 @@ else:
 # PRECIOS ACTUALES
 # ============================================================
 
-if st.session_state.get("active_page", "Inicio") in ("Inicio", "Performance"):
+if st.session_state.get("active_page", "Inicio") in ("Inicio", "Cartera", "Performance"):
     precios_actuales = obtener_precios_activos(df_activas_global)
 else:
     precios_actuales = {}
@@ -3188,7 +3188,7 @@ if not df_hist.empty and "Estado" in df_hist.columns:
 else:
     df_activas_global = pd.DataFrame()
 
-if st.session_state.get("active_page", "Inicio") in ("Inicio", "Performance"):
+if st.session_state.get("active_page", "Inicio") in ("Inicio", "Cartera", "Performance"):
     precios_actuales = obtener_precios_activos(df_activas_global)
 else:
     precios_actuales = {}
@@ -3984,7 +3984,13 @@ with _topbar_cols[1]:
     st.button("✦ Análisis Pro", key="open_analysis_pro", type="primary",
               on_click=_abrir_analisis_pro)
 
-PAGINAS = ["Inicio", "Oportunidades", "Planes", "Cartera", "Performance"]
+PAGINAS = [
+    ("Inicio", "Inicio"),
+    ("Oportunidades", "Oportunidades"),
+    ("Seguimiento", "Cartera"),
+    ("Resultados", "Performance"),
+    ("Planes", "Planes"),
+]
 
 def _cambiar_pagina(pagina):
     st.session_state["active_page"] = pagina
@@ -3994,10 +4000,10 @@ def _cambiar_pagina(pagina):
 
 active_page = st.session_state.get("active_page", "Inicio")
 _nav_cols = st.columns(len(PAGINAS), gap="small")
-for _idx, _pagina in enumerate(PAGINAS):
+for _idx, (_etiqueta_pagina, _pagina) in enumerate(PAGINAS):
     with _nav_cols[_idx]:
         st.button(
-            _pagina,
+            _etiqueta_pagina,
             key=f"nav_{_idx}",
             type="primary" if _pagina == active_page else "secondary",
             on_click=_cambiar_pagina,
@@ -4180,21 +4186,22 @@ def render_opportunity_card(row, compact=False, ribbon=False):
 def render_cartera_table(df):
     """Renderiza la cartera en una tabla compacta con etiquetas y métricas legibles."""
     df = df.copy()
-    if "P&L_Actual_Pct" in df.columns:
-        df["P&L_Actual_Pct"] = pd.to_numeric(df["P&L_Actual_Pct"], errors="coerce")
-        df = df.sort_values("P&L_Actual_Pct", ascending=False, na_position="last")
     filas = []
+    tarjetas = []
     for _, row in df.iterrows():
         empresa_raw = row.get("Empresa")
         if empresa_raw is None or pd.isna(empresa_raw) or not str(empresa_raw).strip():
             empresa_raw = row.get("Ticker") or "Activo"
         empresa = safe_text(empresa_raw)
-        sector = safe_text(row.get("Sector"), "Sin sector")
-        entrada = formatear_numero(safe_float(row.get("Precio_Alerta")), 2, " €")
-        actual = formatear_numero(safe_float(row.get("Precio_Actual")), 2, " €")
-        stop = formatear_numero(safe_float(row.get("Stop_Loss")), 2, " €")
-        objetivo = formatear_numero(safe_float(row.get("Take_Profit")), 2, " €")
-        score = safe_float(row.get("Score_Actual"))
+        sector = safe_text(row.get("Sector"), "Sector no disponible")
+        ticker = safe_text(row.get("Ticker"), "")
+        entrada = formatear_numero(safe_float(row.get("Precio_Alerta")), 2)
+        actual = formatear_numero(safe_float(row.get("Precio_Actual")), 2)
+        stop = formatear_numero(safe_float(row.get("Stop_Loss")), 2)
+        objetivo = formatear_numero(safe_float(row.get("Take_Profit")), 2)
+        distancia_stop = safe_float(row.get("Distancia_SL_Pct"))
+        distancia_stop_text = formatear_numero(distancia_stop, 1, "%") if distancia_stop is not None else "—"
+        score = safe_float(row.get("Score_Actual"), safe_float(row.get("Score_Entrada")))
         score_text = formatear_numero(score, 0) if score is not None else "—"
         score_width = max(0, min(100, score or 0))
         rendimiento = safe_float(row.get("P&L_Actual_Pct"))
@@ -4205,14 +4212,25 @@ def render_cartera_table(df):
             estado_raw = row.get("Estado") or "Activa"
         estado = str(estado_raw).replace("_", " ").title()
         estado = html.escape(estado)
+        estado_clase = "active" if "ACTIV" in estado.upper() else "watch"
         filas.append(f"""
           <tr>
-            <td><div class="portfolio-company">{empresa}</div><div class="portfolio-sector">{sector}</div></td>
-            <td>{entrada}</td><td class="portfolio-current">{actual}</td><td>{stop}</td><td>{objetivo}</td>
+            <td><div class="portfolio-company">{empresa}</div><div class="portfolio-sector">{ticker} · {sector}</div></td>
+            <td>{entrada}</td><td class="portfolio-current">{actual}</td><td>{stop}<small class="portfolio-subvalue">{distancia_stop_text} de distancia</small></td><td>{objetivo}</td>
             <td><div class="portfolio-score"><strong>{score_text}</strong><span><i style="width:{score_width:.1f}%"></i></span></div></td>
             <td><span class="portfolio-return {rendimiento_clase}">{rendimiento_text}</span></td>
-            <td><span class="portfolio-state">{estado}</span></td>
+            <td><span class="portfolio-state {estado_clase}">{estado}</span></td>
           </tr>
+        """)
+        tarjetas.append(f"""
+          <article class="portfolio-mobile-card">
+            <div class="portfolio-mobile-top"><div><div class="portfolio-company">{empresa}</div><div class="portfolio-sector">{ticker} · {sector}</div></div><span class="portfolio-return {rendimiento_clase}">{rendimiento_text}</span></div>
+            <div class="portfolio-mobile-grid">
+              <div><span>Precio actual</span><strong>{actual}</strong></div><div><span>Precio de entrada</span><strong>{entrada}</strong></div>
+              <div><span>Nivel de salida</span><strong>{stop}</strong><small>{distancia_stop_text} de distancia</small></div><div><span>Objetivo de beneficio</span><strong>{objetivo}</strong></div>
+            </div>
+            <div class="portfolio-mobile-bottom"><span>Puntuación Alura</span><strong>{score_text}<small> / 100</small></strong><span class="portfolio-state {estado_clase}">{estado}</span></div>
+          </article>
         """)
     render_html(f"""
     <style>
@@ -4221,21 +4239,31 @@ def render_cartera_table(df):
       .portfolio-heading strong{{display:block;color:#172033;font-family:'Plus Jakarta Sans',sans-serif;font-size:16px}}
       .portfolio-heading span{{display:block;margin-top:4px;color:#8a96a8;font-size:11px}}
       .portfolio-count{{display:inline-flex;align-items:center;padding:7px 11px;border-radius:999px;background:#eff6ff;color:#2563eb;font-size:10px;font-weight:800;letter-spacing:.06em;white-space:nowrap}}
-      .portfolio-scroll{{overflow-x:auto}}.portfolio-table{{width:100%;min-width:840px;border-collapse:collapse;text-align:left}}
+      .portfolio-scroll{{overflow-x:auto}}.portfolio-table{{width:100%;min-width:900px;border-collapse:collapse;text-align:left}}
       .portfolio-table th{{padding:12px 15px;background:#f8fafd;color:#8491a3;font-size:9px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;white-space:nowrap}}
       .portfolio-table td{{padding:15px;border-top:1px solid #eef2f6;color:#344155;font-size:12px;white-space:nowrap}}
       .portfolio-table tbody tr{{transition:background .16s ease}}.portfolio-table tbody tr:hover{{background:#f8fbff}}
-      .portfolio-company{{color:#172033;font-weight:750;font-size:12px}}.portfolio-sector{{margin-top:4px;color:#96a0af;font-size:10px}}
+      .portfolio-company{{color:#172033;font-weight:750;font-size:12px}}.portfolio-sector{{margin-top:4px;color:#8793a4;font-size:10px}}
+      .portfolio-subvalue{{display:block;margin-top:4px;color:#8793a4;font-size:9px}}
       .portfolio-current{{font-weight:750;color:#1d4ed8!important}}.portfolio-score{{display:flex;align-items:center;gap:8px}}
       .portfolio-score strong{{width:24px;color:#344155;font-size:11px}}.portfolio-score span{{width:48px;height:4px;background:#e9eef5;border-radius:99px;overflow:hidden}}
       .portfolio-score i{{display:block;height:100%;background:linear-gradient(90deg,#60a5fa,#2563eb);border-radius:99px}}
       .portfolio-return{{display:inline-flex;padding:6px 9px;border-radius:8px;font-weight:750;font-size:11px}}
       .portfolio-return.positive{{background:#ecfdf3;color:#13834c}}.portfolio-return.negative{{background:#fff1f2;color:#c53044}}.portfolio-return.neutral{{background:#f3f5f8;color:#768397}}
-      .portfolio-state{{display:inline-flex;padding:6px 9px;border:1px solid #dfe8f5;border-radius:999px;background:#f7faff;color:#48658c;font-size:10px;font-weight:700}}
-      @media(max-width:650px){{.portfolio-heading{{padding:17px}}.portfolio-table{{min-width:790px}}}}
+      .portfolio-state{{display:inline-flex;padding:6px 9px;border:1px solid #dfe8f5;border-radius:999px;background:#f7faff;color:#48658c;font-size:10px;font-weight:700;white-space:nowrap}}
+      .portfolio-state.active{{background:#eff6ff;color:#2459a6;border-color:#dce9ff}}.portfolio-state.watch{{background:#fff8eb;color:#946200;border-color:#f5e7c1}}
+      .portfolio-mobile-view{{display:none;padding:12px;gap:10px}}.portfolio-mobile-card{{background:#fff;border:1px solid #e8edf4;border-radius:14px;padding:14px;box-shadow:0 4px 14px rgba(15,23,42,.035)}}
+      .portfolio-mobile-top{{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;padding-bottom:12px;border-bottom:1px solid #eef2f6}}
+      .portfolio-mobile-grid{{display:grid;grid-template-columns:1fr 1fr;gap:12px 10px;padding:13px 0}}
+      .portfolio-mobile-grid div{{min-width:0}}.portfolio-mobile-grid span{{display:block;color:#8793a4;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}}
+      .portfolio-mobile-grid strong{{display:block;margin-top:4px;color:#263348;font-size:12px;font-weight:700}}.portfolio-mobile-grid small{{display:block;margin-top:3px;color:#8793a4;font-size:9px}}
+      .portfolio-mobile-bottom{{display:flex;align-items:center;gap:8px;padding-top:11px;border-top:1px solid #eef2f6;color:#64748b;font-size:10px}}
+      .portfolio-mobile-bottom>strong{{color:#263348;font-size:12px}}.portfolio-mobile-bottom>strong small{{font-size:9px;color:#8793a4;font-weight:500}}.portfolio-mobile-bottom .portfolio-state{{margin-left:auto}}
+      @media(max-width:760px){{.portfolio-table-view{{display:none}}.portfolio-mobile-view{{display:grid}}.portfolio-heading{{padding:17px 16px}}.portfolio-heading strong{{font-size:15px}}.portfolio-count{{font-size:9px;padding:6px 8px}}}}
     </style>
-    <div class="portfolio-shell"><div class="portfolio-heading"><div><strong>Posiciones monitorizadas</strong><span>Precios, niveles de gestión y rendimiento de la cartera</span></div><div class="portfolio-count">{len(df)} POSICIONES</div></div>
-      <div class="portfolio-scroll"><table class="portfolio-table"><thead><tr><th>Activo</th><th>Entrada</th><th>Precio actual</th><th>Stop loss</th><th>Objetivo</th><th>Score</th><th>Rendimiento</th><th>Estado</th></tr></thead><tbody>{''.join(filas)}</tbody></table></div>
+    <div class="portfolio-shell"><div class="portfolio-heading"><div><strong>Señales activas</strong><span>Precios y niveles definidos por el sistema Alura Quant</span></div><div class="portfolio-count">{len(df)} ACTIVAS</div></div>
+      <div class="portfolio-table-view"><div class="portfolio-scroll"><table class="portfolio-table"><thead><tr><th>Activo</th><th>Entrada</th><th>Cotización actual</th><th>Nivel de salida</th><th>Objetivo de beneficio</th><th>Puntuación</th><th>Desde la entrada</th><th>Estado</th></tr></thead><tbody>{''.join(filas)}</tbody></table></div></div>
+      <div class="portfolio-mobile-view">{''.join(tarjetas)}</div>
     </div>
     """)
 
@@ -4869,17 +4897,97 @@ if active_page == "Cartera":
     <div class="aq-wrap">
       <div class="aq-list-head">
         <div>
-          <div class="aq-eyebrow">PORTFOLIO</div>
-          <h2>Cartera</h2>
-          <p>Vista operativa de las posiciones activas monitorizadas.</p>
+          <div class="aq-eyebrow">SEGUIMIENTO ALURA QUANT</div>
+          <h2>Señales en seguimiento</h2>
+          <p>Consulta qué señales siguen activas, su evolución y los niveles definidos por el sistema.</p>
         </div>
       </div>
     </div>
     """)
     if df_activas_global.empty:
-        render_html("<div class='aq-wrap'><div class='empty-state'><div class='empty-title'>No hay posiciones activas</div><div class='empty-text'>Las nuevas señales aparecerán automáticamente.</div></div></div>")
+        render_html("<div class='aq-wrap'><div class='empty-state'><div class='empty-title'>No hay señales activas ahora</div><div class='empty-text'>Cuando el sistema detecte nuevas configuraciones, aparecerán aquí para su seguimiento.</div></div></div>")
     else:
-        render_cartera_table(df_activas_global)
+        _cartera_base = df_activas_global.copy()
+        if "Ticker" in _cartera_base.columns:
+            for _idx_cartera, _fila_cartera in _cartera_base.iterrows():
+                _precio_cartera = safe_float(precios_actuales.get(str(_fila_cartera.get("Ticker", "")).strip()))
+                _entrada_cartera = safe_float(_fila_cartera.get("Precio_Alerta"))
+                if _precio_cartera is not None:
+                    _cartera_base.at[_idx_cartera, "Precio_Actual"] = _precio_cartera
+                    _stop_cartera = safe_float(_fila_cartera.get("Stop_Loss"))
+                    if _precio_cartera > 0 and _entrada_cartera is not None and _entrada_cartera > 0:
+                        _cartera_base.at[_idx_cartera, "P&L_Actual_Pct"] = (_precio_cartera - _entrada_cartera) / _entrada_cartera * 100
+                    if _precio_cartera > 0 and _stop_cartera is not None:
+                        _cartera_base.at[_idx_cartera, "Distancia_SL_Pct"] = (_precio_cartera - _stop_cartera) / _precio_cartera * 100
+        _cartera_base["P&L_Actual_Pct"] = pd.to_numeric(_cartera_base.get("P&L_Actual_Pct", pd.Series(index=_cartera_base.index, dtype=float)), errors="coerce")
+        _cartera_base["Distancia_SL_Pct"] = pd.to_numeric(_cartera_base.get("Distancia_SL_Pct", pd.Series(index=_cartera_base.index, dtype=float)), errors="coerce")
+        _score_cartera = pd.to_numeric(_cartera_base.get("Score_Actual", pd.Series(index=_cartera_base.index, dtype=float)), errors="coerce")
+        if "Score_Entrada" in _cartera_base:
+            _score_cartera = _score_cartera.fillna(pd.to_numeric(_cartera_base["Score_Entrada"], errors="coerce"))
+        _cartera_base["_Puntuacion_Alura"] = _score_cartera
+
+        render_html(f"""
+        <style>
+          .portfolio-summary{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px auto 18px;max-width:1180px}}
+          .portfolio-summary-card{{background:#fff;border:1px solid #e6ebf2;border-radius:15px;padding:17px 18px;box-shadow:0 8px 24px rgba(15,23,42,.035);min-width:0}}
+          .portfolio-summary-label{{color:#7b8798;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}}
+          .portfolio-summary-value{{display:block;margin-top:8px;color:#172033;font-family:'Plus Jakarta Sans',sans-serif;font-size:24px;font-weight:800;letter-spacing:-.04em;line-height:1.1}}
+          .portfolio-summary-note{{margin-top:6px;color:#8793a4;font-size:10px;line-height:1.4}}
+          .portfolio-summary-value.positive{{color:#13834c}}.portfolio-summary-value.negative{{color:#c53044}}
+          @media(max-width:760px){{.portfolio-summary{{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:14px}}.portfolio-summary-card{{padding:14px}}.portfolio-summary-value{{font-size:21px}}}}
+          @media(max-width:380px){{.portfolio-summary{{grid-template-columns:1fr 1fr}}.portfolio-summary-label{{font-size:8px}}}}
+        </style>
+        <div class="portfolio-summary">
+          <div class="portfolio-summary-card"><div class="portfolio-summary-label">Señales activas</div><strong class="portfolio-summary-value">{len(_cartera_base)}</strong><div class="portfolio-summary-note">En seguimiento por Alura Quant</div></div>
+          <div class="portfolio-summary-card"><div class="portfolio-summary-label">Resultado estimado</div><strong class="portfolio-summary-value {'positive' if beneficio_no_realizado >= 0 else 'negative'}">{formatear_numero(beneficio_no_realizado,2,' €',True)}</strong><div class="portfolio-summary-note">Valoración actual; puede variar</div></div>
+          <div class="portfolio-summary-card"><div class="portfolio-summary-label">En positivo</div><strong class="portfolio-summary-value positive">{posiciones_con_beneficio}</strong><div class="portfolio-summary-note">Señales abiertas con resultado positivo</div></div>
+          <div class="portfolio-summary-card"><div class="portfolio-summary-label">En negativo</div><strong class="portfolio-summary-value negative">{posiciones_con_perdida}</strong><div class="portfolio-summary-note">Señales abiertas con resultado negativo</div></div>
+        </div>
+        <div style="max-width:1180px;margin:0 auto 14px;color:#8793a4;font-size:10px;">Última actualización registrada: <strong style="color:#64748b;">{html.escape(fecha_actualizacion_sistema)}</strong></div>
+        <div style="max-width:1180px;margin:0 auto 14px;padding:12px 15px;background:#f8fafc;border:1px solid #e8edf4;border-radius:12px;color:#64748b;font-size:12px;line-height:1.55;">
+          Esta vista muestra señales de Alura Quant; no está conectada a tu bróker ni representa tu cartera personal. El resultado de las señales abiertas es estimado y puede cambiar. Los precios se muestran en la divisa de cotización de cada activo.
+          La puntuación resume criterios del sistema; no es una probabilidad de éxito.
+        </div>
+        """)
+
+        _filtros_cartera = st.columns([1, 1, 1.25, 1.25], gap="small")
+        with _filtros_cartera[0]:
+            _estado_cartera = st.selectbox("Resultado", ["Todos", "En positivo", "En negativo", "A menos del 5 % del nivel de salida"], key="cartera_estado")
+        with _filtros_cartera[1]:
+            _sectores_cartera = sorted(_cartera_base["Sector"].dropna().astype(str).unique().tolist()) if "Sector" in _cartera_base.columns else []
+            _sector_cartera = st.selectbox("Sector", ["Todos los sectores"] + _sectores_cartera, key="cartera_sector")
+        with _filtros_cartera[2]:
+            _busqueda_cartera = st.text_input("Buscar activo", placeholder="Empresa o ticker", key="cartera_busqueda")
+        with _filtros_cartera[3]:
+            _orden_cartera = st.selectbox("Ordenar por", ["Prioridad de seguimiento", "Puntuación Alura", "Mejor resultado", "Nombre A-Z"], key="cartera_orden")
+
+        _cartera_filtrada = _cartera_base.copy()
+        if _estado_cartera == "En positivo":
+            _cartera_filtrada = _cartera_filtrada[_cartera_filtrada["P&L_Actual_Pct"] > 0]
+        elif _estado_cartera == "En negativo":
+            _cartera_filtrada = _cartera_filtrada[_cartera_filtrada["P&L_Actual_Pct"] < 0]
+        elif _estado_cartera == "A menos del 5 % del nivel de salida":
+            _cartera_filtrada = _cartera_filtrada[_cartera_filtrada["Distancia_SL_Pct"].notna() & (_cartera_filtrada["Distancia_SL_Pct"] <= 5)]
+        if _sector_cartera != "Todos los sectores" and "Sector" in _cartera_filtrada.columns:
+            _cartera_filtrada = _cartera_filtrada[_cartera_filtrada["Sector"].astype(str) == _sector_cartera]
+        if _busqueda_cartera.strip():
+            _q_cartera = _busqueda_cartera.strip().lower()
+            _cartera_filtrada = _cartera_filtrada[_cartera_filtrada.apply(lambda r: _q_cartera in str(r.get("Ticker", "")).lower() or _q_cartera in str(r.get("Empresa", "")).lower(), axis=1)]
+
+        if _orden_cartera == "Prioridad de seguimiento":
+            _cartera_filtrada = _cartera_filtrada.sort_values("Distancia_SL_Pct", ascending=True, na_position="last")
+        elif _orden_cartera == "Puntuación Alura":
+            _cartera_filtrada = _cartera_filtrada.sort_values("_Puntuacion_Alura", ascending=False, na_position="last")
+        elif _orden_cartera == "Mejor resultado":
+            _cartera_filtrada = _cartera_filtrada.sort_values("P&L_Actual_Pct", ascending=False, na_position="last")
+        elif "Empresa" in _cartera_filtrada.columns:
+            _cartera_filtrada = _cartera_filtrada.sort_values("Empresa", ascending=True, na_position="last")
+
+        render_html(f"<div style='max-width:1180px;margin:0 auto 8px;color:#8793a4;font-size:10px;'>Mostrando <strong style='color:#475569;'>{len(_cartera_filtrada)}</strong> de {len(_cartera_base)} señales · Prioridad de seguimiento ordena por proximidad al nivel de salida.</div>")
+        if _cartera_filtrada.empty:
+            st.info("No hay señales que coincidan con estos filtros.")
+        else:
+            render_cartera_table(_cartera_filtrada)
 
 
 # ============================================================
