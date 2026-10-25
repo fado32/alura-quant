@@ -311,6 +311,32 @@ def cargar_backtesting_diario():
 fechas_backtesting, resultados_diarios, snapshots_sin_nominal = [], [], 0
 
 
+def cargar_backtesting_diario():
+    """Carga todos los snapshots; Supabase entrega como máximo 1.000 filas por página."""
+    cliente = globals().get("supabase") or globals().get("supabase_client")
+    if cliente is None:
+        return pd.DataFrame()
+    columnas = "fecha_snapshot,alerta_id,ticker,estado,precio_alerta,precio_actual,pnl_actual_pct"
+    filas = []
+    inicio = 0
+    tamano_pagina = 1000
+    while True:
+        respuesta = (
+            cliente.table("backtesting_diario_alertas")
+            .select(columnas)
+            .order("fecha_snapshot")
+            .order("alerta_id")
+            .range(inicio, inicio + tamano_pagina - 1)
+            .execute()
+        )
+        pagina = respuesta.data or []
+        filas.extend(pagina)
+        if len(pagina) < tamano_pagina:
+            break
+        inicio += tamano_pagina
+    return pd.DataFrame(filas)
+
+
 def calcular_resultado_diario(df_backtesting, df_historial):
     """Calcula la valoración diaria usando el nominal real de cada alerta."""
     if df_backtesting is None or df_backtesting.empty:
@@ -325,9 +351,15 @@ def calcular_resultado_diario(df_backtesting, df_historial):
         df["pnl_actual_pct"] = df["pnl_actual_pct"].fillna(pct_calculado)
 
     # Enlaza por ticker y fecha de emisión: un ticker puede tener oportunidades distintas.
-    fecha_historial = next((c for c in ("Fecha", "fecha", "fecha_alerta", "Fecha alerta", "Fecha de alerta", "fecha_oportunidad", "created_at", "createdAt") if c in df_historial.columns), None) if df_historial is not None else None
-    ticker_historial = next((c for c in ("Ticker", "ticker", "simbolo", "Symbol") if df_historial is not None and c in df_historial.columns), None)
-    nominal_historial = next((c for c in ("Nominal", "nominal") if df_historial is not None and c in df_historial.columns), None)
+    columnas_historial = list(df_historial.columns) if df_historial is not None else []
+    def _clave_columna(nombre):
+        return str(nombre).strip().casefold().replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u").replace(" ", "_")
+    columnas_por_clave = {_clave_columna(columna): columna for columna in columnas_historial}
+    fecha_historial = next((columnas_por_clave[k] for k in ("fecha", "fecha_alerta", "fecha_de_alerta", "fecha_oportunidad", "fecha_senal", "fecha_creacion", "created_at", "createdat", "published_at", "timestamp") if k in columnas_por_clave), None)
+    if fecha_historial is None:
+        fecha_historial = next((columna for clave, columna in columnas_por_clave.items() if (clave.startswith("fecha_") or clave.startswith("date_") or clave.startswith("created_")) and not any(palabra in clave for palabra in ("cierre", "fin", "actualizacion", "snapshot"))), None)
+    ticker_historial = next((columnas_por_clave[k] for k in ("ticker", "simbolo", "symbol", "activo") if k in columnas_por_clave), None)
+    nominal_historial = next((columnas_por_clave[k] for k in ("nominal", "capital_nominal") if k in columnas_por_clave), None)
     df["ticker_clave"] = df.get("ticker", pd.Series(index=df.index, dtype="object")).astype(str).str.strip().str.upper()
     df["nominal_real"] = pd.NA
     if df_historial is not None and not df_historial.empty and fecha_historial and nominal_historial and ticker_historial:
@@ -5048,7 +5080,7 @@ if active_page == "Performance":
       <div class="performance-page-head">
         <div>
           <div class="aq-eyebrow">RESULTADOS</div>
-          <h3>Cómo evoluciona el sistema</h3>
+          <h2>Cómo evoluciona el sistema</h2>
           <p>Resumen de operaciones cerradas y posiciones que siguen abiertas.</p>
         </div>
         <div class="performance-total">
@@ -5060,17 +5092,18 @@ if active_page == "Performance":
 
       <div style="margin:16px 0 22px;padding:14px 17px;background:#f8fafc;border:1px solid var(--aq-border);border-radius:14px;color:var(--aq-muted);font-size:13px;line-height:1.65;">
         <strong style="color:var(--aq-text);">Periodo mostrado: {_periodo_performance}.</strong>
+        El resultado total suma las operaciones cerradas y la valoración actual de las abiertas. Esta última puede cambiar mientras sigan en cartera; no es una ganancia asegurada.
       </div>
 
       <div class="performance-kpis">
         <div class="performance-kpi">
-          <span>Posiciones abiertas</span><strong>{activas}</strong><small>Siguen en seguimiento</small>
+          <span>Posiciones abiertas</span><strong>{activas}</strong><small>Siguen en seguimiento y su resultado puede variar</small>
         </div>
         <div class="performance-kpi">
-          <span>Resultado de posiciones abiertas</span><strong style="color:{'#16a34a' if beneficio_no_realizado >= 0 else '#dc2626'};">{formatear_numero(beneficio_no_realizado,2," €",True)}</strong><small>Valoración actual</small>
+          <span>Resultado de posiciones abiertas</span><strong style="color:{'#16a34a' if beneficio_no_realizado >= 0 else '#dc2626'};">{formatear_numero(beneficio_no_realizado,2," €",True)}</strong><small>Valoración actual; aún no está cerrada</small>
         </div>
         <div class="performance-kpi">
-          <span>Resultado de operaciones cerradas</span><strong style="color:{'#16a34a' if beneficio_realizado >= 0 else '#dc2626'};">{formatear_numero(beneficio_realizado,2," €",True)}</strong><small>Resultado ya realizado</small>
+          <span>Resultado de operaciones cerradas</span><strong style="color:{'#16a34a' if beneficio_realizado >= 0 else '#dc2626'};">{formatear_numero(beneficio_realizado,2," €",True)}</strong><small>Resultado ya realizado según el registro</small>
         </div>
         <div class="performance-kpi">
           <span>Operaciones cerradas con beneficio</span><strong>{exitos}</strong><small>Objetivo alcanzado</small>
@@ -5079,7 +5112,7 @@ if active_page == "Performance":
           <span>Operaciones cerradas con pérdida</span><strong>{fallos}</strong><small>{break_even} salidas sin ganancia ni pérdida</small>
         </div>
         <div class="performance-kpi">
-          <span>Porcentaje con beneficio</span><strong>{formatear_numero(win_rate,1,"%")}</strong><small>De las operaciones cerradas</small>
+          <span>Porcentaje con beneficio</span><strong>{formatear_numero(win_rate,1,"%")}</strong><small>Entre las operaciones cerradas con ganancia o pérdida</small>
         </div>
       </div>
 
@@ -5160,7 +5193,7 @@ if active_page == "Performance":
                 _pie_cerrado = f"<div class='performance-chart-footer'><span>Resultado cerrado actual: <strong>{formatear_numero(beneficio_realizado,2,' €',True)}</strong></span><span>Operaciones incluidas: <strong>{len(_cerradas_chart)}</strong></span><span>Última fecha: <strong>{_df_chart['Fecha'].iloc[-1]:%d/%m/%Y}</strong></span></div>" if not _df_chart.empty else "Todavía no hay operaciones cerradas con fecha suficiente para dibujar la evolución."
                 if _num_fechas_senal_chart:
                     _pie_cerrado += "<div style='padding:0 20px 14px;color:#8491a3;font-size:11px;'>En algunos registros falta la fecha de cierre; se usa la fecha de la señal como referencia.</div>"
-                _mostrar_curva_resultados(_df_chart, "Resultado acumulado (€)", "Resultado acumulado de operaciones cerradas", "La línea suma el resultado realizado tras cada cierre.", "Las posiciones abiertas no aparecen en esta curva", _pie_cerrado)
+                _mostrar_curva_resultados(_df_chart, "Resultado acumulado (€)", "Resultado acumulado de operaciones cerradas", "La línea suma el resultado realizado tras cada cierre.", "Las posiciones abiertas no aparecen en esta curva porque su valor puede cambiar; se muestran en la otra pestaña.", _pie_cerrado)
             with _tab_agregado:
                 _nota_agregado = f"Total actual estimado: {formatear_numero(beneficio_acumulado,2,' €',True)} (cerrado + valoración abierta). La curva refleja la valoración diaria de las señales según su nominal real en Supabase." + (f" Se han omitido {snapshots_sin_nominal} registros sin nominal o datos válidos." if snapshots_sin_nominal else "")
                 _pie_agregado = f"<div class='performance-chart-footer'><span>Resultado del último día registrado: <strong>{formatear_numero(_df_agregado_chart['Resultado diario agregado (€)'].iloc[-1],2,' €',True)}</strong></span><span>Días registrados: <strong>{len(_df_agregado_chart)}</strong></span><span>Referencia: <strong>300 € por señal</strong></span></div>" if not _df_agregado_chart.empty else "Aún no hay capturas diarias para mostrar el resultado agregado."
