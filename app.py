@@ -4932,32 +4932,80 @@ if active_page == "Performance":
     """)
 
     with st.container(key="performance_chart_native", border=True):
+        _cerradas_chart = df_hist.copy()
+        if not _cerradas_chart.empty:
+            _estado_chart = _cerradas_chart.get("Estado", pd.Series("", index=_cerradas_chart.index)).astype(str)
+            _cerradas_chart = _cerradas_chart[_estado_chart.str.contains("OBJETIVO_CUMPLIDO|STOP_SALTADO", regex=True, na=False)].copy()
+
+        if not _cerradas_chart.empty:
+            _salidas_chart = pd.to_datetime(_cerradas_chart.get("Fecha_Salida", pd.Series(index=_cerradas_chart.index, dtype="object")), errors="coerce")
+            _fechas_senal_chart = pd.to_datetime(_cerradas_chart.get("Fecha", pd.Series(index=_cerradas_chart.index, dtype="object")), errors="coerce")
+            _usa_fecha_senal_chart = _salidas_chart.isna()
+            _cerradas_chart["Fecha gráfico"] = _salidas_chart.fillna(_fechas_senal_chart)
+            _cerradas_chart["Resultado gráfico"] = _cerradas_chart.apply(calcular_beneficio_fila_cerrada, axis=1)
+            _cerradas_chart = _cerradas_chart.dropna(subset=["Fecha gráfico"])
+            _cerradas_chart["Fecha"] = _cerradas_chart["Fecha gráfico"].dt.normalize()
+            _serie_chart = _cerradas_chart.groupby("Fecha")["Resultado gráfico"].sum().sort_index().cumsum()
+            _df_chart = _serie_chart.rename("Resultado acumulado (€)").reset_index()
+            _num_fechas_senal_chart = int(_usa_fecha_senal_chart.sum())
+        else:
+            _df_chart = pd.DataFrame(columns=["Fecha", "Resultado acumulado (€)"])
+            _num_fechas_senal_chart = 0
+
         render_html(f"""
         <div class="performance-chart-head">
           <div>
-            <div class="performance-chart-title">Evolución del resultado</div>
-            <div class="performance-chart-subtitle">Estimación diaria en euros, según los datos disponibles</div>
+            <div class="performance-chart-title">Resultado acumulado de operaciones cerradas</div>
+            <div class="performance-chart-subtitle">Cada punto suma las ganancias y pérdidas ya realizadas hasta esa fecha.</div>
           </div>
-          <div class="chart-legend"><i></i> Resultado estimado</div>
+          <div class="chart-legend"><i></i> Ganancia / pérdida acumulada (€)</div>
+        </div>
+        <div style="margin:0 25px 4px;padding:11px 14px;background:#f8fafc;border-radius:10px;color:#64748b;font-size:12px;line-height:1.55;">
+          La línea muestra solo operaciones cerradas. Las posiciones abiertas no aparecen aquí porque su valor puede cambiar; están reflejadas por separado arriba.
         </div>
         """)
-        df_grafico = pd.DataFrame({
-            "Fecha": pd.to_datetime(fechas_curva, errors="coerce"),
-            "Resultado (€)": [safe_float(v, 0) or 0 for v in beneficios_curva],
-        }).dropna(subset=["Fecha"]).sort_values("Fecha").set_index("Fecha")
-        if len(df_grafico) == 1:
-            st.scatter_chart(df_grafico.reset_index(), x="Fecha", y="Resultado (€)", height=340, use_container_width=True)
-        elif not df_grafico.empty:
-            st.line_chart(df_grafico, height=340, use_container_width=True)
+
+        if not _df_chart.empty:
+            import plotly.graph_objects as go
+
+            _valor_final_chart = float(_df_chart["Resultado acumulado (€)"].iloc[-1])
+            _color_chart = "#16a34a" if _valor_final_chart >= 0 else "#dc2626"
+            _fig_chart = go.Figure()
+            _fig_chart.add_trace(go.Scatter(
+                x=_df_chart["Fecha"],
+                y=_df_chart["Resultado acumulado (€)"],
+                mode="lines+markers",
+                name="Resultado acumulado",
+                line={"color": _color_chart, "width": 3, "shape": "linear"},
+                marker={"size": 6, "color": "#ffffff", "line": {"color": _color_chart, "width": 2}},
+                fill="tozeroy",
+                fillcolor="rgba(22,163,74,0.08)" if _valor_final_chart >= 0 else "rgba(220,38,38,0.08)",
+                hovertemplate="%{x|%d/%m/%Y}<br><b>%{y:+,.2f} €</b><extra></extra>",
+            ))
+            _fig_chart.add_hline(y=0, line_width=1, line_color="#94a3b8", line_dash="dot")
+            _fig_chart.update_layout(
+                height=390,
+                margin={"l": 18, "r": 24, "t": 12, "b": 18},
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="#ffffff",
+                showlegend=False,
+                hovermode="x unified",
+                font={"family": "Arial, sans-serif", "color": "#475569", "size": 12},
+                xaxis={"title": None, "showgrid": False, "tickformat": "%b %Y", "tickfont": {"color": "#8491a3"}, "showline": False},
+                yaxis={"title": "Euros (€)", "tickprefix": "€ ", "tickformat": ",.0f", "gridcolor": "#edf1f5", "zeroline": False, "titlefont": {"size": 12, "color": "#64748b"}, "tickfont": {"color": "#8491a3"}},
+                hoverlabel={"bgcolor": "#172033", "font": {"color": "#ffffff", "size": 12}},
+            )
+            st.plotly_chart(_fig_chart, use_container_width=True, config={"displayModeBar": False})
+            render_html(f"""
+            <div class="performance-chart-footer">
+              <span>Resultado cerrado actual: <strong>{formatear_numero(beneficio_realizado,2," €",True)}</strong></span>
+              <span>Operaciones incluidas: <strong>{len(_cerradas_chart)}</strong></span>
+              <span>Última fecha del gráfico: <strong>{_df_chart["Fecha"].iloc[-1]:%d/%m/%Y}</strong></span>
+            </div>
+            {"<div style='padding:0 20px 14px;color:#8491a3;font-size:11px;'>En algunos registros falta la fecha de cierre; se ha usado la fecha de la señal como referencia.</div>" if _num_fechas_senal_chart else ""}
+            """)
         else:
-            st.info("Todavía no hay resultados diarios disponibles para mostrar.")
-        render_html(f"""
-        <div class="performance-chart-footer">
-          <span>Operaciones cerradas: <strong>{formatear_numero(beneficio_realizado,2," €",True)}</strong></span>
-          <span>Posiciones abiertas: <strong>{formatear_numero(beneficio_no_realizado,2," €",True)}</strong></span>
-          <span>Importe de referencia: <strong>{formatear_numero(CAPITAL_INICIAL,0," €")}</strong></span>
-        </div>
-        """)
+            st.info("Todavía no hay operaciones cerradas con fecha suficiente para dibujar la evolución.")
 
     render_html("""
     <div class="aq-wrap">
